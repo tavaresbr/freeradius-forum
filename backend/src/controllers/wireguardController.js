@@ -103,6 +103,22 @@ exports.updateServerSettings = async (req, res) => {
   }
 };
 
+// Peers do wg-easy que pertencem a esta empresa (mapeados em empresa_vpn_peers).
+const filtrarPeersDaEmpresa = async (allClients, empresaId) => {
+  const [peerRows] = await db.execute(
+    "SELECT wg_client_id FROM empresa_vpn_peers WHERE empresa_id = ?",
+    [empresaId]
+  );
+  const allowedIds = new Set(peerRows.map(r => r.wg_client_id));
+  return allClients.filter(c => allowedIds.has(c.id));
+};
+
+// Lista os peers da empresa consultando o wg-easy. Lança erro se o wg-easy estiver fora do ar.
+exports.listarPeersDaEmpresa = async (empresaId) => {
+  const allClients = await makeRequest('GET', '/api/wireguard/client');
+  return filtrarPeersDaEmpresa(allClients, empresaId);
+};
+
 exports.getVpnStatus = async (req, res) => {
   try {
     const allClients = await makeRequest('GET', '/api/wireguard/client');
@@ -112,12 +128,7 @@ exports.getVpnStatus = async (req, res) => {
     let endpoint = `${settings.wgHost}:${settings.wgPort}`;
 
     // Filter clients to only show those mapped to this empresa
-    const [peerRows] = await db.execute(
-      "SELECT wg_client_id FROM empresa_vpn_peers WHERE empresa_id = ?",
-      [req.empresa_id]
-    );
-    const allowedIds = new Set(peerRows.map(r => r.wg_client_id));
-    const clients = allClients.filter(c => allowedIds.has(c.id));
+    const clients = await filtrarPeersDaEmpresa(allClients, req.empresa_id);
 
     if (allClients.length > 0) {
       const conf = await makeRequest('GET', `/api/wireguard/client/${allClients[0].id}/configuration`);
