@@ -61,6 +61,20 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
   const [form, setForm] = useState(FORM_INICIAL);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // Peers VPN ainda sem equipamento: { carregando, peers, aviso }
+  const [vpn, setVpn] = useState({ carregando: false, peers: [], aviso: "" });
+
+  // Só no cadastro novo: busca os peers da VPN que ainda não viraram equipamento.
+  useEffect(() => {
+    if (!open || editando) return;
+    let cancelado = false;
+    setVpn({ carregando: true, peers: [], aviso: "" });
+    fetch("/api/mikrotiks/vpn-disponiveis", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
+      .then((d) => { if (!cancelado) setVpn({ carregando: false, peers: d.peers || [], aviso: d.aviso || "" }); })
+      .catch(() => { if (!cancelado) setVpn({ carregando: false, peers: [], aviso: "Não foi possível consultar a VPN agora." }); });
+    return () => { cancelado = true; };
+  }, [open, editando, token]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,6 +203,28 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
         {/* Passo 1: Conexão */}
         {step === 1 && (
           <div className="space-y-4">
+            {/* Peers da VPN ainda não cadastrados: um clique preenche nome e IP */}
+            {!editando && form.tipo === "mikrotik" && (vpn.carregando || vpn.peers.length > 0 || vpn.aviso) && (
+              <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800">
+                <p className="text-xs text-gray-500 mb-2">Equipamentos da VPN ainda não cadastrados</p>
+                {vpn.carregando && <p className="text-xs text-gray-600">Carregando...</p>}
+                {!vpn.carregando && vpn.aviso && <p className="text-xs text-amber-500/90">{vpn.aviso} Preencha o IP manualmente.</p>}
+                <div className="flex flex-wrap gap-2">
+                  {vpn.peers.map((p) => (
+                    <button
+                      key={p.ip}
+                      type="button"
+                      onClick={() => { set("nome", p.nome); set("ip", p.ip); }}
+                      className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded border cursor-pointer transition-colors ${form.ip === p.ip ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-gray-700 text-gray-300 hover:border-gray-500"}`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${p.online ? "bg-green-500" : "bg-red-500"}`} />
+                      <span className="font-medium">{p.nome}</span>
+                      <span className="text-gray-500">{p.ip}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label className={labelCls}>Nome</label>
               <input className={inputCls} value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder={`Ex: ${vendor.nome} Matriz`} />

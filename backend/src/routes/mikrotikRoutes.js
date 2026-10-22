@@ -5,6 +5,8 @@ const { getDriver } = require("../gateways");
 const { resolveHotspotHtmlDir } = require("../utils/hotspotSetup");
 const { obterInformacoes } = require("../controllers/mikrotikAPIController");
 const { exec } = require("child_process");
+const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
+const { peersLivres } = require("../utils/vpnPeers");
 
 // FreeRADIUS só lê NAS clients na inicialização, precisamos recarregar após mudanças
 function reloadFreeRADIUS() {
@@ -167,6 +169,26 @@ router.post("/", async (req, res) => {
   }
 });
 
+
+// Peers da VPN desta empresa que ainda não viraram equipamento (IP em uso em mikrotiks).
+// Usado pelo wizard "Adicionar Equipamento". Se o wg-easy estiver fora do ar, devolve lista
+// vazia + aviso: o cadastro manual continua funcionando.
+router.get("/vpn-disponiveis", async (req, res) => {
+  try {
+    const [usados] = await db.execute("SELECT ip FROM mikrotiks WHERE empresa_id = ?", [req.empresa_id]);
+    let peers;
+    try {
+      peers = await listarPeersDaEmpresa(req.empresa_id);
+    } catch (err) {
+      console.error("Erro ao listar peers VPN:", err.message);
+      return res.json({ peers: [], aviso: "Não foi possível consultar a VPN agora." });
+    }
+    res.json({ peers: peersLivres(peers, usados.map((r) => r.ip)) });
+  } catch (err) {
+    console.error("Erro em /vpn-disponiveis:", err.message);
+    res.status(500).json({ message: "Erro ao buscar peers da VPN." });
+  }
+});
 
 router.get("/", async (req, res) => {
   try {
