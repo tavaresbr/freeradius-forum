@@ -62,17 +62,17 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   // Peers VPN ainda sem equipamento: { carregando, peers, aviso }
-  const [vpn, setVpn] = useState({ carregando: false, peers: [], aviso: "" });
+  const [vpn, setVpn] = useState({ carregando: false, peers: [], total: 0, aviso: "" });
 
   // Só no cadastro novo: busca os peers da VPN que ainda não viraram equipamento.
   useEffect(() => {
     if (!open || editando) return;
     let cancelado = false;
-    setVpn({ carregando: true, peers: [], aviso: "" });
+    setVpn({ carregando: true, peers: [], total: 0, aviso: "" });
     fetch("/api/mikrotiks/vpn-disponiveis", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
-      .then((d) => { if (!cancelado) setVpn({ carregando: false, peers: d.peers || [], aviso: d.aviso || "" }); })
-      .catch(() => { if (!cancelado) setVpn({ carregando: false, peers: [], aviso: "Não foi possível consultar a VPN agora." }); });
+      .then((d) => { if (!cancelado) setVpn({ carregando: false, peers: d.peers || [], total: d.total || 0, aviso: d.aviso || "" }); })
+      .catch(() => { if (!cancelado) setVpn({ carregando: false, peers: [], total: 0, aviso: "Não foi possível consultar a VPN agora." }); });
     return () => { cancelado = true; };
   }, [open, editando, token]);
 
@@ -204,11 +204,14 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
         {step === 1 && (
           <div className="space-y-4">
             {/* Peers da VPN ainda não cadastrados: um clique preenche nome e IP */}
-            {!editando && form.tipo === "mikrotik" && (vpn.carregando || vpn.peers.length > 0 || vpn.aviso) && (
+            {!editando && form.tipo === "mikrotik" && (vpn.carregando || vpn.peers.length > 0 || vpn.total > 0 || vpn.aviso) && (
               <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800">
                 <p className="text-xs text-gray-500 mb-2">Equipamentos da VPN ainda não cadastrados</p>
                 {vpn.carregando && <p className="text-xs text-gray-600">Carregando...</p>}
                 {!vpn.carregando && vpn.aviso && <p className="text-xs text-amber-500/90">{vpn.aviso} Preencha o IP manualmente.</p>}
+                {!vpn.carregando && !vpn.aviso && vpn.peers.length === 0 && vpn.total > 0 && (
+                  <p className="text-xs text-gray-400">Todos os equipamentos da VPN já estão cadastrados.</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {vpn.peers.map((p) => (
                     <button

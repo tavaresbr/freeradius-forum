@@ -183,7 +183,7 @@ router.get("/vpn-disponiveis", async (req, res) => {
       console.error("Erro ao listar peers VPN:", err.message);
       return res.json({ peers: [], aviso: "Não foi possível consultar a VPN agora." });
     }
-    res.json({ peers: peersLivres(peers, usados.map((r) => r.ip)) });
+    res.json({ peers: peersLivres(peers, usados.map((r) => r.ip)), total: peers.length });
   } catch (err) {
     console.error("Erro em /vpn-disponiveis:", err.message);
     res.status(500).json({ message: "Erro ao buscar peers da VPN." });
