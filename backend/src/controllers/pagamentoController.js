@@ -7,6 +7,7 @@ const { validarAssinaturaWebhook } = require("../utils/mpSignature");
 const { liberarUsuario } = require("./mikrotikAPIController");
 const { gerarAcessoTemporario } = require("./authTempController");
 const { obterSenhaRadius } = require("../utils/radiusPassword");
+const { bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO } = require("../utils/leadUtils");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
@@ -72,9 +73,16 @@ exports.gerarPagamento = async (req, res) => {
     let clienteCpf = cpf || null;
     let clienteTelefone = null;
     if (cliente_id) {
-      const [[cliente]] = await db.query("SELECT cpf, telefone FROM leads WHERE id = ?", [cliente_id]);
+      // Endpoint publico: o lead tem que ser da empresa do plano (cliente_id e' sequencial)
+      const [[cliente]] = await db.query("SELECT cpf, telefone FROM leads WHERE id = ? AND empresa_id = ?", [cliente_id, empresaId]);
       if (!clienteCpf && cliente?.cpf) clienteCpf = cliente.cpf.replace(/\D/g, "");
       clienteTelefone = cliente?.telefone || null;
+    }
+
+    // Pagar pelo CPF de quem tem acesso ativo em outro aparelho troca a senha e funde o
+    // tempo dele na conta de quem paga: recusa ANTES de cobrar.
+    if (await bloqueiaPagamentoAlheio({ cpf: clienteCpf, mac, empresaId })) {
+      return res.status(409).json({ message: MSG_PAGAMENTO_ALHEIO, requer_data_nascimento: true });
     }
 
     // Prioriza portal_id explicito (vindo do redirect entre portais), VALIDADO
@@ -419,6 +427,11 @@ exports.gerarPagamentoCartao = async (req, res) => {
     //   - Se nao existe lead, cai pro CPF do form (pode ser que o usuario nao passou
     //     por CadastroCliente, ex: portal antigo). Ai o CPF do cartao vira identidade.
     const clienteCpf = (leadInfo?.cpf || cardholderCpf || "").replace(/\D/g, "") || null;
+
+    // Mesma trava do PIX: nao cobrar quem paga pelo CPF de um acesso ativo em outro aparelho.
+    if (await bloqueiaPagamentoAlheio({ cpf: clienteCpf, mac, empresaId })) {
+      return res.status(409).json({ message: MSG_PAGAMENTO_ALHEIO, requer_data_nascimento: true });
+    }
 
     // 3. INSERT pagamento aguardando ANTES de qualquer chamada ao MP
     //    (assim temos o id interno pra usar como external_reference; o webhook
