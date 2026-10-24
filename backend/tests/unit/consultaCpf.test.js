@@ -117,15 +117,16 @@ test('consultaCpf: entrada invalida da 400', async () => {
 
 test('consultaCpf: passo 1 devolve so o nome mascarado; confirmar devolve nome e telefone', async () => {
   reset();
-  proximaLinha = { nome: 'João da Silva', telefone: '11999990000' };
+  proximaLinha = { nome: 'João da Silva', telefone: '11999990000', email: 'joao@exemplo.com' };
   const body = { cpf: CPF_OK, data_nascimento: '17/05/1990', mikrotik_id: 3 };
   let res = resFalso();
   await consultaCpf({ body, ip: '1.2.3.4' }, res);
   assert.deepStrictEqual(res.corpo, { encontrado: true, nome_mascarado: 'Jo** da Si***' });
   assert.ok(!JSON.stringify(res.corpo).includes('11999990000'));
+  assert.ok(!JSON.stringify(res.corpo).includes('joao@exemplo.com'));
   res = resFalso();
   await consultaCpf({ body: { ...body, confirmar: true }, ip: '1.2.3.4' }, res);
-  assert.deepStrictEqual(res.corpo, { encontrado: true, nome: 'João da Silva', telefone: '11999990000' });
+  assert.deepStrictEqual(res.corpo, { encontrado: true, nome: 'João da Silva', telefone: '11999990000', email: 'joao@exemplo.com' });
   res = resFalso();   // "true" em texto nao confirma
   await consultaCpf({ body: { ...body, confirmar: 'true' }, ip: '1.2.3.4' }, res);
   assert.strictEqual(res.corpo.nome, undefined);
@@ -155,7 +156,7 @@ test('consultaCpf: "nao encontrado" e' + " identico em todos os casos (sem enume
 
 test('consultaCpf: usa a empresa do equipamento e nunca loga CPF, nome ou data', async () => {
   reset();
-  proximaLinha = { nome: 'João da Silva', telefone: '11999990000' };
+  proximaLinha = { nome: 'João da Silva', telefone: '11999990000', email: 'joao@exemplo.com' };
   const logs = [];
   const origLog = console.log; console.log = (...a) => logs.push(a.join(' '));
   try {
@@ -163,5 +164,5 @@ test('consultaCpf: usa a empresa do equipamento e nunca loga CPF, nome ou data',
   } finally { console.log = origLog; }
   assert.strictEqual(chamadas.find((c) => /FROM leads/.test(c.sql)).params[1], 7);
   const texto = logs.join('\n');
-  for (const proibido of ['52998224725', '529.982', 'João', 'Silva', '1990', '17/05', '11999990000']) assert.ok(!texto.includes(proibido), proibido);
+  for (const proibido of ['52998224725', '529.982', 'João', 'Silva', '1990', '17/05', '11999990000', 'joao@exemplo.com']) assert.ok(!texto.includes(proibido), proibido);
 });

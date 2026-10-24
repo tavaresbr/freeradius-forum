@@ -1815,6 +1815,12 @@ Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e
 
 ---
 
+## Portais de cadastro em 2 passos (CPF + nascimento primeiro)
+
+`CadastroLGPD.jsx` (`/cadastro`) e `CadastroLead.jsx` (`/lead`) mostram so CPF + data de nascimento (`components/public/BuscaCpf.jsx`, botao "Continuar"); o restante do formulario (nome, e-mail, telefone, MAC/IP, aceite, botao final) so aparece depois da busca (`POST /api/lgpd/consulta-cpf`): achou + "Sim, sou eu" = formulario preenchido (nome, telefone e e-mail via `confirmar:true`); nao achou/erro = formulario em branco; 429 = nao libera. Mudar CPF ou data esconde o restante e limpa os dados trazidos de outro cadastro. Lead sem CPF (`exibir_cpf=false`) mostra tudo direto. As regras de titularidade (`conferirDataNascimento`, reivindicacao, re-liberacao) continuam todas no servidor (`lgpdLogin`/`leadLogin`).
+
+---
+
 ## Cadastro completo de clientes e importacao (SGP / planilha)
 
 Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`) edita o cadastro completo em `leads`. Importacao em `/admin/:slug/importar-clientes` (`ImportarClientes.jsx`), API `/api/clientes-import` (permissao do modulo `leads`).

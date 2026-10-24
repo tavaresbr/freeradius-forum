@@ -35,13 +35,13 @@ async function verificarLeadExistente(cpf, empresaId) {
  * @param {string} cpf - com ou sem mascara
  * @param {string} dataIso - 'AAAA-MM-DD'
  * @param {number} empresaId
- * @returns {Promise<{nome: string, telefone: string|null}|null>}
+ * @returns {Promise<{nome: string, telefone: string|null, email: string|null}|null>}
  */
 async function buscarCadastroPorCpf(cpf, dataIso, empresaId) {
   const cpfLimpo = String(cpf || "").replace(/\D/g, "");
   if (cpfLimpo.length !== 11 || !dataIso || !empresaId) return null;
   const [[row]] = await db.execute(
-    `SELECT nome, telefone FROM leads
+    `SELECT nome, telefone, email FROM leads
      WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ? AND empresa_id = ? AND data_nascimento = ?
        AND nome IS NOT NULL AND nome <> ''
      ORDER BY criado_em DESC LIMIT 1`,
