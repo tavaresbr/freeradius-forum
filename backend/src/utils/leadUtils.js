@@ -94,7 +94,10 @@ async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistent
 
 /**
  * O CPF ja foi "confirmado" por dinheiro: existe pagamento aprovado (ou ja expirado) com esse
- * CPF na empresa. Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
+ * CPF na empresa **cujo pagador e' o dono do CPF** — `pagamentos.pagador_cpf` (CPF de quem
+ * pagou: do banco no PIX, do titular informado no cartao) e' NULL (desconhecido, conta como
+ * antes) ou compativel com o CPF (pode vir mascarado do MP). Quem paga com o proprio banco o CPF
+ * de outra pessoa NAO confirma esse CPF (grilagem por pagamento). Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
  * pessoa antes dela (grilagem), entao a data de nascimento gravada nao prova titularidade e nao
  * pode trancar o dono de verdade para fora. Na duvida (erro de banco) considera confirmado:
  * a trava rigida e' o lado seguro.
@@ -107,9 +110,10 @@ async function cpfConfirmado(cpfLimpo, empresaId) {
     const [rows] = await db.execute(
       `SELECT 1 FROM pagamentos
         WHERE status IN ('approved', 'expirado')
-          AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?${empresaId ? " AND empresa_id = ?" : ""}
+          AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
+          AND (pagador_cpf IS NULL OR ? LIKE REPLACE(pagador_cpf, '*', '_'))${empresaId ? " AND empresa_id = ?" : ""}
         LIMIT 1`,
-      empresaId ? [cpfLimpo, empresaId] : [cpfLimpo]
+      empresaId ? [cpfLimpo, cpfLimpo, empresaId] : [cpfLimpo, cpfLimpo]
     );
     return rows.length > 0;
   } catch (err) {

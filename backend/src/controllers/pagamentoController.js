@@ -8,6 +8,7 @@ const { liberarUsuario } = require("./mikrotikAPIController");
 const { gerarAcessoTemporario } = require("./authTempController");
 const { obterSenhaRadius } = require("../utils/radiusPassword");
 const { bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO } = require("../utils/leadUtils");
+const { extrairCpfPagador, cpfCompativel } = require("../utils/pagadorCpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
@@ -438,9 +439,11 @@ exports.gerarPagamentoCartao = async (req, res) => {
     //    consegue casar mesmo se a request travar entre /payments e o INSERT).
     //    Gravamos o CPF do CLIENTE (lead), nao o do titular do cartao.
     const [insertResult] = await db.query(
-      `INSERT INTO pagamentos (empresa_id, cliente_id, plano_id, ip, mac, cpf, nome_plano, valor, status, metodo_pagamento, portal_id, telefone)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aguardando', 'cartao', ?, ?)`,
-      [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, plano.nome, plano.valor, portalIdPagto, telefonePagto]
+      `INSERT INTO pagamentos (empresa_id, cliente_id, plano_id, ip, mac, cpf, pagador_cpf, nome_plano, valor, status, metodo_pagamento, portal_id, telefone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aguardando', 'cartao', ?, ?)`,
+      // pagador_cpf = CPF do TITULAR DO CARTAO (informado no formulario): so confirma o CPF do
+      // cadastro se for o mesmo (pai pagando pelo filho nao confirma o CPF do filho).
+      [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, cardholderCpf || null, plano.nome, plano.valor, portalIdPagto, telefonePagto]
     );
     pagId = insertResult.insertId;
 
@@ -812,6 +815,24 @@ exports.notificacaoWebhook = async (req, res) => {
            WHERE mp_pagamento_id = ?`,
           [email, duracao, mpPagamentoId]
         );
+
+        // CPF de quem PAGOU (dado do banco no PIX): so ele pode confirmar o CPF do cadastro
+        // (leadUtils.cpfConfirmado). Nunca bloqueia a liberacao; ausente = desconhecido.
+        try {
+          const pagadorCpf = extrairCpfPagador(pagamento);
+          if (pagadorCpf) {
+            await db.query(
+              "UPDATE pagamentos SET pagador_cpf = ? WHERE mp_pagamento_id = ? AND pagador_cpf IS NULL",
+              [pagadorCpf, mpPagamentoId]
+            );
+            const [[reg]] = await db.query("SELECT cpf FROM pagamentos WHERE mp_pagamento_id = ? LIMIT 1", [mpPagamentoId]);
+            if (reg?.cpf && !cpfCompativel(pagadorCpf, reg.cpf)) {
+              console.warn(`[webhook MP] pagador diferente do CPF do cadastro (mp_id=${mpPagamentoId} empresa=${empresaId || "-"}): nao confirma o CPF`);
+            }
+          }
+        } catch (pagErr) {
+          console.warn("[webhook MP] nao gravou pagador_cpf:", pagErr.message);
+        }
       } else {
         const planoQuery = empresaId
           ? "SELECT id, duracao_minutos FROM planos WHERE nome = ? AND empresa_id = ? LIMIT 1"
