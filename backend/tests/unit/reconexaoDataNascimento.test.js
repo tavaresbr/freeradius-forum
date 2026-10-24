@@ -14,8 +14,11 @@ const CPF = '529.982.247-25';
 const PLANO = { id: 9, duracao_minutos: 5, velocidade_down: 2, velocidade_up: 1, mikrotik_id: 3, shared_users: 1, end_hotspot: 'hs.local' };
 
 // dob: { total, iguais } devolvido pelo COUNT; saldo: true => radcheck com Max-All-Session sobrando
-function montarDb({ existing, dob = { total: 0, iguais: 0 }, saldo = false, senhaSalva = 'senhaReal9', confirmado = true } = {}) {
+function montarDb({ existing, dob = { total: 0, iguais: 0 }, saldo = false, senhaSalva = 'senhaReal9', confirmado = true, dispositivoUsou = false, planoDoAcesso = null } = {}) {
   return criarDb(async (sql) => {
+    // este aparelho (MAC) ja conectou com o username? / qual plano e' o acesso ativo (LGPD/Lead = gratis)
+    if (/FROM radacct WHERE username = \? AND LOWER/.test(sql)) return [dispositivoUsou ? [{ 1: 1 }] : []];
+    if (/FROM radius_users ru JOIN planos/.test(sql)) return [planoDoAcesso ? [{ nome: planoDoAcesso }] : []];
     // confirmado = existe pagamento aprovado com o CPF (cadastro NAO provisorio)
     if (/FROM pagamentos/.test(sql)) return [confirmado ? [{ 1: 1 }] : []];
     if (/FROM mikrotiks WHERE id/.test(sql)) return [[{ empresa_id: 5 }]];
@@ -337,7 +340,8 @@ test('cpfConfirmado: so pagamento approved/expirado da empresa; erro de banco =>
   const q = db.calls.find((c) => /FROM pagamentos/.test(c.sql));
   assert.match(q.sql, /status IN \('approved', 'expirado'\)/);
   assert.match(q.sql, /empresa_id = \?/);
-  assert.deepStrictEqual(q.params, ['52998224725', 5]);
+  assert.match(q.sql, /pagador_cpf IS NULL OR \? LIKE REPLACE\(pagador_cpf, '\*', '_'\)/, 'o pagador tem que ser o dono do CPF (ou desconhecido)');
+  assert.deepStrictEqual(q.params, ['52998224725', '52998224725', 5]);
   limparCache();
   const quebrado = criarDb(async () => { throw new Error('db fora'); });
   const m2 = carregar('src/utils/leadUtils.js', { db: quebrado });
@@ -436,4 +440,144 @@ test('reivindicar tem limite: 10 trocas/hora no mesmo CPF => depois 429', async 
     }
   } finally { un(); }
   assert.strictEqual(res.statusCode, 429);
+});
+
+// ---------- acesso gratis exposto: data gravada por quem reivindica nao libera credenciais ----------
+test('lgpdLogin: CPF sem pagamento, data "ok" mas aparelho NUNCA usou o acesso => credenciais antigas NAO voltam (re-libera com senha nova)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou: false, planoDoAcesso: 'LGPD' });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.notStrictEqual(res.body.existente, true);
+  assert.ok(res.body.password && res.body.password !== 'senhaReal9', 'senha nova, nunca a antiga');
+  assert.ok(houve(db, /INSERT INTO radcheck/));
+});
+
+test('lgpdLogin: CPF sem pagamento, data "ok" e o aparelho JA usou o acesso => credenciais voltam (reconexao do dono)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou: true, planoDoAcesso: 'LGPD' });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.body.existente, true);
+  assert.strictEqual(res.body.password, 'senhaReal9');
+  assert.ok(!houve(db, /INSERT INTO radcheck/), 'nao renova a franquia de quem so reconectou');
+});
+
+test('lgpdLogin: CPF COM pagamento: a data basta (trava rigida) mesmo em aparelho novo', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: true, dispositivoUsou: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.body.existente, true);
+  assert.strictEqual(res.body.password, 'senhaReal9');
+});
+
+test('lgpdLogin: acesso ativo que NAO e o plano gratis (admin/pago) + aparelho que nunca o usou => 409 e RADIUS intacto', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou: false, planoDoAcesso: 'Plano 30 dias' });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9'));
+  assert.ok(!houve(db, /DELETE FROM (radcheck|radreply|radusergroup)/));
+});
+
+test('lgpdLogin: reivindicar em acesso gratis ativo agora RE-LIBERA (nao tranca o dono) e nunca devolve a senha antiga', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, planoDoAcesso: 'Lead' });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9'));
+  assert.ok(houve(db, /INSERT INTO radcheck/));
+});
+
+test('lgpdLogin: re-liberacao com sessao aberta em OUTRO aparelho => resposta traz o aviso para desconectar', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: false, confirmado: true });
+  limparCache();
+  const ctrl = carregar('src/controllers/lgpdController.js', {
+    db,
+    extras: {
+      'src/utils/apInfo.js': { resolverApDoContexto: async () => ({ apMac: null, ssid: null }) },
+      'src/services/whatsappNotify.js': { notificarLiberacao: async () => {} },
+      'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({ tipo: 'mikrotik' }) },
+      'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async () => ({ requer_desconexao: true, sessao_ativa: { aparelho: 'ee:ff' } }) },
+    },
+  });
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.body.requer_desconexao, true);
+  assert.ok(res.body.password);
+});
+
+test('leadLogin: CPF sem pagamento, data "ok" mas aparelho nunca usou o acesso => credenciais antigas NAO voltam', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou: false, planoDoAcesso: 'Lead' });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.leadLogin(criarReq({ body: { nome: 'X', telefone: '55999991111', cpf: CPF, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3, data_nascimento: '01/02/1990' }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.notStrictEqual(res.body.existente, true);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9'));
+  assert.ok(houve(db, /INSERT INTO radcheck/));
+});
+
+test('leadLogin: CPF sem pagamento e aparelho que ja usou o acesso => credenciais voltam', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou: true, planoDoAcesso: 'Lead' });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.leadLogin(criarReq({ body: { nome: 'X', telefone: '55999991111', cpf: CPF, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3, data_nascimento: '01/02/1990' }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.strictEqual(res.body.existente, true);
+  assert.strictEqual(res.body.password, 'senhaReal9');
+});
+
+test('cadastroCliente: CPF sem pagamento, data "ok", aparelho nunca usou o acesso => segue para planos sem credenciais; se ja usou => auto-login', async () => {
+  for (const [dispositivoUsou, esperaAtivo] of [[false, false], [true, true]]) {
+    const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false, dispositivoUsou });
+    const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+    const res = criarRes(); const un = silencia();
+    try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+    assert.strictEqual(res.body.planoAtivo, esperaAtivo, `dispositivoUsou=${dispositivoUsou}`);
+    assert.strictEqual(!!res.body.password, esperaAtivo);
+  }
+});
+
+test('bloqueiaReliberacao: acesso gratis (LGPD/Lead) pode ser regravado; pago/admin ou sem registro continua protegido', async () => {
+  const run = async (planoDoAcesso, saldo) => {
+    limparCache();
+    const m = carregar('src/utils/leadUtils.js', { db: montarDb({ saldo, planoDoAcesso }) });
+    return m.bloqueiaReliberacao({ username: '52998224725', titularVerificado: false });
+  };
+  assert.strictEqual(await run('LGPD', true), false);
+  assert.strictEqual(await run('lead', true), false);
+  assert.strictEqual(await run('Plano 30 dias', true), true);
+  assert.strictEqual(await run(null, true), true);
+  assert.strictEqual(await run('Plano 30 dias', false), false, 'sem saldo ativo nada a proteger');
+});
+
+test('dispositivoJaUsouAcesso: compara o MAC normalizado no radacct do username; MAC invalido nem consulta', async () => {
+  limparCache();
+  const db = montarDb({ dispositivoUsou: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  assert.strictEqual(await m.dispositivoJaUsouAcesso('52998224725', 'AA-BB-CC-DD-EE-FF'), true);
+  const q = db.calls.find((c) => /FROM radacct WHERE username/.test(c.sql));
+  assert.deepStrictEqual(q.params, ['52998224725', 'aabbccddeeff']);
+  const antes = db.calls.length;
+  assert.strictEqual(await m.dispositivoJaUsouAcesso('52998224725', 'xx'), false);
+  assert.strictEqual(db.calls.length, antes);
+});
+
+test('podeReceberCredenciais: CPF confirmado basta (nem consulta o radacct); senao exige o aparelho', async () => {
+  limparCache();
+  const db = montarDb({ confirmado: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  assert.strictEqual(await m.podeReceberCredenciais({ cpf: CPF, username: '52998224725', mac: 'aa:bb:cc:dd:ee:01', empresaId: 5 }), true);
+  assert.ok(!db.calls.some((c) => /FROM radacct/.test(c.sql)));
+  limparCache();
+  const db2 = montarDb({ confirmado: false, dispositivoUsou: false });
+  const m2 = carregar('src/utils/leadUtils.js', { db: db2 });
+  assert.strictEqual(await m2.podeReceberCredenciais({ cpf: CPF, username: '52998224725', mac: 'aa:bb:cc:dd:ee:01', empresaId: 5 }), false);
 });

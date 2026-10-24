@@ -4,7 +4,7 @@ const path = require('path');
 
 // ---- banco simulado ----
 const chamadas = [];
-const estado = { sessao: null, mikrotik: null, aberta: true, empresaMtk: 7 };
+const estado = { sessao: null, mikrotik: null, aberta: true, empresaMtk: 7, cpfConfirmado: true, planoDoAcesso: null, aparelhoJaUsou: false };
 const fakeDb = {
   query: async (sql, params) => {
     chamadas.push({ sql, params });
@@ -16,6 +16,9 @@ const fakeDb = {
   execute: async (sql, params) => {
     chamadas.push({ sql, params });
     if (/FROM mikrotiks WHERE id/.test(sql)) return [[{ empresa_id: estado.empresaMtk }].filter(() => estado.empresaMtk)];
+    if (/FROM pagamentos/.test(sql)) return [estado.cpfConfirmado ? [{ 1: 1 }] : []];          // CPF confirmado por pagamento
+    if (/FROM radius_users ru JOIN planos/.test(sql)) return [[estado.planoDoAcesso ? { nome: estado.planoDoAcesso } : undefined].filter(Boolean)];
+    if (/FROM radacct\s+WHERE username = \? AND LOWER/.test(sql)) return [estado.aparelhoJaUsou ? [{ 1: 1 }] : []];
     return [[]];
   },
 };
@@ -55,6 +58,7 @@ const sessaoOutroAparelho = { radacctid: 11, acctsessionid: 'abc', nasipaddress:
 const reset = () => {
   chamadas.length = 0; estado.sessao = { ...sessaoOutroAparelho }; estado.mikrotik = { ip: '10.0.0.1', usuario: 'u', senha: 's', porta: 8728 };
   estado.aberta = true; estado.empresaMtk = 7; api.ativos = []; api.falhaConexao = false; api.removidos = []; confResp = 'ok'; leadResp = null;
+  estado.cpfConfirmado = true; estado.planoDoAcesso = null; estado.aparelhoJaUsou = false;
   coa.desconectarSessaoCoA = async () => ({ ok: true });
 };
 const resFalso = () => { const r = { statusCode: 200, corpo: null }; r.status = (c) => { r.statusCode = c; return r; }; r.json = (o) => { r.corpo = o; return r; }; return r; };
@@ -193,4 +197,24 @@ test('endpoint: sem sessao ativa -> sucesso sem desconectar; falha do equipament
   reset(); coa.desconectarSessaoCoA = async () => ({ ok: false }); estado.mikrotik = null;
   r = resFalso(); await desconectarAnterior({ body, ip: '1.1.1.1' }, r);
   assert.strictEqual(r.statusCode, 502);
+});
+
+test('endpoint: CPF sem pagamento + acesso que NAO e o plano gratis + aparelho que nunca o usou -> 403 sem derrubar nada', async () => {
+  const body = { cpf: CPF, data_nascimento: '17/05/1990', username: '52998224725', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3 };
+  reset(); estado.cpfConfirmado = false; estado.planoDoAcesso = 'Plano 30 dias (admin)';
+  leadResp = { id: 1, telefone: '(93) 99999-0000', email: 'a@b.com', mac: 'AA:BB:CC:DD:EE:FF', cpf: '52998224725' };
+  const r = resFalso(); await desconectarAnterior({ body, ip: '1.1.1.1' }, r);
+  assert.strictEqual(r.statusCode, 403);
+  assert.ok(!chamadas.some((c) => /FROM radacct ra/.test(c.sql) || /UPDATE radacct/.test(c.sql)));
+});
+
+test('endpoint: CPF sem pagamento mas aparelho que ja usou o acesso, ou acesso gratis (LGPD/Lead) -> desconecta', async () => {
+  const body = { cpf: CPF, data_nascimento: '17/05/1990', username: '52998224725', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3 };
+  for (const cenario of [{ aparelhoJaUsou: true, planoDoAcesso: 'Plano 30 dias (admin)' }, { planoDoAcesso: 'LGPD' }, { planoDoAcesso: 'Lead' }]) {
+    reset(); estado.cpfConfirmado = false; Object.assign(estado, cenario);
+    leadResp = { id: 1, telefone: '(93) 99999-0000', email: 'a@b.com', mac: 'AA:BB:CC:DD:EE:FF', cpf: '52998224725' };
+    fechaNoStop();
+    const r = resFalso(); await desconectarAnterior({ body, ip: '1.1.1.1' }, r);
+    assert.strictEqual(r.statusCode, 200, JSON.stringify(cenario));
+  }
 });

@@ -94,7 +94,10 @@ async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistent
 
 /**
  * O CPF ja foi "confirmado" por dinheiro: existe pagamento aprovado (ou ja expirado) com esse
- * CPF na empresa. Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
+ * CPF na empresa **cujo pagador e' o dono do CPF** — `pagamentos.pagador_cpf` (CPF de quem
+ * pagou: do banco no PIX, do titular informado no cartao) e' NULL (desconhecido, conta como
+ * antes) ou compativel com o CPF (pode vir mascarado do MP). Quem paga com o proprio banco o CPF
+ * de outra pessoa NAO confirma esse CPF (grilagem por pagamento). Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
  * pessoa antes dela (grilagem), entao a data de nascimento gravada nao prova titularidade e nao
  * pode trancar o dono de verdade para fora. Na duvida (erro de banco) considera confirmado:
  * a trava rigida e' o lado seguro.
@@ -107,9 +110,10 @@ async function cpfConfirmado(cpfLimpo, empresaId) {
     const [rows] = await db.execute(
       `SELECT 1 FROM pagamentos
         WHERE status IN ('approved', 'expirado')
-          AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?${empresaId ? " AND empresa_id = ?" : ""}
+          AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
+          AND (pagador_cpf IS NULL OR ? LIKE REPLACE(pagador_cpf, '*', '_'))${empresaId ? " AND empresa_id = ?" : ""}
         LIMIT 1`,
-      empresaId ? [cpfLimpo, empresaId] : [cpfLimpo]
+      empresaId ? [cpfLimpo, cpfLimpo, empresaId] : [cpfLimpo, cpfLimpo]
     );
     return rows.length > 0;
   } catch (err) {
@@ -285,6 +289,66 @@ async function bloqueiaPagamentoAlheio({ cpf, mac, empresaId }) {
 const MSG_PAGAMENTO_ALHEIO = "Já existe um acesso ativo para este CPF em outro aparelho. Volte ao cadastro e informe a data de nascimento do titular, ou use o usuário e senha que você recebeu.";
 
 /**
+ * Este aparelho (MAC) ja usou o acesso desse username? Prova de posse do acesso: existe
+ * sessao no radacct do username vinda desse MAC. Quem so digitou CPF + uma data que ele mesmo
+ * gravou (cadastro provisorio) nunca conectou com aquele username.
+ * @param {string} username
+ * @param {string} mac
+ * @returns {Promise<boolean>}
+ */
+async function dispositivoJaUsouAcesso(username, mac) {
+  const macLimpo = normMac(mac);
+  if (!username || macLimpo.length !== 12) return false;
+  try {
+    const [rows] = await db.execute(
+      `SELECT 1 FROM radacct
+        WHERE username = ? AND LOWER(REPLACE(REPLACE(callingstationid, '-', ''), ':', '')) = ?
+        LIMIT 1`,
+      [username, macLimpo]
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.warn("[dispositivoJaUsouAcesso] indisponivel:", err.message);
+    return false;
+  }
+}
+
+/**
+ * O acesso ativo desse username e' do plano GRATIS dos portais (LGPD / Lead)? So esse pode ser
+ * regravado por quem nao se provou: acesso pago (CPF confirmado) ou criado pelo admin (outro
+ * plano, ou sem registro em radius_users) continua protegido.
+ * @param {string} username
+ * @returns {Promise<boolean>}
+ */
+async function acessoEhGratis(username) {
+  try {
+    const [[row]] = await db.execute(
+      `SELECT p.nome FROM radius_users ru JOIN planos p ON p.id = ru.plano_id WHERE ru.username = ? LIMIT 1`,
+      [username]
+    );
+    return !!row && ["lgpd", "lead"].includes(String(row.nome || "").trim().toLowerCase());
+  } catch (err) {
+    console.warn("[acessoEhGratis] indisponivel:", err.message);
+    return false;
+  }
+}
+
+/**
+ * Pode devolver as credenciais de um acesso JA existente a quem passou na checagem da data de
+ * nascimento? Se o CPF e' confirmado por pagamento, a data e' trava rigida (basta). Em cadastro
+ * provisorio (sem pagamento) a data nao prova nada — qualquer um a grava ao reivindicar o CPF e
+ * volta com ela —, entao so o aparelho que ja usou o acesso recebe as credenciais de volta;
+ * os demais caem na re-liberacao (senha nova), que nao expoe nada do acesso anterior.
+ * @param {{cpf: string, username: string, mac: string, empresaId: number|null}} p
+ * @returns {Promise<boolean>}
+ */
+async function podeReceberCredenciais({ cpf, username, mac, empresaId }) {
+  const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+  if (cpfLimpo.length === 11 && (await cpfConfirmado(cpfLimpo, empresaId))) return true;
+  return dispositivoJaUsouAcesso(username, mac);
+}
+
+/**
  * A re-liberacao (DELETE + INSERT no radcheck/radreply/radusergroup do username) troca a
  * senha e o plano. Para um username que JA tem saldo ativo isso destroi o acesso de quem
  * pode ser outra pessoa (ex.: plano pago sobrescrito pelo plano gratis de quem so sabe o CPF).
@@ -296,7 +360,10 @@ const MSG_PAGAMENTO_ALHEIO = "Já existe um acesso ativo para este CPF em outro 
 async function bloqueiaReliberacao({ username, titularVerificado = false, usernameEhMac = false }) {
   if (titularVerificado || usernameEhMac || !username) return false;
   const saldo = await verificarSaldoRadius(username);
-  return !!(saldo.existe && saldo.temSaldo);
+  if (!(saldo.existe && saldo.temSaldo)) return false;
+  // Acesso gratis (plano LGPD/Lead) pode ser regravado: nao ha o que proteger e trancar o dono
+  // (que nunca conectou) so deixaria o acesso parado. Acesso pago/admin continua protegido.
+  return !(await acessoEhGratis(username));
 }
 
 const MSG_ACESSO_ATIVO = "Já existe um acesso ativo para este cadastro. Use o usuário e senha que você recebeu ou informe a data de nascimento do titular.";
@@ -415,4 +482,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, dispositivoJaUsouAcesso, acessoEhGratis, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
