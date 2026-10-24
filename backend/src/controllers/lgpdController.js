@@ -317,11 +317,14 @@ exports.lgpdCadastro = async (req, res) => {
     // Reconexao por CPF: se ja existe, re-registra o consentimento (novo aceite
     // LGPD com timestamp valido) em vez de bloquear.
     let leadJaRegistrado = false;
+    let permitirDataEmExistente = false;
     if (cpf) {
       const cpfCheck = cpf.replace(/\D/g, "");
       const existing = await verificarLeadExistente(cpfCheck, empresaId);
       if (existing) {
         leadJaRegistrado = true;
+        // Lead antigo sem data: so preenche se for o mesmo aparelho do cadastro anterior
+        permitirDataEmExistente = mesmoDispositivo(existing, mac);
         await atualizarLeadExistente(existing.id, empresaId, {
           nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd,
           ap_mac: apInfo.apMac, ssid: apInfo.ssid,
@@ -336,7 +339,7 @@ exports.lgpdCadastro = async (req, res) => {
         [empresaId, nome || null, email || null, telefone || null, cpf, mac || null, ip || null, apInfo.apMac, apInfo.ssid, aceiteInt, termoLgpd]
       );
     }
-    await gravarDataNascimento(cpf, empresaId, data_nascimento);
+    await gravarDataNascimento(cpf, empresaId, data_nascimento, { permitirLeadExistente: permitirDataEmExistente });
 
     res.json({ success: true, message: "Cadastro LGPD realizado com sucesso" });
   } catch (err) {
