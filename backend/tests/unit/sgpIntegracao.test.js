@@ -48,6 +48,7 @@ const servidor = http.createServer((req, res) => {
     if (modo === 'redirect') { res.writeHead(302, { location: 'https://outro' }); return res.end(); }
     if (ultimoCorpo.token !== 'tok123' || ultimoCorpo.app !== 'meuapp') return json(401, { erro: 'credenciais' });
     const { offset, limit } = ultimoCorpo;
+    if (limit > 100) return json(400, { erro: '[limit]: max 100' });
     json(200, { clientes: CLIENTES.slice(offset, offset + limit) });
   });
 });
@@ -61,7 +62,7 @@ test('testar: devolve HTTP, campos achatados e mapeamento sem expor valores', as
   modo = 'ok';
   const r = await sgp.testar(cfg());
   assert.strictEqual(r.http, 200);
-  assert.strictEqual(r.registros, 200);   // 1a pagina
+  assert.strictEqual(r.registros, 100);   // 1a pagina
   assert.ok(r.campos.includes('endereco_cidade') && r.campos.includes('cidade'));
   assert.ok(!r.campos.includes('contratos'));
   assert.deepStrictEqual(r.identificou, { nome: true, documento: true });
