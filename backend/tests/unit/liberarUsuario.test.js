@@ -121,7 +121,7 @@ test('liberarUsuario: dispara notificarLiberacao com portal_id/empresa e a mesma
   assert.strictEqual(notificacoes[0].vars.username, '52998224725');
   assert.strictEqual(notificacoes[0].vars.password, gravada);
   assert.strictEqual(notificacoes[0].vars.login_url, `http://hotspot.local/login?username=52998224725&password=${gravada}`);
-  if (ret) assert.deepStrictEqual(ret, { username: '52998224725', password: gravada });
+  if (ret) assert.deepStrictEqual(ret, { username: '52998224725', password: gravada, tempoAcumulado: 0 });
 });
 
 test('liberarUsuario: falha no WhatsApp nao bloqueia a liberacao', async () => {

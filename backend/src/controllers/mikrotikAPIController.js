@@ -4,6 +4,7 @@ const axios = require("axios");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { upgradeSessaoCoA } = require("../utils/coa");
 const { gerarSenhaRadius, ehSenhaLegada } = require("../utils/radiusPassword");
+const { verificarSaldoRadius } = require("../utils/leadUtils");
 
 async function obterInformacoes(req, res) {
   const { id } = req.params;
@@ -39,6 +40,28 @@ async function obterInformacoes(req, res) {
 }
 
 /**
+ * Quando a liberacao empilhou tempo restante, o vencimento dos pagamentos aprovados do
+ * mesmo cliente precisa acompanhar o total: o job de expiracao remove o usuario do RADIUS
+ * no `expira_em` de cada pagamento (e o de um pagamento antigo derrubaria o tempo novo).
+ * So avanca o vencimento (nunca encurta). Nao bloqueia a liberacao.
+ */
+async function estenderExpiracaoPagamentos({ empresaId, cpfNumeros, mac, totalSegundos }) {
+  try {
+    const porCpf = !!cpfNumeros;
+    await db.query(
+      `UPDATE pagamentos
+          SET expira_em = DATE_ADD(NOW(), INTERVAL ? SECOND)
+        WHERE empresa_id = ? AND status = 'approved'
+          AND ${porCpf ? "REPLACE(REPLACE(REPLACE(cpf,'.',''),'-',''),' ','') = ?" : "mac = ?"}
+          AND (expira_em IS NULL OR expira_em < DATE_ADD(NOW(), INTERVAL ? SECOND))`,
+      [totalSegundos, empresaId, porCpf ? cpfNumeros : mac, totalSegundos]
+    );
+  } catch (err) {
+    console.warn("[liberarUsuario] estender expiracao dos pagamentos falhou:", err.message);
+  }
+}
+
+/**
  * Libera usuário no RADIUS com todos os atributos.
  * @param {Object} params
  * @param {string} params.mac - MAC address
@@ -46,8 +69,11 @@ async function obterInformacoes(req, res) {
  * @param {string} params.plano - Nome do plano
  * @param {number} [params.empresa_id] - ID da empresa (obrigatório para multi-tenant)
  * @param {number} [params.shared_users] - Limite de sessões simultâneas
+ * @param {boolean} [params.empilharTempo=false] - Soma o tempo restante do acesso ativo ao do plano novo
+ *   (em vez de descarta-lo). SO para caminhos com idempotencia por pagamento (`pagamentos.liberado_em`):
+ *   uma 2a chamada para o mesmo pagamento empilharia o plano de novo.
  */
-async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, cliente_id, portal_id, contexto_tipo, referencia_id }) {
+async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, cliente_id, portal_id, contexto_tipo, referencia_id, empilharTempo = false }) {
   try {
     // Username/senha: CPF (se tiver) ou MAC. Nao bloqueia por falta de CPF
     // (portais de Leads e Leads sem internet podem nao ter CPF).
@@ -71,7 +97,15 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
     if (!p) throw new Error(`Plano '${plano}' não encontrado${empresa_id ? ` para empresa ${empresa_id}` : ''}`);
 
     const rateLimit = `${p.velocidade_up}M/${p.velocidade_down}M`;
-    const tempoSegundos = p.duracao_minutos * 60;
+    // Pagamento com acesso ainda ativo: o tempo restante nao se perde, soma ao do plano novo
+    // (a velocidade passa a ser a do plano novo). liberado_em = NOW() zera o contador, entao o
+    // limite novo ja carrega o saldo antigo.
+    let tempoRestante = 0;
+    if (empilharTempo) {
+      const saldoAtual = await verificarSaldoRadius(username);
+      if (saldoAtual.existe && saldoAtual.temSaldo) tempoRestante = Math.max(0, Math.floor(saldoAtual.tempoRestante));
+    }
+    const tempoSegundos = p.duracao_minutos * 60 + tempoRestante;
     const empresaIdFinal = empresa_id || p.empresa_id;
 
     // 1.7: Upgrade SEM reconexao. Se ja existe sessao ativa com este username
@@ -168,8 +202,9 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
               cpf: cpfNumeros || "",
             },
           }).catch(err => console.warn("[liberarUsuario] notificarLiberacao (upgrade) falhou:", err.message));
-          console.log(`Upgrade sem reconexao (CoA) aplicado para ${username} -> plano ${plano}`);
-          return { username, password: senha };
+          if (tempoRestante > 0) await estenderExpiracaoPagamentos({ empresaId: empresaIdFinal, cpfNumeros, mac, totalSegundos: tempoSegundos });
+          console.log(`Upgrade sem reconexao (CoA) aplicado para ${username} -> plano ${plano}${tempoRestante ? ` (+${tempoRestante}s acumulados)` : ""}`);
+          return { username, password: senha, tempoAcumulado: tempoRestante };
         }
         console.warn(`[liberarUsuario] CoA falhou para ${username} (${coaRes.reason || coaRes.error}); recriando usuario (reconexao).`);
       } catch (upErr) {
@@ -259,8 +294,10 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
       },
     }).catch(err => console.warn("[liberarUsuario] notificarLiberacao falhou:", err.message));
 
-    console.log(`Usuario ${username} liberado com plano ${plano} (empresa: ${empresaIdFinal})`);
-    return { username, password: senha };
+    if (tempoRestante > 0) await estenderExpiracaoPagamentos({ empresaId: empresaIdFinal, cpfNumeros, mac, totalSegundos: tempoSegundos });
+
+    console.log(`Usuario ${username} liberado com plano ${plano} (empresa: ${empresaIdFinal})${tempoRestante ? ` (+${tempoRestante}s acumulados)` : ""}`);
+    return { username, password: senha, tempoAcumulado: tempoRestante };
   } catch (error) {
     console.error("Erro ao liberar usuario:", error.message);
     throw error;

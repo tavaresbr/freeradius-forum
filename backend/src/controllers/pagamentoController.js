@@ -579,6 +579,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
             portal_id: portalIdPagto,
             telefone: telefonePagto,
             contexto_tipo: "pagamento_cartao",
+            empilharTempo: true, // so com marcador pagamentos.liberado_em (1 liberacao por pagamento)
             referencia_id: pagId,
           });
         } catch (liberarErr) {
@@ -851,6 +852,7 @@ exports.notificacaoWebhook = async (req, res) => {
             portal_id: pagPortalId || null,
             telefone: pagTelefone || null,
             contexto_tipo: "pagamento_pix",
+            empilharTempo: true, // so com marcador pagamentos.liberado_em (1 liberacao por pagamento)
             referencia_id: pagIdWebhook,
           });
         } catch (liberarErr) {
@@ -1007,6 +1009,7 @@ exports.verificarStatusPagamento = async (req, res) => {
             portal_id: pagPortalId || null,
             telefone: pagTelefone || null,
             contexto_tipo: "pagamento_pix",
+            empilharTempo: true, // so com marcador pagamentos.liberado_em (1 liberacao por pagamento)
             referencia_id: pagIdStatus,
           });
           if (cred?.password) senhaLiberada = cred.password;
