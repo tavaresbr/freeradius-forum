@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { validarAssinaturaWebhook } = require("../utils/mpSignature");
 const { liberarUsuario } = require("./mikrotikAPIController");
 const { gerarAcessoTemporario } = require("./authTempController");
+const { obterSenhaRadius } = require("../utils/radiusPassword");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
@@ -567,9 +568,10 @@ exports.gerarPagamentoCartao = async (req, res) => {
 
       let gateway = null;
       let username = null;
+      let credLiberada = null; // { username, password } real gravado em radcheck
       if (marker.affectedRows > 0) {
         try {
-          await liberarUsuario({
+          credLiberada = await liberarUsuario({
             mac, ip, plano: plano.nome, empresa_id: empresaId,
             // CPF do CLIENTE (lead), nao do titular do cartao. E o que vira username RADIUS.
             cpf: clienteCpf,
@@ -599,7 +601,13 @@ exports.gerarPagamentoCartao = async (req, res) => {
         console.warn("Falha ao buscar gateway apos cartao approved:", e.message);
       }
 
-      const finalUsername = username || mac;
+      const finalUsername = credLiberada?.username || username || mac;
+      // Senha REAL do radcheck (aleatoria). Se outro caminho (webhook) liberou antes,
+      // le do banco; ultimo recurso = username (usuarios legados senha==username).
+      let senhaCartao = credLiberada?.password || null;
+      if (!senhaCartao) {
+        try { senhaCartao = await obterSenhaRadius(finalUsername); } catch (e) { /* cai no fallback */ }
+      }
       // Branch por vendor: Omada/UniFi precisam de gateway_info pro passo final
       // (browserauth / redirect); MikroTik segue o fluxo legado.
       const gatewayInfo = await montarGatewayInfo({
@@ -609,7 +617,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
         status: "approved",
         gateway,
         username: finalUsername,
-        password: finalUsername,
+        password: senhaCartao || finalUsername,
         mp_pagamento_id: mpPagamentoId,
         gateway_info: gatewayInfo,
       });
@@ -978,6 +986,7 @@ exports.verificarStatusPagamento = async (req, res) => {
     const mikrotik = mikrotikResult[0];
     const gateway = mikrotik?.end_hotspot || mikrotik?.ip || null;
 
+    let senhaLiberada = null; // senha real (radcheck) quando ESTA request liberou
     if (status === "approved") {
       // Idempotencia atomica: tenta marcar 'liberado_em' se ainda nao foi liberado.
       // Se affectedRows > 0 -> este e' o primeiro request que vai liberar, segue.
@@ -992,7 +1001,7 @@ exports.verificarStatusPagamento = async (req, res) => {
       );
       if (marker.affectedRows > 0) {
         try {
-          await liberarUsuario({
+          const cred = await liberarUsuario({
             mac, ip, plano: nome_plano, empresa_id: pagEmpresaId, cpf: pagCpf || null,
             cliente_id: pagClienteId || null,
             portal_id: pagPortalId || null,
@@ -1000,6 +1009,7 @@ exports.verificarStatusPagamento = async (req, res) => {
             contexto_tipo: "pagamento_pix",
             referencia_id: pagIdStatus,
           });
+          if (cred?.password) senhaLiberada = cred.password;
         } catch (liberarErr) {
           console.error("Erro ao liberar usuario no status check:", liberarErr.message);
           // Reverter marker pra permitir retry numa proxima chamada
@@ -1018,12 +1028,13 @@ exports.verificarStatusPagamento = async (req, res) => {
     // credenciais, e o cliente cairia de volta no captive portal. Melhor
     // "fingir" pending - o proximo polling tentara de novo e radcheck ja
     // estara la.
+    let senhaResp = null;
     if (status === "approved") {
-      const [rc] = await db.query(
-        "SELECT 1 FROM radcheck WHERE username = ? AND attribute = 'Cleartext-Password' LIMIT 1",
-        [usernameResp]
-      );
-      if (rc.length === 0) {
+      // Senha vem do radcheck (aleatoria). Com pagamentoId, so vale se a liberacao
+      // deste pagamento ja terminou (evita devolver senha de ciclo anterior
+      // enquanto outra request ainda regrava as credenciais).
+      senhaResp = senhaLiberada || await obterSenhaRadius(usernameResp, { pagamentoId: pagIdStatus });
+      if (!senhaResp) {
         return res.json({
           status: "pending",
           gateway: null,
@@ -1033,16 +1044,20 @@ exports.verificarStatusPagamento = async (req, res) => {
       }
     }
 
-    // Resposta publica NAO retorna cpf nem password. O `username` (== CPF do
-    // cliente) e' necessario pro auto-login no MikroTik; a senha e' igual ao
-    // username, entao o frontend reusa `username` como senha no redirect.
+    // Resposta publica NAO retorna cpf. Retorna `password` (agora ALEATORIA, lida do
+    // radcheck, nao mais == username/CPF) so quando approved: o redirect de auto-login
+    // precisa dela. Protegido pela prova de posse (mp_pagamento_id + mac do MESMO registro).
     // gateway_info: branch por vendor (Omada browserauth / UniFi redirect).
     const gatewayInfoStatus = status === "approved"
       ? await montarGatewayInfo({
           mikrotik_id: mikrotik?.mikrotik_id, empresa_id: pagEmpresaId, mac, username: usernameResp,
         })
       : null;
-    res.json({ status, gateway, username: usernameResp, gateway_info: gatewayInfoStatus });
+    res.json({
+      status, gateway, username: usernameResp,
+      ...(status === "approved" && senhaResp ? { password: senhaResp } : {}),
+      gateway_info: gatewayInfoStatus,
+    });
   } catch (error) {
     console.error("Erro ao verificar status:", error.message);
     res.status(500).json({ message: "Erro interno ao verificar status." });

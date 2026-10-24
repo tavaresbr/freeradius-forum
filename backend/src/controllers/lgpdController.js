@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { gerarSenhaRadius } = require("../utils/radiusPassword");
 const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
@@ -31,7 +32,7 @@ exports.lgpdLogin = async (req, res) => {
     // Limpar caracteres especiais do CPF para usar como username RADIUS
     const cpfLimpo = cpf ? cpf.replace(/\D/g, '') : null;
     const username = cpfLimpo || mac;
-    const senha = cpfLimpo || mac;
+    const senha = gerarSenhaRadius(); // aleatoria; devolvida ao frontend/WhatsApp
 
     // Busca plano LGPD da empresa ANTES de inserir registros
     let planoQuery = `

@@ -3,6 +3,7 @@ const { RouterOSAPI } = require("node-routeros");
 const axios = require("axios");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { upgradeSessaoCoA } = require("../utils/coa");
+const { gerarSenhaRadius, ehSenhaLegada } = require("../utils/radiusPassword");
 
 async function obterInformacoes(req, res) {
   const { id } = req.params;
@@ -52,7 +53,9 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
     // (portais de Leads e Leads sem internet podem nao ter CPF).
     const cpfNumeros = cpf ? String(cpf).replace(/\D/g, "") : null;
     const username = cpfNumeros || mac;
-    const senha = cpfNumeros || mac;
+    // Senha ALEATORIA (nao mais == username). A senha real gravada em radcheck e'
+    // a devolvida ao chamador / WhatsApp. Definida no ramo CoA ou no fluxo normal.
+    let senha = null;
 
     // Consulta plano FILTRANDO POR EMPRESA
     let planoQuery = "SELECT * FROM planos WHERE nome = ?";
@@ -81,6 +84,23 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
     );
     if (sessAtiva.length > 0) {
       try {
+        // Senha: mantem a do trial/ciclo atual (o navegador do cliente ja a recebeu e
+        // a sessao esta ativa). Se ausente ou legada (== username), grava uma nova.
+        const [pwRow] = await db.query(
+          "SELECT value FROM radcheck WHERE username = ? AND attribute = 'Cleartext-Password' LIMIT 1",
+          [username]
+        );
+        if (pwRow.length > 0 && !ehSenhaLegada(username, pwRow[0].value)) {
+          senha = String(pwRow[0].value);
+        } else {
+          senha = gerarSenhaRadius();
+          if (pwRow.length > 0) {
+            await db.query("UPDATE radcheck SET value = ? WHERE username = ? AND attribute = 'Cleartext-Password'", [senha, username]);
+          } else {
+            await db.query("INSERT INTO radcheck (username, attribute, op, value) VALUES (?, 'Cleartext-Password', ':=', ?)", [username, senha]);
+          }
+        }
+
         // Garante Max-All-Session (trial nao tinha esse atributo)
         const [chkMax] = await db.query(
           "SELECT id FROM radcheck WHERE username = ? AND attribute = 'Max-All-Session' LIMIT 1",
@@ -127,7 +147,7 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
         if (coaRes.ok) {
           const [mkUp] = await db.query("SELECT end_hotspot, ip FROM mikrotiks WHERE id = ? LIMIT 1", [p.mikrotik_id]);
           const gwUp = mkUp[0]?.end_hotspot || mkUp[0]?.ip || null;
-          const loginUrlUp = gwUp ? `http://${gwUp}/login?username=${username}&password=${username}` : "";
+          const loginUrlUp = gwUp ? `http://${gwUp}/login?username=${username}&password=${senha}` : "";
           notificarLiberacao({
             empresa_id: empresaIdFinal,
             portal_id: portal_id || null,
@@ -149,13 +169,17 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
             },
           }).catch(err => console.warn("[liberarUsuario] notificarLiberacao (upgrade) falhou:", err.message));
           console.log(`Upgrade sem reconexao (CoA) aplicado para ${username} -> plano ${plano}`);
-          return;
+          return { username, password: senha };
         }
         console.warn(`[liberarUsuario] CoA falhou para ${username} (${coaRes.reason || coaRes.error}); recriando usuario (reconexao).`);
       } catch (upErr) {
         console.warn(`[liberarUsuario] upgrade sem reconexao falhou para ${username}: ${upErr.message}; caindo pro fluxo normal.`);
       }
     }
+
+    // Nova senha aleatoria a cada (re)liberacao; usuarios legados (senha == username)
+    // sao regravados aqui. Se o ramo CoA falhou depois de gerar uma, descarta e gera outra.
+    senha = gerarSenhaRadius();
 
     // Remove entradas antigas do RADIUS
     await db.query("DELETE FROM radcheck WHERE username = ?", [username]);
@@ -210,7 +234,7 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
       [p.mikrotik_id]
     );
     const gateway = mkInfo[0]?.end_hotspot || mkInfo[0]?.ip || null;
-    const loginUrl = gateway ? `http://${gateway}/login?username=${username}&password=${username}` : "";
+    const loginUrl = gateway ? `http://${gateway}/login?username=${username}&password=${senha}` : "";
 
     // Dispara notificacao WhatsApp via service centralizado.
     // NUNCA bloqueia a liberacao: erros sao logados em whatsapp_logs.
@@ -236,6 +260,7 @@ async function liberarUsuario({ mac, ip, plano, empresa_id, cpf, telefone, clien
     }).catch(err => console.warn("[liberarUsuario] notificarLiberacao falhou:", err.message));
 
     console.log(`Usuario ${username} liberado com plano ${plano} (empresa: ${empresaIdFinal})`);
+    return { username, password: senha };
   } catch (error) {
     console.error("Erro ao liberar usuario:", error.message);
     throw error;

@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { gerarSenhaRadius } = require("../utils/radiusPassword");
 
 function gerarUsernameAleatorio(empresaId) {
   const timestamp = Date.now().toString().slice(-6);
@@ -16,7 +17,7 @@ async function gerarAcessoTemporario(mac, ip, planoId, empresaId, opts = {}) {
       : (opts.usernamePrefix
           ? `${opts.usernamePrefix}_${Date.now().toString().slice(-6)}_${Math.random().toString(36).substring(2, 6)}`
           : gerarUsernameAleatorio(empresaId));
-    const senha = username;
+    const senha = gerarSenhaRadius(); // aleatoria (nao mais == username)
     const rateLimit = opts.rateLimit || "2M/2M";
     const tempoSegundos = opts.duracaoSegundos || 300;
 
