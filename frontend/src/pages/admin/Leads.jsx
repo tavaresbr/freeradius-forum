@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { mascaraCPF } from "../../utils/cpfUtils";
 import { mascaraData, mascaraTelefone } from "../../utils/dataUtils";
+import { mascaraCEP, buscarCep } from "../../utils/cepUtils";
 
 const API = "";
 
@@ -78,9 +79,33 @@ export default function Leads() {
   const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [cepMsg, setCepMsg] = useState("");
+  const cepAtual = useRef("");
+  const numeroRef = useRef(null);
 
   const token = localStorage.getItem("admin_token");
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // CEP digitado por completo: busca o endereco e preenche os campos (so quando o CEP muda por digitacao)
+  const onCepChange = async (e) => {
+    const cep = mascaraCEP(e.target.value);
+    setForm((f) => ({ ...f, cep }));
+    setCepMsg("");
+    const digitos = cep.replace(/\D/g, "");
+    cepAtual.current = digitos;
+    if (digitos.length !== 8) return;
+    setCepMsg("Buscando CEP...");
+    try {
+      const end = await buscarCep(digitos);
+      if (cepAtual.current !== digitos) return; // CEP mudou durante a busca
+      if (!end) { setCepMsg("CEP não encontrado — preencha o endereço manualmente"); return; }
+      setForm((f) => ({ ...f, logradouro: end.logradouro, bairro: end.bairro, cidade: end.cidade, uf: end.uf }));
+      setCepMsg("");
+      numeroRef.current && numeroRef.current.focus();
+    } catch {
+      if (cepAtual.current === digitos) setCepMsg("Não foi possível consultar o CEP — preencha manualmente");
+    }
+  };
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -139,6 +164,7 @@ export default function Leads() {
     setForm(FORM_VAZIO);
     setAba("dados");
     setErro("");
+    setCepMsg("");
     setShowModal(true);
   };
 
@@ -147,6 +173,7 @@ export default function Leads() {
     setForm(deLead(lead));
     setAba("dados");
     setErro("");
+    setCepMsg("");
     setShowModal(true);
   };
 
@@ -456,13 +483,14 @@ export default function Leads() {
               {aba === "endereco" && (
                 <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
                   <Campo label="CEP" className="sm:col-span-2">
-                    <input type="text" value={form.cep} onChange={set("cep")} placeholder="00000-000" className={inputCls} />
+                    <input type="text" inputMode="numeric" value={form.cep} onChange={onCepChange} placeholder="00000-000" className={inputCls} />
+                    {cepMsg && <p className="text-xs text-gray-400 mt-1">{cepMsg}</p>}
                   </Campo>
                   <Campo label="Logradouro" className="sm:col-span-4">
                     <input type="text" value={form.logradouro} onChange={set("logradouro")} className={inputCls} />
                   </Campo>
                   <Campo label="Número" className="sm:col-span-2">
-                    <input type="text" value={form.numero} onChange={set("numero")} className={inputCls} />
+                    <input type="text" ref={numeroRef} value={form.numero} onChange={set("numero")} className={inputCls} />
                   </Campo>
                   <Campo label="Complemento" className="sm:col-span-4">
                     <input type="text" value={form.complemento} onChange={set("complemento")} className={inputCls} />
