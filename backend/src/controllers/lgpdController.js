@@ -8,6 +8,7 @@ const { mascararNome } = require("../utils/mascararDados");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
+const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 
 exports.lgpdLogin = async (req, res) => {
   try {
@@ -97,6 +98,8 @@ exports.lgpdLogin = async (req, res) => {
             password: saldo.password,
             existente: true,
             tempoRestante: saldo.tempoRestante,
+            // Sessao aberta em outro aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+            ...(await tratarSessaoAtiva({ username, mac, empresaId })),
             gateway_info: await montarGatewayInfo({
               mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username,
             }),

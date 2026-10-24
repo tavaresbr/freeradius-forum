@@ -36,6 +36,7 @@ const pagamentoRoutes = require("./src/routes/pagamentoRoutes");
 const radiusRoutes = require('./src/routes/radiusRoutes');
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const lgpdRoutes = require("./src/routes/lgpdRoutes");
+const sessaoRoutes = require("./src/routes/sessaoRoutes");
 const whatsappRoutes = require("./src/routes/whatsappRoutes");
 const authTempRoutes = require("./src/routes/authTempRoutes");
 const limpezaRoutes = require("./src/routes/limpezaRoutes");
@@ -116,6 +117,7 @@ app.use('/api/auth', authRoutes)            // Auth
 app.use('/api/auth', authTempRoutes)        // Acesso temporário
 app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
+app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
 app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
 app.use("/api/registro", registroRoutes);       // Registro público de empresas
 

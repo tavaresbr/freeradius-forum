@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import BuscaCpf from "../../components/public/BuscaCpf";
+import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 import { normalizarCampos, validarCampos } from "../../utils/camposPortal";
 
 export default function CadastroLGPD() {
@@ -43,6 +44,8 @@ export default function CadastroLGPD() {
   const [cpfErro, setCpfErro] = useState("");
   // Passo 1: so CPF + data de nascimento; o restante aparece depois da busca do cadastro
   const [mostrarResto, setMostrarResto] = useState(false);
+  // Resposta do login quando o acesso ja esta conectado em outro aparelho (aguarda a decisao do cliente)
+  const [sessaoAtiva, setSessaoAtiva] = useState(null);
   // Dados de contato trazidos de um cadastro existente: se CPF ou data mudarem, somem (nao vazam para outro CPF)
   const preenchidoAuto = useRef(false);
   const limparPreenchido = () => {
@@ -103,6 +106,10 @@ export default function CadastroLGPD() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro ao cadastrar");
+      if (data.requer_desconexao) {
+        setSessaoAtiva(data);
+        return;
+      }
       setMensagem("Cadastro realizado! Conectando...");
 
       if (data.gateway && data.username) {
@@ -150,6 +157,19 @@ export default function CadastroLGPD() {
             </div>
           )}
           
+          {sessaoAtiva && (
+            <div className="mb-6">
+              <SessaoAtivaAviso
+                dados={sessaoAtiva}
+                cpf={form.cpf}
+                dataNascimento={form.data_nascimento}
+                mac={form.mac}
+                mikrotikId={mikrotikId}
+                onCancelar={() => setSessaoAtiva(null)}
+              />
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

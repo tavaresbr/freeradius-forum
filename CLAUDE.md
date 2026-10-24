@@ -1821,6 +1821,12 @@ Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e
 
 ---
 
+## Sessao simultanea: desconectar o outro aparelho
+
+`Simultaneous-Use=1` faz o FreeRADIUS recusar o login de quem ja esta conectado em outro aparelho (o MikroTik nao explica o motivo). Nos portais LGPD e Lead (`CadastroLGPD.jsx`, `CadastroLead.jsx`), na reconexao com saldo, `utils/sessaoAtiva.tratarSessaoAtiva` olha o `radacct` aberto do username (ignora sessoes sem update ha >15 min, restrito a empresa): **mesmo MAC** = sessao velha, desconecta sozinho; **outro MAC** = a resposta traz `requer_desconexao:true` + `sessao_ativa` (so os 2 ultimos bytes do MAC) e o portal mostra `SessaoAtivaAviso.jsx` ("Desconectar o outro e conectar aqui" / "Cancelar"). A confirmacao chama `POST /api/sessao/desconectar-anterior` (publico, `cpfLookupLimiters`): exige CPF + data de nascimento com `conferirDataNascimento === 'ok'` (nunca `reivindicado`/`ausente`), empresa vinda do `mikrotik_id` e username do proprio titular (CPF ou telefone/e-mail/MAC do lead). `desconectarSessao`: Disconnect-Request via `radclient` (`coa.desconectarSessaoCoA`, porta 3799) -> fallback API do MikroTik (so `/ip/hotspot/active` do usuario) -> espera o Accounting-Stop (4 s) e, se nao chegar, fecha a linha (`Admin-Reset`). **Nunca apaga radcheck/radreply/radius_users** (o saldo continua). Sem metodo que funcione (ex.: Omada External RADIUS, Grandstream) = `ok:false` e a linha NAO e fechada. Fora do escopo (fase 2): pagamento PIX/cartao e `LoginHotspot.jsx`. Testes: `backend/tests/unit/sessaoAtiva.test.js`. Nao testado contra um MikroTik real (so mocks).
+
+---
+
 ## Cadastro completo de clientes e importacao (SGP / planilha)
 
 Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`) edita o cadastro completo em `leads`. Importacao em `/admin/:slug/importar-clientes` (`ImportarClientes.jsx`), API `/api/clientes-import` (permissao do modulo `leads`).

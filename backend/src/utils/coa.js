@@ -17,14 +17,15 @@ const COA_PORT = 3799;
 const COA_TIMEOUT_MS = 8000;
 
 /**
- * Envia um pacote CoA-Request via radclient.
+ * Envia um pacote CoA-Request (ou Disconnect-Request) via radclient.
  * @param {Object} p
  * @param {string} p.nasip - IP do NAS (radacct.nasipaddress)
  * @param {string} p.secret - segredo RADIUS do NAS
  * @param {Object} p.attrs - atributos { 'User-Name': 'x', 'Session-Timeout': 3600, ... }
+ * @param {"coa"|"disconnect"} [p.codigo="coa"] - tipo do pacote
  * @returns {Promise<{ok:boolean, stdout?:string, error?:string}>}
  */
-function enviarCoA({ nasip, secret, attrs }) {
+function enviarCoA({ nasip, secret, attrs, codigo = "coa" }) {
   return new Promise((resolve) => {
     const payload = Object.entries(attrs)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
@@ -33,13 +34,13 @@ function enviarCoA({ nasip, secret, attrs }) {
 
     const child = execFile(
       "radclient",
-      ["-x", `${nasip}:${COA_PORT}`, "coa", secret],
+      ["-x", `${nasip}:${COA_PORT}`, codigo, secret],
       { timeout: COA_TIMEOUT_MS },
       (err, stdout = "", stderr = "") => {
         if (err) {
           return resolve({ ok: false, error: err.message, stdout, stderr });
         }
-        const ok = /CoA-ACK/i.test(stdout);
+        const ok = codigo === "disconnect" ? /Disconnect-ACK/i.test(stdout) : /CoA-ACK/i.test(stdout);
         resolve({ ok, stdout, stderr });
       }
     );
@@ -97,4 +98,36 @@ async function upgradeSessaoCoA({ username, sessionTimeout, rateLimit }) {
   }
 }
 
-module.exports = { enviarCoA, upgradeSessaoCoA };
+/**
+ * Derruba uma sessao ativa via Disconnect-Request (RFC 5176) ao NAS.
+ * Nao apaga credenciais nem saldo: so encerra a conexao no equipamento.
+ * @param {Object} p
+ * @param {string} p.username
+ * @param {{acctsessionid?:string, nasipaddress:string, framedipaddress?:string}} p.sessao - linha do radacct
+ * @returns {Promise<{ok:boolean, reason?:string, error?:string}>}
+ */
+async function desconectarSessaoCoA({ username, sessao }) {
+  try {
+    if (!sessao || !sessao.nasipaddress) return { ok: false, reason: "no_nas_ip" };
+    const [[nasRow]] = await db.query(
+      "SELECT secret FROM nas WHERE nasname = ? LIMIT 1",
+      [sessao.nasipaddress]
+    );
+    const secret = nasRow?.secret;
+    if (!secret) return { ok: false, reason: "no_secret" };
+    return await enviarCoA({
+      nasip: sessao.nasipaddress,
+      secret,
+      codigo: "disconnect",
+      attrs: {
+        "User-Name": username,
+        "Acct-Session-Id": sessao.acctsessionid || undefined,
+        "Framed-IP-Address": sessao.framedipaddress || undefined,
+      },
+    });
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+module.exports = { enviarCoA, upgradeSessaoCoA, desconectarSessaoCoA };
