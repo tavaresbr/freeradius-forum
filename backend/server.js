@@ -47,6 +47,7 @@ const portalTemplateRoutes = require("./src/routes/portalTemplateRoutes");
 const campanhasRoutes = require("./src/routes/campanhasRoutes");
 const campanhasPublicRoutes = require("./src/routes/campanhasPublicRoutes");
 const leadRoutes = require("./src/routes/leadRoutes");
+const importacaoRoutes = require("./src/routes/importacaoRoutes");
 const complianceRoutes = require("./src/routes/complianceRoutes");
 const empresaRoutes = require("./src/routes/empresaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
@@ -157,6 +158,7 @@ app.use("/api/portais", auth, tenant, checkPermissao('portais'), portalRoutes);
 app.use("/api/campanhas", auth, tenant, checkPermissao('portais'), campanhasRoutes);
 app.use("/api/portal-templates", auth, tenant, checkPermissao('portais'), portalTemplateRoutes);
 app.use("/api/leads", auth, tenant, checkPermissao('leads'), leadRoutes);
+app.use("/api/clientes-import", auth, tenant, checkPermissao('leads'), importacaoRoutes);
 app.use("/api/compliance", auth, tenant, checkPermissao('compliance'), complianceRoutes);
 app.use("/api/empresa-config", auth, tenant, checkPermissao('configuracoes'), empresaConfigRoutes);
 

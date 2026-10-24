@@ -152,7 +152,8 @@ export default function AdminLayout({ children }) {
       ),
       children: [
         { key: "clientes", title: "Cadastro LGPD", path: `${basePath}/lgpd` },
-        { key: "leads", title: "Leads", path: `${basePath}/leads` },
+        { key: "leads", title: "Clientes / Leads", path: `${basePath}/leads` },
+        { key: "leads", title: "Importar clientes", path: `${basePath}/importar-clientes` },
       ]
     },
     {

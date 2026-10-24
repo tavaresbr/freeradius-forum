@@ -188,6 +188,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 024 | `024_ap_info` | `ap_mac`/`ssid` em `connection_logs` e `leads`, tabela `access_points`, backfill do radacct |
 | 025 | `025_grandstream_gateway` | ENUM `mikrotiks.tipo` + 'grandstream'; colunas `gwn_api_key`, `gwn_api_secret`, `gwn_network_id` |
 | 026 | `026_leads_data_nascimento` | `leads.data_nascimento` (DATE) |
+| 029 | `029_leads_cadastro_completo` | `leads`: tipo_pessoa, rg, cnpj, razao_social, endereco (cep..uf), `id_externo`, `sistema_origem`, `importado_em`; `origem` vira VARCHAR(30); indices `(empresa_id,cpf)` e `(empresa_id,sistema_origem,id_externo)`; `empresa_configs.config_type` ganha 'sgp' |
 
 ---
 
@@ -1811,3 +1812,15 @@ Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e
 11. **RADIUS: tempo cumulativo, NAO diario (2026-04-24).** Se for tocar em qualquer fluxo de liberacao RADIUS, use sempre `Max-All-Session` (nunca `Max-Daily-Session`) e `Simultaneous-Use=1` hardcoded. Toda nova liberacao deve fazer `DELETE FROM radacct WHERE username=?` (sem filtro de data) pra zerar o contador. O FreeRADIUS usa `sqlcounter totalcounter` com `reset=never`. Detalhes em "Modelo de Tempo: CUMULATIVO" acima. NUNCA voltar pro modelo daily sem revisar todos os 5 controllers: `mikrotikAPIController`, `radiusController`, `lgpdController`, `leadController`, `loginPortalController`.
 
 12. **`shared_users` do plano e' LIDO mas nao USADO (2026-04-24).** Campo continua em `SELECT` em varios lugares por compatibilidade, mas o valor e ignorado — `Simultaneous-Use` e sempre `1`. Se voltar a usar, revisar os 5 controllers acima.
+
+---
+
+## Cadastro completo de clientes e importacao (SGP / planilha)
+
+Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`) edita o cadastro completo em `leads`. Importacao em `/admin/:slug/importar-clientes` (`ImportarClientes.jsx`), API `/api/clientes-import` (permissao do modulo `leads`).
+
+- Logica: `backend/src/utils/importCadastros.js` (mapeamento, normalizacao, `processarImportacao`, parse CSV/XLSX) e `backend/src/utils/sgpClient.js` (config por empresa em `empresa_configs` tipo `sgp`).
+- **CPF/CNPJ existente: so preenche campos vazios** (`COALESCE(NULLIF(col,''), ?)`); nunca toca `lgpd_aceite`/`lgpd_termo`/`status`/CPF. Importados entram com `origem='importacao'`, `lgpd_aceite=0`.
+- Importar `data_nascimento` torna o lead localizavel por CPF+data em `/api/lgpd/consulta-cpf`.
+- **SGP:** o endpoint padrao (`/api/ura/clientes/`) e o formato da resposta NAO foram validados contra um SGP real; o cliente aceita a lista em `clientes|results|data|items` e achata objetos aninhados. Ajustar o campo "Endpoint" na tela se a versao do SGP for diferente. A URL e validada contra destinos internos (SSRF).
+- Testes: `backend/tests/unit/importCadastros.test.js`.
