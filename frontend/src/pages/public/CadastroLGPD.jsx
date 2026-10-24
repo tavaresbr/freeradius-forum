@@ -288,7 +288,7 @@ export default function CadastroLGPD() {
                   className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
                 <label htmlFor="aceite" className="text-sm text-gray-700 leading-relaxed cursor-pointer">
-                  {cfg.texto_lgpd || "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais. *"}
+                  {cfg.texto_lgpd || "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais, incluindo a data de nascimento, que será utilizada para confirmar minha identidade e recuperar meu cadastro. *"}
                 </label>
               </div>
             </div>
