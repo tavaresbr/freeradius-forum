@@ -43,7 +43,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   const WRITE_TIMEOUT = 10000;
   // /tool/fetch conclui no roteador mas, em alguns modelos (hAP), a resposta da API
   // demora ou nunca volta; por isso o resultado e confirmado em /file/print.
-  const FETCH_TIMEOUT = 20000;
+  const FETCH_TIMEOUT = 45000;
+  const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const safePrint = async (path) => {
     return Promise.race([
@@ -250,8 +251,19 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         `=address-pool=${poolName}`,
       ]);
       if (r === "timeout") {
-        addStep("user-profile", "aviso",
-          `Sem resposta ao ajustar o user profile default. Confirme no MikroTik: /ip hotspot user profile print (address-pool deve ser ${poolName})`);
+        // O set pode ter sido aplicado mesmo sem resposta: confere o valor no roteador.
+        await esperar(2000);
+        const perfis = await Promise.race([
+          conn.write("/ip/hotspot/user/profile/print", ["=.proplist=name,address-pool"]).then(x => Array.isArray(x) ? x : []).catch(() => []),
+          new Promise(resolve => setTimeout(() => resolve([]), 8000)),
+        ]);
+        const padrao = perfis.find(p => p.name === "default");
+        if (padrao && padrao["address-pool"] === poolName) {
+          addStep("user-profile", "ok", `User profile default apontando para ${poolName} (confirmado no roteador)`);
+        } else {
+          addStep("user-profile", "aviso",
+            `Sem resposta ao ajustar o user profile default. Confirme no MikroTik: /ip hotspot user profile print (address-pool deve ser ${poolName})`);
+        }
       } else {
         addStep("user-profile", "ok", `User profile default apontando para ${poolName}`);
       }
@@ -357,11 +369,17 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
 
       // Depois de um timeout, confere no roteador se o arquivo foi (re)gravado:
       // o creation-time mudou ou o conteudo cita o ID deste equipamento.
+      // Em roteador lento o arquivo pode aparecer depois da resposta expirar: reconfere
+      // algumas vezes antes de desistir.
       const confirmarDownload = async () => {
-        const depois = await lerArquivo(dstLogin);
-        if (!depois || !(Number(depois.size) > 0)) return false;
-        if (!antes || depois["creation-time"] !== antes["creation-time"]) return true;
-        return new RegExp(`(redirect/|mikrotik_id=)${mikrotik.id}\\b`).test(depois.contents);
+        for (let i = 0; i < 3; i++) {
+          if (i > 0) await esperar(4000);
+          const depois = await lerArquivo(dstLogin);
+          if (!depois || !(Number(depois.size) > 0)) continue;
+          if (!antes || depois["creation-time"] !== antes["creation-time"]) return true;
+          if (new RegExp(`(redirect/|mikrotik_id=)${mikrotik.id}\\b`).test(depois.contents)) return true;
+        }
+        return false;
       };
 
       try {
