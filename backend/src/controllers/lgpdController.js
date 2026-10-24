@@ -387,7 +387,7 @@ exports.consultaCpf = async (req, res) => {
 
     if (!cadastro) return res.json({ encontrado: false });
     if (confirmar === true) {
-      return res.json({ encontrado: true, nome: cadastro.nome, telefone: cadastro.telefone || "" });
+      return res.json({ encontrado: true, nome: cadastro.nome, telefone: cadastro.telefone || "", email: cadastro.email || "" });
     }
     return res.json({ encontrado: true, nome_mascarado: mascararNome(cadastro.nome) });
   } catch (err) {

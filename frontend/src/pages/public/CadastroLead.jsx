@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import BuscaCpf from "../../components/public/BuscaCpf";
@@ -18,6 +18,15 @@ export default function CadastroLead() {
   const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [cpfErro, setCpfErro] = useState("");
+  // Passo 1: so CPF + data de nascimento; o restante aparece depois da busca do cadastro
+  const [mostrarResto, setMostrarResto] = useState(false);
+  // Dados de contato trazidos de um cadastro existente: se CPF ou data mudarem, somem (nao vazam para outro CPF)
+  const preenchidoAuto = useRef(false);
+  const limparPreenchido = () => {
+    if (!preenchidoAuto.current) return;
+    preenchidoAuto.current = false;
+    setForm((f) => ({ ...f, nome: "", email: "", telefone: "" }));
+  };
   const [mikrotikId, setMikrotikId] = useState("");
   const [cfg, setCfg] = useState({});
 
@@ -62,6 +71,7 @@ export default function CadastroLead() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!restoVisivel) return; // Enter no passo 1 nao envia o cadastro
     setMensagem(null);
     setErro(null);
 
@@ -90,6 +100,9 @@ export default function CadastroLead() {
       setEnviando(false);
     }
   };
+
+  // Sem CPF no portal nao ha passo 1: mostra tudo
+  const restoVisivel = mostrarResto || cfg.exibir_cpf === false;
 
   const bgStyle = cfg.cor_fundo_1 ? { background: `linear-gradient(135deg, ${cfg.cor_fundo_1}, ${cfg.cor_fundo_2 || cfg.cor_fundo_1})` } : undefined;
   const btnStyle = cfg.cor_botao ? { backgroundColor: cfg.cor_botao } : undefined;
@@ -133,6 +146,46 @@ export default function CadastroLead() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {cfg.exibir_cpf !== false && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    name="cpf"
+                    inputMode="numeric"
+                    value={form.cpf}
+                    onChange={handleChange}
+                    placeholder="000.000.000-00"
+                    className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:border-transparent transition-all ${
+                      cpfErro ? 'border-red-500 focus:ring-red-400' : form.cpf.replace(/\D/g, '').length === 11 ? 'border-green-500 focus:ring-green-400' : 'border-gray-300 focus:ring-emerald-500'
+                    }`}
+                  />
+                </div>
+                {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
+              </div>
+            )}
+
+            {cfg.exibir_cpf !== false && (
+              <BuscaCpf
+                cpf={form.cpf}
+                dataNascimento={form.data_nascimento}
+                onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
+                mac={form.mac}
+                mikrotikId={mikrotikId}
+                onPreencher={({ nome, telefone, email }) => { preenchidoAuto.current = true; setForm((f) => ({ ...f, nome: nome || f.nome, telefone: telefone || f.telefone, email: email || f.email })); }}
+                onLiberarResto={() => setMostrarResto(true)}
+                onResetar={() => { setMostrarResto(false); limparPreenchido(); }}
+                ringClass="focus:ring-emerald-500"
+              />
+            )}
+
+            {restoVisivel && (<>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Nome *</label>
               <div className="relative">
@@ -153,41 +206,6 @@ export default function CadastroLead() {
               </div>
             </div>
 
-            {cfg.exibir_cpf !== false && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">CPF</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    name="cpf"
-                    value={form.cpf}
-                    onChange={handleChange}
-                    placeholder="000.000.000-00"
-                    className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:border-transparent transition-all ${
-                      cpfErro ? 'border-red-500 focus:ring-red-400' : form.cpf.replace(/\D/g, '').length === 11 ? 'border-green-500 focus:ring-green-400' : 'border-gray-300 focus:ring-emerald-500'
-                    }`}
-                  />
-                </div>
-                {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
-              </div>
-            )}
-
-            {cfg.exibir_cpf !== false && (
-              <BuscaCpf
-                cpf={form.cpf}
-                dataNascimento={form.data_nascimento}
-                onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
-                mac={form.mac}
-                mikrotikId={mikrotikId}
-                onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: nome || f.nome, telefone: telefone || f.telefone }))}
-                ringClass="focus:ring-emerald-500"
-              />
-            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -251,6 +269,7 @@ export default function CadastroLead() {
               </svg>
               <span>{enviando ? "Conectando..." : (cfg.texto_botao || "Conectar à Internet")}</span>
             </button>
+            </>)}
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200">

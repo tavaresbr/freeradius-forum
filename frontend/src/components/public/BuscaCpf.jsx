@@ -1,29 +1,37 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { validarCPF } from "../../utils/cpfUtils";
 import { mascaraData, dataNascimentoValida, mascaraTelefone } from "../../utils/dataUtils";
 
 /**
- * Data de nascimento + "Buscar meu cadastro" para os portais de cadastro.
+ * Passo 1 dos portais de cadastro: data de nascimento + "Continuar".
  * Só acha cadastros do próprio banco (mesma empresa) quando CPF e data batem.
- * Passo 1 mostra o nome mascarado; "Sim, preencher" busca o nome e o telefone.
+ * - achou: mostra o nome mascarado e pergunta "É você?"; "Sim" busca nome, telefone e e-mail
+ *   (onPreencher) e libera o restante do formulário (onLiberarResto);
+ * - não achou / erro: libera o restante em branco para preencher (cadastro novo ou atualização,
+ *   as regras de titularidade ficam no servidor); só o bloqueio por excesso de tentativas (429) não libera.
  * Props: cpf (com ou sem máscara), dataNascimento (DD/MM/AAAA) e onDataChange (controlado),
- * mac e mikrotikId (para o servidor limitar tentativas e achar a empresa),
- * onPreencher({ nome, telefone }) e ringClass (cor do foco do campo).
+ * mac e mikrotikId (o servidor limita tentativas e acha a empresa), onPreencher({ nome, telefone, email }),
+ * onLiberarResto(), onResetar() (CPF ou data mudaram) e ringClass (cor do foco do campo).
  */
-export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikrotikId, onPreencher, ringClass = "focus:ring-blue-500" }) {
-  // estado: idle | buscando | achou | nao-achou | erro
+export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikrotikId, onPreencher, onLiberarResto, onResetar, ringClass = "focus:ring-blue-500" }) {
+  // estado: idle | buscando | achou | liberado | bloqueado
   const [estado, setEstado] = useState("idle");
   const [nomeMascarado, setNomeMascarado] = useState("");
   const [aviso, setAviso] = useState("");
 
-  // Mudou CPF ou data: o resultado anterior deixa de valer
+  // Callbacks do pai sempre atualizados, sem refazer o efeito de reset
+  const cb = useRef({});
+  cb.current = { onPreencher, onLiberarResto, onResetar };
+
+  // Mudou CPF ou data: o resultado anterior deixa de valer e o restante do formulário volta a se esconder
   useEffect(() => {
     setEstado("idle");
     setNomeMascarado("");
     setAviso("");
+    if (cb.current.onResetar) cb.current.onResetar();
   }, [cpf, dataNascimento]);
 
-  const podeBuscar = validarCPF(cpf || "") && dataNascimentoValida(dataNascimento) && estado !== "buscando";
+  const podeContinuar = validarCPF(cpf || "") && dataNascimentoValida(dataNascimento) && estado !== "buscando";
 
   const chamar = async (confirmar) => {
     const res = await fetch("/api/lgpd/consulta-cpf", {
@@ -36,49 +44,55 @@ export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikro
     return { res, data };
   };
 
-  const falha = (res, data) => {
-    setEstado("erro");
-    setAviso(res.status === 429 ? (data.error || "Muitas tentativas. Tente novamente mais tarde.") : (data.message || "Não foi possível buscar agora. Preencha os dados manualmente."));
+  const liberar = (mensagem) => {
+    setAviso(mensagem || "");
+    setEstado("liberado");
+    if (cb.current.onLiberarResto) cb.current.onLiberarResto();
   };
 
-  const buscar = async () => {
+  const bloquear = (data) => {
+    setAviso(data.error || "Muitas tentativas. Tente novamente mais tarde.");
+    setEstado("bloqueado");
+  };
+
+  const continuar = async () => {
+    if (!podeContinuar) return;
     setEstado("buscando");
     setAviso("");
     try {
       const { res, data } = await chamar(false);
-      if (!res.ok) return falha(res, data);
+      if (res.status === 429) return bloquear(data);
+      if (!res.ok) return liberar("Não foi possível buscar seu cadastro agora. Preencha seus dados abaixo.");
       if (data.encontrado) {
         setNomeMascarado(data.nome_mascarado || "");
         setEstado("achou");
       } else {
-        setEstado("nao-achou");
+        liberar("Não encontramos um cadastro com esses dados. Preencha seus dados abaixo.");
       }
     } catch {
-      setEstado("erro");
-      setAviso("Erro de conexão. Preencha os dados manualmente.");
+      liberar("Erro de conexão ao buscar seu cadastro. Preencha seus dados abaixo.");
     }
   };
 
-  const preencher = async () => {
+  const souEu = async () => {
     setEstado("buscando");
     try {
       const { res, data } = await chamar(true);
-      if (!res.ok) return falha(res, data);
-      if (data.encontrado) {
-        onPreencher({ nome: data.nome || "", telefone: mascaraTelefone(data.telefone) });
-        setEstado("preenchido");
+      if (res.status === 429) return bloquear(data);
+      if (res.ok && data.encontrado) {
+        if (cb.current.onPreencher) cb.current.onPreencher({ nome: data.nome || "", telefone: mascaraTelefone(data.telefone), email: data.email || "" });
+        liberar("Dados preenchidos. Confira e atualize se precisar.");
       } else {
-        setEstado("nao-achou");
+        liberar("Não foi possível carregar seus dados. Preencha abaixo.");
       }
     } catch {
-      setEstado("erro");
-      setAviso("Erro de conexão. Preencha os dados manualmente.");
+      liberar("Erro de conexão. Preencha seus dados abaixo.");
     }
   };
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">Data de nascimento</label>
+      <label className="block text-sm font-medium text-gray-700 mb-2">Data de nascimento *</label>
       <div className="flex gap-2">
         <input
           type="text"
@@ -86,33 +100,33 @@ export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikro
           name="data_nascimento"
           value={dataNascimento}
           onChange={(e) => onDataChange(mascaraData(e.target.value))}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); continuar(); } }}
           placeholder="DD/MM/AAAA"
           autoComplete="bday"
           className={`flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 ${ringClass} focus:border-transparent transition-all`}
         />
         <button
           type="button"
-          onClick={buscar}
-          disabled={!podeBuscar}
-          className="px-4 py-3 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={continuar}
+          disabled={!podeContinuar}
+          className="px-5 py-3 rounded-lg text-sm font-semibold border border-gray-300 text-gray-800 bg-gray-50 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {estado === "buscando" ? "Buscando..." : "Buscar meu cadastro"}
+          {estado === "buscando" ? "Buscando..." : "Continuar"}
         </button>
       </div>
-      <p className="text-gray-500 text-xs mt-1">Se você já se cadastrou aqui, informe a mesma data para reconectar e preenchermos seus dados.</p>
+      {estado === "idle" && <p className="text-gray-500 text-xs mt-1">Informe seu CPF e sua data de nascimento para começar.</p>}
 
       {estado === "achou" && (
         <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
           <p>Encontramos um cadastro em nome de <strong>{nomeMascarado}</strong>. É você?</p>
-          <div className="flex gap-2 mt-2">
-            <button type="button" onClick={preencher} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Sim, preencher meus dados</button>
-            <button type="button" onClick={() => setEstado("idle")} className="px-3 py-1.5 rounded-md border border-blue-300 text-blue-800 text-sm hover:bg-blue-100">Não</button>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button type="button" onClick={souEu} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Sim, sou eu</button>
+            <button type="button" onClick={() => liberar("")} className="px-3 py-1.5 rounded-md border border-blue-300 text-blue-800 text-sm hover:bg-blue-100">Não, preencher novos dados</button>
           </div>
         </div>
       )}
-      {estado === "preenchido" && <p className="text-green-700 text-xs mt-2">Dados preenchidos. Confira e corrija se precisar.</p>}
-      {estado === "nao-achou" && <p className="text-gray-600 text-xs mt-2">Não encontramos um cadastro com esses dados. Preencha manualmente e informe a data de nascimento: nas próximas vezes a busca funcionará.</p>}
-      {estado === "erro" && <p className="text-red-600 text-xs mt-2">{aviso}</p>}
+      {estado === "liberado" && aviso && <p className="text-gray-600 text-xs mt-2">{aviso}</p>}
+      {estado === "bloqueado" && <p className="text-red-600 text-xs mt-2">{aviso}</p>}
     </div>
   );
 }

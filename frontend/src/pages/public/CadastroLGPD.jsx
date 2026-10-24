@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import BuscaCpf from "../../components/public/BuscaCpf";
@@ -41,6 +41,15 @@ export default function CadastroLGPD() {
   }, []);
 
   const [cpfErro, setCpfErro] = useState("");
+  // Passo 1: so CPF + data de nascimento; o restante aparece depois da busca do cadastro
+  const [mostrarResto, setMostrarResto] = useState(false);
+  // Dados de contato trazidos de um cadastro existente: se CPF ou data mudarem, somem (nao vazam para outro CPF)
+  const preenchidoAuto = useRef(false);
+  const limparPreenchido = () => {
+    if (!preenchidoAuto.current) return;
+    preenchidoAuto.current = false;
+    setForm((f) => ({ ...f, nome: "", email: "", telefone: "" }));
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -70,6 +79,7 @@ export default function CadastroLGPD() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!mostrarResto) return; // Enter no passo 1 nao envia o cadastro
     setMensagem(null);
     setErro(null);
 
@@ -154,6 +164,7 @@ export default function CadastroLGPD() {
                 <input
                   type="text"
                   name="cpf"
+                  inputMode="numeric"
                   value={form.cpf}
                   onChange={handleChange}
                   placeholder="000.000.000-00"
@@ -172,9 +183,18 @@ export default function CadastroLGPD() {
               onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
               mac={form.mac}
               mikrotikId={mikrotikId}
-              onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: campos.nome.visivel ? (nome || f.nome) : f.nome, telefone: campos.telefone.visivel ? (telefone || f.telefone) : f.telefone }))}
+              onPreencher={({ nome, telefone, email }) => { preenchidoAuto.current = true; setForm((f) => ({
+                ...f,
+                nome: campos.nome.visivel ? (nome || f.nome) : f.nome,
+                telefone: campos.telefone.visivel ? (telefone || f.telefone) : f.telefone,
+                email: campos.email.visivel ? (email || f.email) : f.email,
+              })); }}
+              onLiberarResto={() => setMostrarResto(true)}
+              onResetar={() => { setMostrarResto(false); limparPreenchido(); }}
               ringClass="focus:ring-blue-500"
             />
+
+            {mostrarResto && (<>
 
             {campos.nome.visivel && (
               <div>
@@ -303,6 +323,7 @@ export default function CadastroLGPD() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </button>
+            </>)}
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200">
