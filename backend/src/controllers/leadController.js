@@ -5,6 +5,7 @@ const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
 const { validarCPF } = require("../utils/cpf");
+const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { camposFaltando, mensagemFaltando } = require("../utils/cadastroObrigatorio");
 const { formatarTelefone, formatarCep, normalizarDataImport } = require("../utils/importCadastros");
 
@@ -192,6 +193,8 @@ exports.leadLogin = async (req, res) => {
             password: saldo.password,
             existente: true,
             tempoRestante: saldo.tempoRestante,
+            // Sessao aberta em outro aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+            ...(await tratarSessaoAtiva({ username, mac, empresaId })),
             gateway_info: await montarGatewayInfo({
               mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username,
             }),
