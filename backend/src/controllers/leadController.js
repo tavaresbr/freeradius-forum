@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -171,15 +171,18 @@ exports.leadLogin = async (req, res) => {
         if (conf === "divergente") {
           return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
         }
-        const verificado = conf === "ok";
+        const dataOk = conf === "ok";
         // 'reivindicado' = CPF sem pagamento confirmado, cadastro provisorio: o contato passa a ser
         // o de quem se cadastrou agora, mas NAO prova titularidade (nada de credenciais existentes).
         const reivindicado = conf === "reivindicado";
+        // Em CPF sem pagamento a data nao prova nada (quem reivindica a grava e volta com ela):
+        // as credenciais de um acesso existente so voltam para o aparelho que ja o usou.
+        const verificado = dataOk && await podeReceberCredenciais({ cpf, username, mac, empresaId });
         // Username deste fluxo e' telefone/e-mail/MAC: so devolve credencial se for o do proprio lead
         const usernameDoLead = verificado && usernamePertenceAoLead(existing, username);
         titularVerificado = usernameDoLead;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
-        await atualizarLeadExistente(existing.id, empresaId, (verificado || reivindicado)
+        await atualizarLeadExistente(existing.id, empresaId, (dataOk || reivindicado)
           ? { nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
           : { aceite: 1, termo: termoLgpd });
 
@@ -310,6 +313,9 @@ exports.leadLogin = async (req, res) => {
 
     return res.json({
       success: true, gateway, username, password: senha,
+      // Re-liberacao com sessao aberta em OUTRO aparelho (Simultaneous-Use=1 recusaria o login novo):
+      // o portal oferece "desconectar a anterior e conectar aqui", como na reconexao com saldo.
+      ...(await tratarSessaoAtiva({ username, mac, empresaId })),
       gateway_info: await montarGatewayInfo({
         mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username,
         duracaoSegundos: tempoSegundos,
@@ -622,7 +628,9 @@ exports.cadastroCliente = async (req, res) => {
       // Verificar se tem saldo ativo no RADIUS (modelo cumulativo)
       try {
         const saldo = await verificarSaldoRadius(cpfLimpo);
-        if (saldo.temSaldo) {
+        // Em CPF sem pagamento a data nao prova nada: so o aparelho que ja usou o acesso recebe as
+        // credenciais de volta (os demais seguem para os planos, sem expor nada do acesso atual).
+        if (saldo.temSaldo && await podeReceberCredenciais({ cpf: cpfLimpo, username: cpfLimpo, mac, empresaId })) {
           // Buscar gateway do MikroTik
           let gateway = null;
           let mkId = null;

@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
@@ -78,13 +78,16 @@ exports.lgpdLogin = async (req, res) => {
         if (conf === "divergente") {
           return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
         }
-        const verificado = conf === "ok";
+        const dataOk = conf === "ok";
         // 'reivindicado' = CPF sem pagamento confirmado, cadastro provisorio: o contato passa a ser
         // o de quem se cadastrou agora, mas NAO prova titularidade (nada de credenciais existentes).
         const reivindicado = conf === "reivindicado";
+        // Em CPF sem pagamento a data nao prova nada (quem reivindica a grava e volta com ela):
+        // as credenciais de um acesso existente so voltam para o aparelho que ja o usou.
+        const verificado = dataOk && await podeReceberCredenciais({ cpf: cpfLimpo, username, mac, empresaId });
         titularVerificado = verificado;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
-        await atualizarLeadExistente(existing.id, empresaId, (verificado || reivindicado)
+        await atualizarLeadExistente(existing.id, empresaId, (dataOk || reivindicado)
           ? { nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
           : { aceite: aceiteInt, termo: termoLgpd });
 
@@ -209,6 +212,9 @@ exports.lgpdLogin = async (req, res) => {
 
     return res.json({
       success: true, gateway, username, password: senha,
+      // Re-liberacao com sessao aberta em OUTRO aparelho (Simultaneous-Use=1 recusaria o login novo):
+      // o portal oferece "desconectar a anterior e conectar aqui", como na reconexao com saldo.
+      ...(await tratarSessaoAtiva({ username, mac, empresaId })),
       gateway_info: await montarGatewayInfo({
         mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username,
         duracaoSegundos: tempoSegundos,

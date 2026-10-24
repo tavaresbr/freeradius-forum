@@ -1,7 +1,7 @@
 const db = require("../../db");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
-const { conferirDataNascimento, verificarLeadExistente, usernamePertenceAoLead } = require("../utils/leadUtils");
+const { conferirDataNascimento, verificarLeadExistente, usernamePertenceAoLead, podeReceberCredenciais, acessoEhGratis } = require("../utils/leadUtils");
 const { buscarSessaoAtiva, desconectarSessao } = require("../utils/sessaoAtiva");
 
 /**
@@ -41,6 +41,12 @@ exports.desconectarAnterior = async (req, res) => {
     const lead = await verificarLeadExistente(cpfLimpo, empresaId);
     if (username !== cpfLimpo && !(lead && usernamePertenceAoLead(lead, username))) {
       return res.status(403).json({ message: "Usuário não pertence a este cadastro." });
+    }
+
+    // Em CPF sem pagamento a data nao prova nada (quem reivindica a grava e volta com ela): derrubar
+    // um acesso que nao e' o plano gratis dos portais exige que o aparelho ja o tenha usado.
+    if (!(await podeReceberCredenciais({ cpf: cpfLimpo, username, mac, empresaId })) && !(await acessoEhGratis(username))) {
+      return res.status(403).json({ message: "Não foi possível confirmar que este aparelho é o do titular." });
     }
 
     const sessao = await buscarSessaoAtiva(username, empresaId);
