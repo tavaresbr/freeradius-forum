@@ -49,7 +49,7 @@ Sistema completo de gerenciamento de Hotspot WiFi com captive portal, autenticac
 │   ├── package.json
 │   ├── certificados/                # Certificados EFI PIX
 │   ├── tokens/                      # Armazenamento de tokens
-│   ├── migrations/                  # Migracoes incrementais (001-025)
+│   ├── migrations/                  # Migracoes incrementais (001-026)
 │   ├── jobs/
 │   │   └── estrutura.sql            # Schema completo do banco (dump)
 │   ├── src/
@@ -144,7 +144,7 @@ Arquivo: `/var/www/hotspot/backend/.env`
 |--------|-----------|
 | `planos` | Planos de internet (empresa_id, nome, valor, duracao_minutos, velocidade_down/up, mikrotik_id, address_pool, shared_users) |
 | `pagamentos` | Transacoes (empresa_id, plano_id, valor, status, mp_pagamento_id, mac, cpf, IP) |
-| `lgpd_logins` | Registros LGPD (empresa_id, cpf, nome, telefone, aceite, mac, ip) |
+| `leads` (origem='lgpd') | Consentimento LGPD (cpf, nome, telefone, lgpd_aceite, lgpd_aceite_em, lgpd_termo, mac, ip). `lgpd_logins` NAO existe mais (so `lgpd_logins_backup`) |
 | `leads` | Leads marketing (empresa_id, nome, email, telefone, cpf, mac, ip, origem, status, lgpd_aceite) |
 | `connection_logs` | Logs Marco Civil (sync de radacct para compliance) |
 
@@ -164,8 +164,30 @@ node migrations/002_leads.js           # Cria tabela leads
 node migrations/003_connection_logs.js # Cria tabela connection_logs
 node migrations/004_portal_templates.js # Cria portal_templates, adiciona colunas em portais
 node migrations/005_vpn_peers.js       # Cria empresa_vpn_peers
-# ... e assim por diante ate a 025 (rodar todas em ordem numerica: for f in migrations/[0-9][0-9][0-9]_*.js)
+# ... e assim por diante ate a 026 (rodar todas em ordem numerica: for f in migrations/[0-9][0-9][0-9]_*.js)
 ```
+
+Migrations recentes (006-026, conforme `backend/migrations/`):
+
+| # | Arquivo | Mudanca |
+|---|---|---|
+| 006 | `006_mikrotik_portal_id` | `mikrotiks.portal_id` (+FK) |
+| 007-008 | `007_portal_template_lead_passivo`, `008_inserir_portais_lead_passivo` | template e portal Lead Passivo |
+| 009-010 | `009_system_updates`, `010_update_publish` | tabelas do sistema de atualizacao |
+| 011 | `011_campanhas` | `campanhas`, `campanha_itens`, `portais.campanha_ativa_id` |
+| 012 | `012_whatsapp_notif` | WhatsApp por portal + `whatsapp_logs` |
+| 013 | `013_pix_trial` | `pagamentos.trial_liberado_em` + indice |
+| 014-015 | `014_schema_snapshots`, `015_update_apply_logs` | snapshots de schema e logs do apply |
+| 016 | `016_liberado_em` | `radius_users.liberado_em` + indice por username |
+| 017 | `017_connection_logs_unique` | `connection_logs.acctuniqueid` UNIQUE, `connection_logs_sync.last_synced_at` |
+| 018 | `018_grupo_completo` | grupo "Acesso Completo" (permissoes) para admins sem grupo |
+| 019-020 | `019_gateways`, `020_gateway_credenciais_opcionais` | multi-vendor (tipo, controller_*, api_*), `usuario`/`senha` NULLABLE |
+| 021 | `021_lgpd_termo` | `leads.lgpd_termo` |
+| 022 | `022_portal_contexts` | tabela `portal_contexts` (contexto do vendor no redirect) |
+| 023 | `023_radius_users_unique` | dedup + UNIQUE `uk_radius_users_username` |
+| 024 | `024_ap_info` | `ap_mac`/`ssid` em `connection_logs` e `leads`, tabela `access_points`, backfill do radacct |
+| 025 | `025_grandstream_gateway` | ENUM `mikrotiks.tipo` + 'grandstream'; colunas `gwn_api_key`, `gwn_api_secret`, `gwn_network_id` |
+| 026 | `026_leads_data_nascimento` | `leads.data_nascimento` (DATE) |
 
 ---
 
@@ -420,7 +442,7 @@ GET    /api/radius-logs/export          # Exportar CSV
 - FreeRADIUS usa `sqlcounter totalcounter` com `reset = never` (em `/etc/freeradius/3.0/mods-enabled/sqlcounter`).
 - `sites-enabled/default` chama `totalcounter` (nao mais `dailycounter`; o bloco daily ainda existe no arquivo como referencia legacy mas nao e invocado).
 - Query do counter soma `SUM(acctsessiontime + tempo_vivo_se_ativa)` de TODO o historico do username em `radacct`, sem filtro de data.
-- A cada nova liberacao (pagamento, LGPD, lead, admin manual), todo o `radacct` do username e **apagado** pra zerar o contador. Compliance Marco Civil preservado em `connection_logs` (sincronizado via cron `*/5 * * * *` em `server.js:457`).
+- A cada nova liberacao (pagamento, LGPD, lead, admin manual) o codigo grava `radius_users.liberado_em = NOW()` (INSERT ... ON DUPLICATE KEY UPDATE liberado_em = NOW()); o contador do sqlcounter deve somar apenas `radacct` com `acctstarttime >= liberado_em` (ver comentarios em `mikrotikAPIController.js` ~L166 e `lgpdController.js` ~L110). O radacct NAO e' mais apagado: historico preservado na fonte (Marco Civil), alem do sync para `connection_logs`. **Atencao:** a query do sqlcounter vive fora do repo (`/etc/freeradius/3.0/mods-enabled/sqlcounter`); conferir no servidor que ela filtra por `liberado_em` (o texto acima sobre 'sem filtro de data' reflete a versao de 2026-04-24).
 - `Simultaneous-Use` fixo em `1` (antes lia `shared_users` do plano) — cliente nao pode compartilhar credencial em multiplos dispositivos.
 
 ### Atributos RADIUS Utilizados
@@ -470,7 +492,7 @@ Depois: POST /api/radius/vincular-plano { username, plano_id }
 #### 2. Via Pagamento Aprovado (mikrotikAPIController.liberarUsuario)
 ```
 Webhook pagamento aprovado -> liberarUsuario()
--> Busca CPF do lgpd_logins por MAC/IP
+-> Recebe o CPF do cliente (leads, via cliente_id/cpf) no contexto da liberacao
 -> Username = CPF ou MAC (se CPF nao existe)
 -> Password = username
 -> INSERT radcheck (Cleartext-Password, Max-All-Session, Simultaneous-Use=1)
@@ -494,10 +516,10 @@ POST /api/auth/temp-access
 #### 4. Via Login LGPD (lgpdController.lgpdLogin)
 ```
 POST /api/lgpd/login
--> Busca CPF dos lgpd_logins por MAC
+-> Usa o CPF informado no formulario (grava o consentimento em `leads`, origem='lgpd')
 -> Username = CPF ou MAC
 -> Busca plano LGPD especifico da empresa
--> Limpa sessoes do dia atual antes de criar novas
+-> Marca `radius_users.liberado_em = NOW()` para renovar a franquia (nao apaga radacct)
 -> Cria lead LGPD automaticamente
 ```
 
@@ -516,14 +538,19 @@ DELETE FROM radius_users WHERE username = ? AND empresa_id = ?
 
 **Query:**
 ```sql
-SELECT username, callingstationid AS mac, framedipaddress AS ip,
-       nasipaddress AS gateway, acctstarttime, acctsessiontime,
-       acctinputoctets AS bytes_in, acctoutputoctets AS bytes_out
+SELECT ra.username, ll.cpf, ra.callingstationid AS mac, ra.framedipaddress AS ip,
+       ra.nasipaddress AS gateway, ra.acctstarttime, ra.acctsessiontime AS segundos,
+       ra.acctinputoctets AS bytes_entrada, ra.acctoutputoctets AS bytes_saida
 FROM radacct ra
-JOIN radius_users ru ON ra.username = ru.username
-WHERE ra.acctstoptime IS NULL AND ru.empresa_id = ?
+LEFT JOIN mikrotiks m     ON m.ip = ra.nasipaddress          -- MikroTik: NAS-IP = mikrotiks.ip
+LEFT JOIN radius_users ru ON ru.username = ra.username       -- Omada/UniFi: NAS-IP e' o IP LAN do controller
+LEFT JOIN (SELECT mac, empresa_id, MAX(cpf) AS cpf FROM leads GROUP BY mac, empresa_id) ll
+       ON ll.mac = ra.callingstationid AND ll.empresa_id = COALESCE(m.empresa_id, ru.empresa_id)
+WHERE ra.acctstoptime IS NULL
+  AND COALESCE(m.empresa_id, ru.empresa_id) = ?
 ORDER BY ra.acctstarttime DESC
 ```
+(Fonte: `radiusController.listarSessoesAtivas`; os JOINs usam `COLLATE utf8mb4_unicode_ci`. CPF vem de `leads`, nao de `lgpd_logins`.)
 
 ### Logs de Accounting (radacct)
 
@@ -575,7 +602,7 @@ nas (id, nasname, shortname, type, ports, secret, server, community, description
 **Processo:**
 1. Busca `last_synced_radacctid` da tabela `connection_logs_sync`
 2. Query radacct WHERE `radacctid > lastId` AND `acctstoptime IS NOT NULL`
-3. Join com `radius_users` (empresa_id) e `lgpd_logins` (CPF por MAC)
+3. Join com `mikrotiks` (NAS-IP), `radius_users` (empresa_id) e `leads` (CPF por MAC)
 4. INSERT em `connection_logs` com dados de compliance
 5. Atualiza `connection_logs_sync` com max radacctid processado
 6. Processa em lotes de 5000 registros
@@ -615,7 +642,7 @@ empresas (1) ──── (N) radius_users ──── (1) planos
                         └── radpostauth (N)
                             └── Logs de autenticacao
 
-lgpd_logins ──(MAC)── radacct.callingstationid
+leads ──(MAC)── radacct.callingstationid
                          │
                          └── connection_logs (Marco Civil compliance)
 
@@ -628,7 +655,7 @@ pagamentos ──(MAC)── radacct/radius cleanup (verificaExpiracoes)
 |------|----------|-------|------------|---------|---------|
 | **Temporario (PIX)** | `pix_e{id}_{ts}_{rand}` | = username | 2M/2M fixo | 300s (5min) | Auto (verificaExpiracoes) |
 | **Permanente (Plano)** | CPF ou MAC | = username | Conforme plano | duracao_minutos | Expiracao pagamento |
-| **LGPD** | CPF ou MAC | = username | Conforme plano LGPD | duracao_minutos | Cumulativa (radacct zerado a cada nova liberacao) |
+| **LGPD** | CPF ou MAC | = username | Conforme plano LGPD | duracao_minutos | Cumulativa (renovada via `radius_users.liberado_em` a cada nova liberacao) |
 | **Admin Manual** | Customizado | Customizada | Conforme plano vinculado | duracao_minutos | Manual |
 
 ---
@@ -1001,8 +1028,8 @@ GET    /api/wireguard/clients/:id/config   # Download config do peer
 ## Conformidade Legal
 
 ### LGPD (Lei 13.709/2018)
-- Consentimento registrado na tabela `lgpd_logins`
-- Campos: cpf, nome, telefone, aceite, mac, ip, timestamp
+- Consentimento registrado na tabela `leads` (`lgpd_logins` nao existe mais; so `lgpd_logins_backup`)
+- Campos: cpf, nome, telefone, lgpd_aceite, lgpd_aceite_em, lgpd_termo (snapshot do termo), mac, ip
 - Formulario de cadastro com termos de uso
 - Leads criados automaticamente a partir de cadastros LGPD
 
@@ -1070,6 +1097,8 @@ mysql -u hotspotuser -p hotspot        # Conectar ao banco
 | `completo` | LGPD + cadastro + selecao de planos (multi-step) |
 
 ### Personalizacao por Portal
+
+> **Onde fica a config visual do portal:** coluna `portais.configuracoes` (JSON em texto), gravada por `PUT /api/portais/:id` (`portalController.atualizarPortal`) e lida pelo endpoint publico `GET /api/portal-config/:tipo?empresa_id=` (`getPortalConfig`, que tambem devolve `cor_primaria`, `cor_fundo`, `logo_url`, `custom_css`). **Nao existe coluna `portais.config_json`** (`config_json` e' so de `empresa_configs`). Os toggles PIX/Cartao/Trial/`link_portal_id` vivem dentro de `configuracoes`. As paginas publicas sao `LoginHotspot.jsx`, `LgpdAuto.jsx`, `CadastroLeadPassivo.jsx`, etc. (nao existe `RenderPortal.jsx` nem rota `/p/:hash`).
 - `template_id` - Template base selecionado
 - `html_content` - HTML customizado (sobrescreve template)
 - `custom_css` - CSS adicional injetado
@@ -1276,7 +1305,7 @@ mikrotikAPIController      │
 3. O service:
    - Busca `whatsapp_enabled` e `whatsapp_template` do portal (resolve `portal_id` via `mikrotiks.portal_id` se nao informado)
    - Se desligado ou sem template → grava `skipped` no log e retorna
-   - Resolve telefone na ordem: `telefone` explicito → `cliente_id` (leads) → `cpf` (leads) → `mac` (lgpd_logins)
+   - Resolve telefone na ordem: `telefone` explicito → `cliente_id` (leads) → `cpf` (leads) → `mac` (leads com origem='lgpd')
    - Normaliza telefone para 13 digitos (`55 + DDD 2 + numero 9`) por **comprimento**, NAO por prefixo `startsWith("55")` (DDD 55 do RS confundia)
    - Renderiza template com variaveis (`nome`, `username`, `password`, `plano`, `duracao`, `velocidade`, `login_url`, `valor`, `empresa`, `expira_em`, `cpf`)
    - Envia via `enviarMensagemDireta` (que aplica `formatarNumeroComNonoDigito` pro DDD ≤ 30 adicionar 9)
@@ -1570,7 +1599,7 @@ servidor novo ─ install.sh ─> [SSH detect] -> [deps] -> [estrutura.sql] ->
 
 2. **`mysqldump --no-data` mata todos os seeds.** Quando regenerar `estrutura.sql`, sempre re-anexar os 7 INSERTs do `.bak` (linhas 547-582). Sem isso, install termina sem super admin e o painel fica inacessivel.
 
-3. **Migrations 012-015 vao falhar com "Duplicate column" no install novo** porque o schema ja esta no `estrutura.sql` regenerado. O `|| true` no loop suprime, mas polui output. Aceitar como ruido benigno ate tornar todas migrations idempotentes (`IF NOT EXISTS`).
+3. **Migrations ja sao em sua maioria idempotentes** (012-015 checam INFORMATION_SCHEMA / `IF NOT EXISTS`), entao nao devem falhar por 'Duplicate column' num install novo. As excecoes reais estao na secao "Migrations: idempotencia (auditoria)" (001 e 007).
 
 4. **Bug pre-existente:** `lgpd_logins` nao existe na master (so `lgpd_logins_backup`), mas `whatsappNotify.js:226` ainda referencia. Nao corrigido neste hardening - feature provavelmente quebrada ha tempos sem ninguem notar.
 
@@ -1621,7 +1650,7 @@ LoginHotspot (cfg.link_portal_id) ─click─>
 
 ---
 
-## Gateways Multi-Vendor (MikroTik / Omada / UniFi)
+## Gateways Multi-Vendor (MikroTik / Omada / UniFi / Grandstream)
 
 > **Doc tecnico completo:** `docs/GATEWAYS-MULTI-VENDOR.md`
 
@@ -1644,6 +1673,10 @@ Acoes por linha ──▶ getDriver(row): MikrotikDriver | OmadaDriver | UnifiDr
 |---|---|
 | 019 | `mikrotiks` + tipo ENUM, controller_url, controller_site, omadac_id, api_user, api_pass, api_key, verify_tls |
 | 020 | `usuario`/`senha` viram NULLABLE (UniFi/Omada-API nao tem credencial RouterOS) |
+| 024 | `ap_mac`/`ssid` em `connection_logs` e `leads`, tabela `access_points` |
+| 025 | ENUM `tipo` inclui `grandstream`; colunas `gwn_api_key`, `gwn_api_secret`, `gwn_network_id` |
+
+**Grandstream (GWN):** `backend/src/gateways/GrandstreamDriver.js` (+ `controllers/grandstreamController.js`, tutorial em `frontend/src/pages/admin/TutorialGrandstream.jsx`, rota `/admin/:slug/tutorial-grandstream`). Opera como External Web Portal + External RADIUS (igual ao Omada External RADIUS); o "login final" e' um GET no login URL do gateway montado em `gatewayLiberacao.montarGatewayInfo` (`tipo:'grandstream'`). As chaves GWN Cloud sao opcionais (so monitoramento no "Testar"); sem elas `testConnection` retorna sucesso. Desconexao ativa nao e' suportada via External RADIUS.
 
 ### Arquivos-chave
 
@@ -1700,6 +1733,38 @@ termo aceito.
 3. **Relatorio LGPD inclui qualquer origem com aceite** (`origem='lgpd' OR lgpd_aceite=1`), nao so o portal LGPD.
 4. **Todo fluxo novo de aceite TEM que gravar `lgpd_termo`** via `resolverTextoLgpd` — aceite sem termo nao e' prova LGPD.
 5. **`lgpd_logins` nao existe mais** — consentimento vive em `leads`; so ha `lgpd_logins_backup`.
+
+---
+
+## Uploads de Tenant (logos) fora do git
+
+- `frontend/public/uploads/logos/*` esta no `.gitignore` (so o `.gitkeep` e' versionado) e os logos antigos foram removidos do indice (`git rm --cached`). `backend/uploads/` tambem e' ignorado.
+- Criacao de diretorios nao depende do git: `empresaRoutes.js` e `portalRoutes.js` fazem `mkdirSync(..., {recursive:true})` de `frontend/dist/uploads/logos` e `frontend/public/uploads/logos` ao carregar; `install.sh` faz `mkdir -p backend/uploads/campanhas`; `uploadCampanha.js` usa `backend/uploads/campanhas`.
+- Sistema de update NAO e' afetado: `updatePublishController` varre o disco (nao `git ls-files`) apenas em `SCAN_TARGETS` (backend/src, server.js, package.json, routes, migrations, frontend/src, ...), e `frontend/public/` / uploads nao estao la.
+- **Cuidado no deploy:** em servidores que fazem `git pull` deste commit, o git remove do disco os logos que estavam versionados (arquivos de tracked -> untracked sao apagados no checkout). Faca backup de `frontend/public/uploads/logos/` antes do pull e restaure depois. O build do Vite copia `public/` para `dist/`, entao logos so sobrevivem a um `npm run build` se estiverem em `public/uploads/logos`.
+- `.gitignore` tambem ignora `*.sql`, entao `backend/jobs/estrutura.sql` (citado acima) nao aparece no repo: `install.sh` depende dele no pacote gerado por `empacotar.sh` (que nao esta neste repo).
+
+---
+
+## Migrations: idempotencia (auditoria)
+
+Rodar uma migration 2x deve ser seguro, mas nem todas sao. Auditoria de `backend/migrations/` (apenas listagem; codigo nao alterado):
+
+**NAO idempotentes**
+- `007_portal_template_lead_passivo.js` - `INSERT INTO portal_templates` sem checar existencia: duplica o template "Cadastro de LEAD (Sem Internet)" a cada execucao.
+- `001_multi_tenant.js` - passos 12 e 13 re-executam `INSERT ... ON DUPLICATE KEY UPDATE` copiando `config_mercadopago`/`efi_config` legadas para `empresa_configs`: sobrescrevem a config atual da empresa padrao. Alem disso o passo 9 faz `SHOW COLUMNS FROM lgpd_logins`, tabela que nao existe mais: em banco novo/atual a migration 001 falha (rollback) nesse passo.
+
+**Parcialmente idempotentes / com efeito colateral ao repetir**
+- `004_portal_templates.js` - ALTERs e templates sao guardados, mas o guard dos templates e' "tabela vazia" (nao por nome).
+- `006_mikrotik_portal_id.js` - coluna guardada; FK dentro de try/catch (erro de FK duplicada so e' logado).
+- `017_connection_logs_unique.js` - guardas ok, mas refaz backfill e DELETE de duplicatas a cada execucao (seguro, custo).
+- `023_radius_users_unique.js` - refaz dedup (DELETE) a cada execucao; seguro, mas destrutivo por natureza.
+- `024_ap_info.js` - guardas ok; reexecucao faz `MODIFY` (normaliza collation) e backfill so de linhas com `ap_mac`/`ssid` NULL.
+- `008_inserir_portais_lead_passivo.js`, `018_grupo_completo.js` - guardados por SELECT (018 reaplica permissoes totais ao grupo "Acesso Completo" a cada execucao, sobrescrevendo ajustes manuais desse grupo).
+
+**Idempotentes** (CREATE IF NOT EXISTS / checagem em INFORMATION_SCHEMA): 002, 003, 005, 009, 010, 011, 012, 013, 014, 015, 016, 019, 020, 021, 022, 025, 026.
+
+Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e 007 sao as que causam problema/ruido. Relacionado ao gotcha #3 do instalador acima.
 
 ---
 

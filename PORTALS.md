@@ -19,9 +19,9 @@ A tabela `portais` define a aparência e o comportamento da página de captura. 
 
 ## 2. Editor Visual (WYSIWYG)
 
-O editor visual fica em **`PortalEditor.jsx`**.
+O editor visual fica em **`frontend/src/pages/admin/PortalEditor.jsx`**.
 
-- **Armazenamento**: O design do portal é salvo dinamicamente na coluna json `config_json` da tabela `portais`.
+- **Armazenamento**: O design e as opções do portal são salvos como JSON (texto) na coluna **`configuracoes`** da tabela `portais` (via `PUT /api/portais/:id`, `portalController.atualizarPortal`). Colunas dedicadas complementam: `cor_primaria`, `cor_fundo`, `logo_url`, `custom_css`, `campos_cadastro`, `whatsapp_*`. Não existe coluna `portais.config_json` (`config_json` é da tabela `empresa_configs`, usada para credenciais de pagamento).
 - **Customização**: O provedor pode alterar imagem de fundo, logotipo, cores primárias/secundárias (botões/textos), opacidade, raio de borda (arredondamento), fontes e posição dos elementos (esquerda, centro, direita).
 - **Preview em Tempo Real**: Usando a mesma casca de estilização, o editor simula os componentes na tela lado-a-lado usando o hook de estado do React, antes de salvar no banco de dados.
 - **Diferenciação por Tipo**: O preview reconhece o tipo do portal. Se for tipo `planos`, o preview mostrará um infográfico de "Etapa 1: Cadastro → Etapa 2: Planos → Etapa 3: PIX", permitindo visualizar as cores dos inputs sem renderizar todo o motor complexo de pagamento no editor.
@@ -30,11 +30,10 @@ O editor visual fica em **`PortalEditor.jsx`**.
 
 ## 3. Renderização Dinâmica (Public Portal)
 
-A renderização pública é feita através da URL **`/p/:hash`**, processada pelo `RenderPortal.jsx`.
+A renderização pública é feita por páginas React dedicadas por tipo (rotas em `frontend/src/App.jsx`: `/login-hotspot` → `LoginHotspot.jsx`, `/lgpd` → `LgpdAuto.jsx`, `/lead-passivo` → `CadastroLeadPassivo.jsx`, `/planos-cliente` → `PlanosCliente.jsx`, etc.). Não existe `RenderPortal.jsx` nem rota `/p/:hash` no código atual.
 
-- O MikroTik/RADIUS intercepta conexões HTTP sem autenticação e redireciona os clientes para `/p/:hash?mac=XX:XX&ip=YY.YY&mikrotik_id=ZZ`.
-- O hash mapeia diretamente para o ID do portal do banco de dados (escondendo URLs incrementais).
-- A página `RenderPortal.jsx` consome o `config_json` salvo para aquele portal específico e aplica as **variáveis CSS dinâmicas** (ex: `--primary-color`, `--bg-opacity`) via tag `style` in-line, injetando o logotipo e background corretos.
+- O gateway (MikroTik/Omada/UniFi/Grandstream) redireciona o cliente via `/hotspot/redirect/:mikrotikId` / `/api/hotspot-login/:mikrotikId`, com `mac`, `ip` e `mikrotik_id` na URL; o portal de entrada vem de `mikrotiks.portal_id`, e um redirect entre portais pode carregar `portal_id` explícito (ver CLAUDE.md, seção "Redirect entre Portais").
+- A página pública busca a config visual em **`GET /api/portal-config/:tipo?empresa_id=`** (`portalController.getPortalConfig`), que devolve `configuracoes` (JSON), `cor_primaria`, `cor_fundo`, `logo_url` e `custom_css`, e aplica cores/logo/background na página.
 - Com base no `tipo` do portal carregado, botões de ação e formulários diferentes (Login, Formulário LGPD ou Botão de Compra) são renderizados no frontend, injetados dinamicamente na UI configurada.
 
 ---
@@ -72,8 +71,8 @@ Para evitar vendas anônimas e para identificar o usuário no RADIUS:
 
 Abaixo estão as principais rotas Node/Express alimentando esta lógica:
 
-*   `GET /api/portais/hash/:hash`
-    *   **Uso:** Visualização de portal público pelo cliente. Traz JSON com confs visuais (`config_json`).
+*   `GET /api/portal-config/:tipo?empresa_id=X`
+    *   **Uso:** Endpoint público: config visual do portal (`configuracoes` + cores/logo/CSS) para a página pública renderizar. (Não existe `/api/portais/hash/:hash`.)
 *   `GET /api/portais/:id` \ `PUT /api/portais/:id`
     *   **Uso:** Admin obtém e salva a edição visual e a configuração de campos no PortalEditor.
 *   `POST /api/clientes/cadastro`

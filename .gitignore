@@ -24,6 +24,9 @@ frontend/dist/
 backend/certificados/
 backend/tokens/
 backend/uploads/
+# Uploads de tenants (logos): fora do git, .gitkeep mantem a pasta
+frontend/public/uploads/logos/*
+!frontend/public/uploads/logos/.gitkeep
 backups/
 cookies.txt
 *.key
