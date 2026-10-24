@@ -2,11 +2,13 @@ import React, { useEffect, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import BuscaCpf from "../../components/public/BuscaCpf";
+import { normalizarCampos, validarCampos } from "../../utils/camposPortal";
 
 export default function CadastroLGPD() {
   const [form, setForm] = useState({
     cpf: "",
     nome: "",
+    email: "",
     telefone: "",
     data_nascimento: "",
     aceite: false,
@@ -15,10 +17,12 @@ export default function CadastroLGPD() {
   });
 
   const [mensagem, setMensagem] = useState(null);
+  const [erro, setErro] = useState(null);
 
   const [mikrotikId, setMikrotikId] = useState("");
   const [empresaId, setEmpresaId] = useState("");
   const [cfg, setCfg] = useState({});
+  const campos = normalizarCampos(cfg.campos);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -67,12 +71,19 @@ export default function CadastroLGPD() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMensagem(null);
+    setErro(null);
 
     if (!validarCPF(form.cpf)) {
       setCpfErro("CPF inválido");
       return;
     }
     setCpfErro("");
+
+    const erroCampos = validarCampos(campos, form);
+    if (erroCampos) {
+      setErro(erroCampos);
+      return;
+    }
 
     try {
       const res = await fetch("/api/lgpd/login", {
@@ -88,7 +99,7 @@ export default function CadastroLGPD() {
         redirecionarHotspot(data.gateway, data.username, data.password, 1500, data.gateway_info);
       }
     } catch (err) {
-      setMensagem(err.message);
+      setErro(err.message);
     }
   };
 
@@ -121,6 +132,11 @@ export default function CadastroLGPD() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {mensagem}
+            </div>
+          )}
+          {erro && (
+            <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium" role="alert">
+              {erro}
             </div>
           )}
           
@@ -156,51 +172,82 @@ export default function CadastroLGPD() {
               onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
               mac={form.mac}
               mikrotikId={mikrotikId}
-              onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: nome || f.nome, telefone: telefone || f.telefone }))}
+              onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: campos.nome.visivel ? (nome || f.nome) : f.nome, telefone: campos.telefone.visivel ? (telefone || f.telefone) : f.telefone }))}
               ringClass="focus:ring-blue-500"
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome Completo *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+            {campos.nome.visivel && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nome Completo{campos.nome.obrigatorio ? " *" : ""}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    name="nome"
+                    value={form.nome}
+                    onChange={handleChange}
+                    required={campos.nome.obrigatorio}
+                    placeholder="Seu nome completo"
+                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
                 </div>
-                <input
-                  type="text"
-                  name="nome"
-                  value={form.nome}
-                  onChange={handleChange}
-                  placeholder="Seu nome completo"
-                  className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
               </div>
-            </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
+            {campos.email.visivel && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  E-mail{campos.email.obrigatorio ? " *" : ""}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    required={campos.email.obrigatorio}
+                    autoComplete="email"
+                    placeholder="seu@email.com"
+                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
                 </div>
-                <input
-                  type="text"
-                  name="telefone"
-                  value={form.telefone}
-                  onChange={handleChange}
-                  placeholder="(00) 00000-0000"
-                  className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
               </div>
-            </div>
+            )}
+
+            {campos.telefone.visivel && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Telefone{campos.telefone.obrigatorio ? " *" : ""}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    name="telefone"
+                    value={form.telefone}
+                    onChange={handleChange}
+                    required={campos.telefone.obrigatorio}
+                    placeholder="(00) 00000-0000"
+                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

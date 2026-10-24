@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { CAMPOS_PADRAO, normalizarCampos } from "../../utils/camposPortal";
 
 const defaultConfigs = {
   lgpd: {
@@ -13,6 +14,7 @@ const defaultConfigs = {
     cor_fundo_2: "#172554",
     cor_botao: "#3B82F6",
     logo_url: "",
+    campos: CAMPOS_PADRAO,
   },
   lead: {
     titulo: "WiFi Grátis",
@@ -111,7 +113,10 @@ export default function PortalEditor() {
         if (p.configuracoes) {
           try { saved = JSON.parse(p.configuracoes); } catch (e) {}
         }
-        setConfig({ ...defaults, ...saved });
+        const merged = { ...defaults, ...saved };
+        // Campos do formulário (Visível/Obrigatório): mescla campo a campo com os padrões
+        if (p.tipo === "lgpd") merged.campos = normalizarCampos(saved.campos);
+        setConfig(merged);
         setWhatsEnabled(!!p.whatsapp_enabled);
         setWhatsTemplate(p.whatsapp_template || "");
       }
@@ -200,6 +205,44 @@ export default function PortalEditor() {
     } catch (err) {
       setWhatsTesteMsg({ ok: false, msg: "Erro de conexão" });
     }
+  };
+
+  // Campos do formulário do portal LGPD (Visível / Obrigatório). CPF é sempre obrigatório.
+  const camposLgpd = normalizarCampos(config.campos);
+  const setCampo = (chave, prop, valor) => {
+    const campos = normalizarCampos(config.campos);
+    campos[chave] = { ...campos[chave], [prop]: valor };
+    setConfig({ ...config, campos: normalizarCampos(campos) });
+  };
+  const renderToggle = (checked, onChange, rotulo, desabilitado = false) => (
+    <label className={`relative inline-flex items-center ${desabilitado ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}>
+      <input type="checkbox" checked={checked} disabled={desabilitado} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
+      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+      <span className="ml-2 text-xs text-gray-500">{rotulo}</span>
+    </label>
+  );
+  const renderCampoLgpd = (chave, rotulo, icone, exemplo) => {
+    const c = camposLgpd[chave];
+    return (
+      <div key={chave} className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg" data-campo={chave}>
+          <span className="text-sm font-medium text-gray-700">{icone} {rotulo}</span>
+          <div className="flex items-center gap-4">
+            {renderToggle(c.visivel, (v) => setCampo(chave, "visivel", v), c.visivel ? "Visível" : "Oculto")}
+            {renderToggle(c.obrigatorio, (v) => setCampo(chave, "obrigatorio", v), c.obrigatorio ? "Obrigatório" : "Opcional", !c.visivel)}
+          </div>
+        </div>
+        {c.visivel && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{rotulo}{c.obrigatorio ? " *" : ""}</label>
+            <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
+              <span className="text-gray-400 mr-2">{icone}</span>
+              <span className="text-gray-400 text-sm">{exemplo}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleSave = async () => {
@@ -437,20 +480,10 @@ export default function PortalEditor() {
                         <span className="text-gray-400 text-sm">000.000.000-00</span>
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>
-                      <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
-                        <span className="text-gray-400 mr-2">👤</span>
-                        <span className="text-gray-400 text-sm">Seu nome completo</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefone *</label>
-                      <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
-                        <span className="text-gray-400 mr-2">📞</span>
-                        <span className="text-gray-400 text-sm">(00) 00000-0000</span>
-                      </div>
-                    </div>
+                    {renderCampoLgpd("nome", "Nome Completo", "👤", "Seu nome completo")}
+                    {renderCampoLgpd("email", "E-mail", "✉️", "seu@email.com")}
+                    {renderCampoLgpd("telefone", "Telefone", "📞", "(00) 00000-0000")}
+                    <p className="text-xs text-gray-400">O CPF é sempre obrigatório. Campos obrigatórios também são exigidos pelo servidor.</p>
                   </>
                 )}
                 {(portal.tipo === "lead" || portal.tipo === "lead_passivo") && (
