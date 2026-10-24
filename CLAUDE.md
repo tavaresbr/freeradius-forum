@@ -1819,6 +1819,7 @@ Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e
 
 Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`) edita o cadastro completo em `leads`. Importacao em `/admin/:slug/importar-clientes` (`ImportarClientes.jsx`), API `/api/clientes-import` (permissao do modulo `leads`).
 
+- **Cadastro manual (tela Clientes) exige Nome, CPF (PF) ou CNPJ (PJ), E-mail, Data de nascimento e Telefone** (`utils/cadastroObrigatorio.js`, validado no front e em `leadController.criarLead/atualizarLead`; edicao que so troca `status`/`observacoes` nao exige). A importacao em massa e os portais NAO passam por essa regra.
 - Logica: `backend/src/utils/importCadastros.js` (mapeamento, normalizacao, `processarImportacao`, parse CSV/XLSX) e `backend/src/utils/sgpClient.js` (config por empresa em `empresa_configs` tipo `sgp`; `testar`, `amostra` mascarada, `buscarTodos`).
 - **Integracao SGP fica em Configuracoes > Integracoes > SGP** (`Integracoes.jsx`, `IntegracaoSgp.jsx`; rotas `/admin/:slug/integracoes[/sgp]`), API `/api/integracoes/sgp/{,testar,amostra,importar}` (modulo `configuracoes`; controller `integracaoController.js`). Fluxo da tela: salvar -> testar conexao (HTTP + campos recebidos + mapeamento) -> ver amostra mascarada -> simular -> importar. A aba SGP de *Importar clientes* so aponta para la.
 - **CPF/CNPJ existente: so preenche campos vazios** (`COALESCE(NULLIF(col,''), ?)`); nunca toca `lgpd_aceite`/`lgpd_termo`/`status`/CPF. Importados entram com `origem='importacao'`, `lgpd_aceite=0`.

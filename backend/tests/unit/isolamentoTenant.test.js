@@ -62,13 +62,17 @@ test('planos: criar grava empresa_id da req, ignorando body.empresa_id', async (
 });
 
 // ---- leads ----
+// Cadastro completo (campos obrigatorios do cadastro manual) e lead existente completo para a edicao
+const LEAD_OK = { nome: 'a', cpf: '52998224725', cnpj: null, tipo_pessoa: 'PF', email: 'a@b.com', telefone: '(93) 99999-0000', data_nascimento: '1990-05-17' };
+const BODY_LEAD = { nome: 'a', cpf: '529.982.247-25', email: 'a@b.com', telefone: '93999990000', data_nascimento: '17/05/1990' };
+const handlerLead = async (s) => (/^SELECT/i.test(s) ? [[LEAD_OK]] : [{ affectedRows: 1 }]);
 test('leads: listar (com filtros) filtra por empresa_id', async () => {
   const { db } = await exec('src/controllers/leadController.js', 'listarLeads', { query: { status: 'novo', q: 'ana' } });
   assertTodasFiltradas(db, 'listarLeads');
   assert.strictEqual(db.calls[0].params[0], EMP);
 });
 test('leads: atualizar / deletar / exportar filtram por empresa_id', async () => {
-  let r = await exec('src/controllers/leadController.js', 'atualizarLead', { params: { id: '9' }, body: { nome: 'x' } });
+  let r = await exec('src/controllers/leadController.js', 'atualizarLead', { params: { id: '9' }, body: { nome: 'x' } }, handlerLead);
   assertTodasFiltradas(r.db, 'atualizarLead'); assert.deepStrictEqual(r.db.calls[0].params.slice(-2), ['9', EMP]);
   r = await exec('src/controllers/leadController.js', 'deletarLead', { params: { id: '9' } });
   assertTodasFiltradas(r.db, 'deletarLead');
@@ -76,11 +80,12 @@ test('leads: atualizar / deletar / exportar filtram por empresa_id', async () =>
   assertTodasFiltradas(r.db, 'exportarLeadsCSV');
 });
 test('leads: criar grava empresa_id da req', async () => {
-  const { db } = await exec('src/controllers/leadController.js', 'criarLead', { body: { nome: 'a', empresa_id: 1 } }, async () => [{ insertId: 1 }]);
-  assert.strictEqual(db.calls[0].params[0], EMP);
+  const { db } = await exec('src/controllers/leadController.js', 'criarLead', { body: { ...BODY_LEAD, empresa_id: 1 } }, async (s) => (/^INSERT/i.test(s) ? [{ insertId: 1 }] : [[]]));
+  const ins = db.calls.find((c) => /^INSERT/i.test(c.sql));
+  assert.strictEqual(ins.params[0], EMP);
 });
 test('leads: atualizar lead de outra empresa (affectedRows=0) -> 404', async () => {
-  const { res } = await exec('src/controllers/leadController.js', 'atualizarLead', { params: { id: '9' }, body: { nome: 'x' } }, async () => [{ affectedRows: 0 }]);
+  const { res } = await exec('src/controllers/leadController.js', 'atualizarLead', { params: { id: '9' }, body: { nome: 'x' } }, async (s) => (/^SELECT/i.test(s) ? [[]] : [{ affectedRows: 0 }]));
   assert.strictEqual(res.statusCode, 404);
 });
 

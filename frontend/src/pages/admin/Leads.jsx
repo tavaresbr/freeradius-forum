@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
-import { mascaraCPF } from "../../utils/cpfUtils";
-import { mascaraData, mascaraTelefone } from "../../utils/dataUtils";
+import { mascaraCPF, validarCPF } from "../../utils/cpfUtils";
+import { mascaraData, mascaraTelefone, dataNascimentoValida } from "../../utils/dataUtils";
 import { mascaraCEP, buscarCep } from "../../utils/cepUtils";
 
 const API = "";
@@ -177,9 +177,31 @@ export default function Leads() {
     setShowModal(true);
   };
 
+  // Obrigatorios: nome, CPF (PF) ou CNPJ (PJ), e-mail, data de nascimento e telefone
+  const validarForm = () => {
+    const pj = form.tipo_pessoa === "PJ";
+    if (!form.nome.trim()) return "Informe o nome";
+    if (pj) {
+      if (form.cnpj.replace(/\D/g, "").length !== 14) return "Informe um CNPJ válido (14 dígitos)";
+    } else if (!validarCPF(form.cpf)) {
+      return "Informe um CPF válido";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Informe um e-mail válido";
+    if (!dataNascimentoValida(form.data_nascimento)) return "Informe a data de nascimento (DD/MM/AAAA)";
+    const tel = form.telefone.replace(/\D/g, "");
+    if (tel.length < 10 || tel.length > 11) return "Informe o telefone com DDD";
+    return "";
+  };
+
   const handleSalvar = async (e) => {
     e.preventDefault();
     setErro("");
+    const invalido = validarForm();
+    if (invalido) {
+      setAba("dados"); // os obrigatorios ficam na aba Dados
+      setErro(invalido);
+      return;
+    }
     setSalvando(true);
     try {
       const corpo = { ...form };
@@ -436,12 +458,12 @@ export default function Leads() {
                       <Campo label="Razão social">
                         <input type="text" value={form.razao_social} onChange={set("razao_social")} className={inputCls} />
                       </Campo>
-                      <Campo label="CNPJ">
+                      <Campo label="CNPJ *">
                         <input type="text" value={form.cnpj} onChange={set("cnpj")} className={inputCls} />
                       </Campo>
                     </>
                   )}
-                  <Campo label="CPF">
+                  <Campo label={form.tipo_pessoa === "PJ" ? "CPF" : "CPF *"}>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -454,7 +476,7 @@ export default function Leads() {
                   <Campo label="RG">
                     <input type="text" value={form.rg} onChange={set("rg")} className={inputCls} />
                   </Campo>
-                  <Campo label="Data de nascimento">
+                  <Campo label="Data de nascimento *">
                     <input
                       type="text"
                       inputMode="numeric"
@@ -464,10 +486,10 @@ export default function Leads() {
                       className={inputCls}
                     />
                   </Campo>
-                  <Campo label="Email">
+                  <Campo label="Email *">
                     <input type="email" value={form.email} onChange={set("email")} className={inputCls} />
                   </Campo>
-                  <Campo label="Telefone">
+                  <Campo label="Telefone *">
                     <input
                       type="text"
                       inputMode="numeric"
