@@ -5,6 +5,7 @@ const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
 const { validarCPF } = require("../utils/cpf");
+const { camposFaltando, mensagemFaltando } = require("../utils/cadastroObrigatorio");
 const { formatarTelefone, formatarCep, normalizarDataImport } = require("../utils/importCadastros");
 
 // Captura de lead sem liberar internet
@@ -421,6 +422,9 @@ exports.criarLead = async (req, res) => {
     const { dados, erro } = sanitizarCadastro(body);
     if (erro) return res.status(400).json({ message: erro });
 
+    const faltando = camposFaltando(dados);
+    if (faltando.length) return res.status(400).json({ message: mensagemFaltando(faltando), campos: faltando });
+
     if (dados.cpf && await verificarLeadExistente(dados.cpf, req.empresa_id)) {
       return res.status(409).json({ message: "Já existe um cadastro com este CPF" });
     }
@@ -453,6 +457,17 @@ exports.atualizarLead = async (req, res) => {
     const chaves = Object.keys(dados);
     if (chaves.length === 0) {
       return res.status(400).json({ message: "Nenhum campo para atualizar" });
+    }
+
+    // Edicao do cadastro (nao so troca de status/observacoes): o resultado final precisa ter os obrigatorios
+    if (chaves.some((k) => k !== "status" && k !== "observacoes")) {
+      const [[atual]] = await db.execute(
+        "SELECT nome, cpf, cnpj, tipo_pessoa, email, telefone, data_nascimento FROM leads WHERE id = ? AND empresa_id = ?",
+        [id, req.empresa_id]
+      );
+      if (!atual) return res.status(404).json({ message: "Lead não encontrado" });
+      const faltando = camposFaltando({ ...atual, ...dados });
+      if (faltando.length) return res.status(400).json({ message: mensagemFaltando(faltando), campos: faltando });
     }
 
     if (dados.cpf) {
