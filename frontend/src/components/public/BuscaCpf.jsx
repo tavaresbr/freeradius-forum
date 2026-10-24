@@ -111,7 +111,7 @@ export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikro
         </div>
       )}
       {estado === "preenchido" && <p className="text-green-700 text-xs mt-2">Dados preenchidos. Confira e corrija se precisar.</p>}
-      {estado === "nao-achou" && <p className="text-gray-600 text-xs mt-2">Não encontramos um cadastro com esses dados. Preencha manualmente.</p>}
+      {estado === "nao-achou" && <p className="text-gray-600 text-xs mt-2">Não encontramos um cadastro com esses dados. Preencha manualmente e informe a data de nascimento: nas próximas vezes a busca funcionará.</p>}
       {estado === "erro" && <p className="text-red-600 text-xs mt-2">{aviso}</p>}
     </div>
   );
