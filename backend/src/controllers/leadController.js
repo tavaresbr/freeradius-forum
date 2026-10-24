@@ -168,11 +168,14 @@ exports.leadLogin = async (req, res) => {
           return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
         }
         const verificado = conf === "ok";
+        // 'reivindicado' = CPF sem pagamento confirmado, cadastro provisorio: o contato passa a ser
+        // o de quem se cadastrou agora, mas NAO prova titularidade (nada de credenciais existentes).
+        const reivindicado = conf === "reivindicado";
         // Username deste fluxo e' telefone/e-mail/MAC: so devolve credencial se for o do proprio lead
         const usernameDoLead = verificado && usernamePertenceAoLead(existing, username);
         titularVerificado = usernameDoLead;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
-        await atualizarLeadExistente(existing.id, empresaId, verificado
+        await atualizarLeadExistente(existing.id, empresaId, (verificado || reivindicado)
           ? { nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
           : { aceite: 1, termo: termoLgpd });
 
@@ -481,10 +484,22 @@ exports.cadastroCliente = async (req, res) => {
       // Segundo fator: sem a data de nascimento correta nao ha reconexao, nem
       // alteracao do cadastro, nem retorno de nome/e-mail do titular.
       await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
-      const conf = await conferirDataNascimento(cpfLimpo, empresaId, data_nascimento, { mac, ip: req.ip });
+      const conf = await conferirDataNascimento(cpfLimpo, empresaId, data_nascimento, { mac, ip: req.ip, reivindicarAusente: true });
       if (conf === "bloqueado") return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
       if (conf === "divergente") {
         return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
+      }
+      if (conf === "reivindicado") {
+        // CPF sem pagamento confirmado: cadastro provisorio. O contato (e o MAC) passa a ser o de
+        // quem se cadastrou agora — assim a credencial do pagamento vai por WhatsApp para o telefone
+        // de quem paga, nao para o de quem digitou o CPF antes (grilagem). Nada de credenciais
+        // existentes nem dados do cadastro anterior na resposta.
+        try {
+          await atualizarLeadExistente(existing.id, empresaId, { nome, email, telefone, mac, ip });
+        } catch (updErr) {
+          console.warn("Aviso: falha ao atualizar lead reivindicado:", updErr.message);
+        }
+        return res.json({ id: existing.id, nome, email, existente: true, planoAtivo: false });
       }
       if (conf === "ausente") {
         // Cadastro legado sem data: nao da pra provar a titularidade. Segue para planos

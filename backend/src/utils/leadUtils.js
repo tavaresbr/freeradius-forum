@@ -93,19 +93,50 @@ async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistent
 }
 
 /**
+ * O CPF ja foi "confirmado" por dinheiro: existe pagamento aprovado (ou ja expirado) com esse
+ * CPF na empresa. Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
+ * pessoa antes dela (grilagem), entao a data de nascimento gravada nao prova titularidade e nao
+ * pode trancar o dono de verdade para fora. Na duvida (erro de banco) considera confirmado:
+ * a trava rigida e' o lado seguro.
+ * @param {string} cpfLimpo - 11 digitos
+ * @param {number|null} empresaId
+ * @returns {Promise<boolean>}
+ */
+async function cpfConfirmado(cpfLimpo, empresaId) {
+  try {
+    const [rows] = await db.execute(
+      `SELECT 1 FROM pagamentos
+        WHERE status IN ('approved', 'expirado')
+          AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?${empresaId ? " AND empresa_id = ?" : ""}
+        LIMIT 1`,
+      empresaId ? [cpfLimpo, empresaId] : [cpfLimpo]
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.warn("[cpfConfirmado] indisponivel:", err.message);
+    return true;
+  }
+}
+
+/**
  * Segundo fator da reconexao por CPF: confere a data de nascimento informada com a
  * gravada no(s) lead(s) desse CPF/empresa (comparacao feita no SQL, sem fuso).
  * Resultados:
- *  - 'ok'         data bate;
- *  - 'ausente'    cadastro sem data gravada (legado): nao ha como verificar;
- *  - 'divergente' ha data gravada e a informada falta ou nao bate (conta como tentativa errada);
- *  - 'bloqueado'  tentativas erradas demais (CPF ou dispositivo): nem consulta.
+ *  - 'ok'          data bate;
+ *  - 'ausente'     cadastro sem data gravada (legado): nao ha como verificar;
+ *  - 'divergente'  ha data gravada e a informada falta ou nao bate (conta como tentativa errada);
+ *  - 'reivindicado' o CPF NAO esta confirmado por pagamento (ver cpfConfirmado) e o chamador
+ *                  informou outra data: ela substitui a gravada (ultimo a se cadastrar fica com o
+ *                  cadastro provisorio) e conta como tentativa. NAO prova titularidade: o chamador
+ *                  nunca devolve credenciais existentes nesse caso. Com `reivindicarAusente`, o
+ *                  cadastro sem data tambem e' reivindicado (grava a data, se informada);
+ *  - 'bloqueado'   tentativas erradas demais (CPF ou dispositivo): nem consulta.
  * @param {string} cpf
  * @param {number|null} empresaId
  * @param {*} data - 'AAAA-MM-DD' ou 'DD/MM/AAAA'
- * @param {{mac?: string, ip?: string}} [origem]
+ * @param {{mac?: string, ip?: string, reivindicarAusente?: boolean}} [origem]
  */
-async function conferirDataNascimento(cpf, empresaId, data, { mac, ip } = {}) {
+async function conferirDataNascimento(cpf, empresaId, data, { mac, ip, reivindicarAusente = false } = {}) {
   const ctx = { empresaId, cpf, ip, mac };
   if (dobTentativas.bloqueado(ctx)) return "bloqueado";
   const cpfLimpo = String(cpf || "").replace(/\D/g, "");
@@ -126,8 +157,30 @@ async function conferirDataNascimento(cpf, empresaId, data, { mac, ip } = {}) {
     console.warn("[conferirDataNascimento] indisponivel:", err.message);
     return "ausente";
   }
-  if (total === 0) return "ausente";
+
+  const reivindicar = async () => {
+    try {
+      if (dataIso) {
+        await db.execute(
+          `UPDATE leads SET data_nascimento = ?
+            WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ?${empresaId ? " AND empresa_id = ?" : ""}`,
+          empresaId ? [dataIso, cpfLimpo, empresaId] : [dataIso, cpfLimpo]
+        );
+      }
+    } catch (err) {
+      console.warn("[reivindicacao-cpf] nao gravou a data:", err.message);
+    }
+    dobTentativas.registrarFalha(ctx); // limita a troca de dono do cadastro provisorio
+    console.warn(`[reivindicacao-cpf] empresa=${empresaId || "-"} ip=${ip || "-"}`); // nunca loga CPF
+    return "reivindicado";
+  };
+
+  if (total === 0) {
+    if (reivindicarAusente && !(await cpfConfirmado(cpfLimpo, empresaId))) return reivindicar();
+    return "ausente";
+  }
   if (dataIso && iguais > 0) return "ok";
+  if (dataIso && !(await cpfConfirmado(cpfLimpo, empresaId))) return reivindicar();
   dobTentativas.registrarFalha(ctx);
   return "divergente";
 }
@@ -362,4 +415,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };

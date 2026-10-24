@@ -78,9 +78,12 @@ exports.lgpdLogin = async (req, res) => {
           return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
         }
         const verificado = conf === "ok";
+        // 'reivindicado' = CPF sem pagamento confirmado, cadastro provisorio: o contato passa a ser
+        // o de quem se cadastrou agora, mas NAO prova titularidade (nada de credenciais existentes).
+        const reivindicado = conf === "reivindicado";
         titularVerificado = verificado;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
-        await atualizarLeadExistente(existing.id, empresaId, verificado
+        await atualizarLeadExistente(existing.id, empresaId, (verificado || reivindicado)
           ? { nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
           : { aceite: aceiteInt, termo: termoLgpd });
 
