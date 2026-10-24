@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 
@@ -175,90 +175,14 @@ function Planilha({ token, campos }) {
   );
 }
 
-function Sgp({ token }) {
-  const [cfg, setCfg] = useState({ url: "", app: "", endpoint: "/api/ura/clientes/", token: "" });
-  const [tokenDefinido, setTokenDefinido] = useState(false);
-  const [msg, setMsg] = useState({ tipo: "", texto: "" });
-  const [busy, setBusy] = useState(false);
-  const [resultado, setResultado] = useState(null);
-
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
-  const carregar = useCallback(async () => {
-    try {
-      const res = await fetch(`${API}/api/clientes-import/sgp/config`, { headers });
-      const d = await res.json();
-      setCfg((c) => ({ ...c, url: d.url || "", app: d.app || "", endpoint: d.endpoint || c.endpoint }));
-      setTokenDefinido(!!d.token_definido);
-    } catch { /* tela segue vazia */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  useEffect(() => { carregar(); }, [carregar]);
-
-  const chamar = async (rota, metodo, corpo) => {
-    setBusy(true);
-    setMsg({ tipo: "", texto: "" });
-    try {
-      const res = await fetch(`${API}/api/clientes-import/sgp/${rota}`, { method: metodo, headers, body: corpo ? JSON.stringify(corpo) : undefined });
-      const data = await res.json().catch(() => ({}));
-      return { ok: res.ok, data };
-    } catch {
-      return { ok: false, data: { message: "Erro de conexão" } };
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const salvar = async () => {
-    const { ok, data } = await chamar("config", "PUT", cfg);
-    setMsg({ tipo: ok ? "ok" : "erro", texto: data.message || (ok ? "Salvo" : "Erro") });
-    if (ok) { setCfg((c) => ({ ...c, token: "" })); setTokenDefinido(true); }
-  };
-
-  const testar = async () => {
-    const { ok, data } = await chamar("testar", "POST");
-    setMsg({ tipo: ok ? "ok" : "erro", texto: ok ? `Conexão ok (${data.amostra} registro(s) na amostra)` : data.message });
-  };
-
-  const importar = async (simular) => {
-    setResultado(null);
-    const { ok, data } = await chamar("importar", "POST", { simular });
-    if (ok) setResultado(data);
-    else setMsg({ tipo: "erro", texto: data.message || "Erro ao importar" });
-  };
-
+function Sgp({ empresaSlug }) {
   return (
-    <div className="space-y-5">
-      <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-4">
-        <p className="text-gray-300 text-sm">Informe os dados de acesso à API do seu SGP. O token fica salvo só no servidor e não é exibido novamente.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">URL do SGP</label>
-            <input className={inputCls} placeholder="https://sgp.suaempresa.com.br" value={cfg.url} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">App</label>
-            <input className={inputCls} value={cfg.app} onChange={(e) => setCfg({ ...cfg, app: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Token {tokenDefinido && <span className="text-green-400">(já salvo — deixe em branco para manter)</span>}</label>
-            <input type="password" autoComplete="new-password" className={inputCls} value={cfg.token} onChange={(e) => setCfg({ ...cfg, token: e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">Endpoint de clientes</label>
-            <input className={inputCls} value={cfg.endpoint} onChange={(e) => setCfg({ ...cfg, endpoint: e.target.value })} />
-          </div>
-        </div>
-        <div className="flex gap-3 flex-wrap">
-          <button disabled={busy} onClick={salvar} className={btnPrimary}>Salvar</button>
-          <button disabled={busy} onClick={testar} className={btnSecondary}>Testar conexão</button>
-          <button disabled={busy} onClick={() => importar(true)} className={btnSecondary}>Simular importação</button>
-          <button disabled={busy} onClick={() => importar(false)} className={btnPrimary}>{busy ? "Aguarde..." : "Importar do SGP"}</button>
-        </div>
-        {msg.texto && <p className={`text-sm ${msg.tipo === "ok" ? "text-green-400" : "text-red-400"}`}>{msg.texto}</p>}
-      </div>
-      <Resultado r={resultado} />
+    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
+      <p className="text-gray-300 text-sm">
+        A importação do SGP agora fica em <strong>Configurações › Integrações › SGP</strong>, onde você salva as credenciais, testa a conexão,
+        vê uma amostra e simula antes de importar.
+      </p>
+      <Link to={`/admin/${empresaSlug}/integracoes/sgp`} className={btnPrimary + " inline-block"}>Abrir integração SGP</Link>
     </div>
   );
 }
@@ -301,7 +225,7 @@ export default function ImportarClientes() {
           ))}
         </div>
 
-        {origem === "planilha" ? <Planilha token={token} campos={campos} /> : <Sgp token={token} />}
+        {origem === "planilha" ? <Planilha token={token} campos={campos} /> : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
   );

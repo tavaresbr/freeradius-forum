@@ -202,6 +202,7 @@ export default function AdminLayout({ children }) {
       ),
       children: [
         { key: "configuracoes", title: "Configurações", path: `${basePath}/configuracoes` },
+        { key: "configuracoes", title: "Integrações", path: `${basePath}/integracoes` },
         { key: "usuarios", title: "Usuários", path: `${basePath}/usuarios` },
         ...(isSuperAdmin ? [{ key: "grupos-permissao", title: "Permissões", path: `${basePath}/grupos-permissao` }] : []),
       ]

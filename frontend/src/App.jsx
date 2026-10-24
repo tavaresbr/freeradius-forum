@@ -17,6 +17,8 @@ import Portais from "./pages/admin/Portais";
 import PortalEditor from "./pages/admin/PortalEditor";
 import Leads from "./pages/admin/Leads";
 import ImportarClientes from "./pages/admin/ImportarClientes";
+import Integracoes from "./pages/admin/Integracoes";
+import IntegracaoSgp from "./pages/admin/IntegracaoSgp";
 import Compliance from "./pages/admin/Compliance";
 import EmpresasAdmin from "./pages/admin/EmpresasAdmin";
 import GruposPermissao from "./pages/admin/GruposPermissao";
@@ -98,6 +100,8 @@ function App() {
       <Route path="/admin/:empresaSlug/logs" element={<RotaPrivada><Logs /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/leads" element={<RotaPrivada><Leads /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/importar-clientes" element={<RotaPrivada><ImportarClientes /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/integracoes" element={<RotaPrivada><Integracoes /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/integracoes/sgp" element={<RotaPrivada><IntegracaoSgp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/compliance" element={<RotaPrivada><Compliance /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />

@@ -1,5 +1,7 @@
 const axios = require("axios");
 const db = require("../../db");
+const { mascararNome } = require("./mascararDados");
+const { sugerirMapeamento } = require("./importCadastros");
 
 /**
  * Cliente da API do SGP. Config por empresa em empresa_configs (config_type='sgp'):
@@ -86,35 +88,93 @@ function extrairLista(corpo) {
   return null;
 }
 
+/** Erro com mensagem segura para o usuario (nunca inclui app/token). */
+class SgpError extends Error {}
+
 async function buscarPagina(cfg, offset) {
-  const url = `${cfg.url}${cfg.endpoint && cfg.endpoint.startsWith("/") ? cfg.endpoint : `/${cfg.endpoint || ENDPOINT_PADRAO}`}`;
-  const resp = await axios.post(
-    url,
-    { app: cfg.app, token: cfg.token, offset, limit: PAGINA },
-    { timeout: TIMEOUT_MS, validateStatus: () => true }
-  );
-  if (resp.status === 401 || resp.status === 403) throw new Error("SGP recusou as credenciais (app/token)");
-  if (resp.status >= 400) throw new Error(`SGP respondeu HTTP ${resp.status}`);
+  const caminho = cfg.endpoint && cfg.endpoint.startsWith("/") ? cfg.endpoint : `/${cfg.endpoint || ENDPOINT_PADRAO}`;
+  let resp;
+  try {
+    resp = await axios.post(
+      `${cfg.url}${caminho}`,
+      { app: cfg.app, token: cfg.token, offset, limit: PAGINA },
+      { timeout: TIMEOUT_MS, validateStatus: () => true, maxRedirects: 0 }
+    );
+  } catch (err) {
+    const c = err && err.code;
+    if (c === "ECONNABORTED" || c === "ETIMEDOUT") throw new SgpError("Tempo esgotado ao falar com o SGP");
+    if (c === "ENOTFOUND" || c === "EAI_AGAIN") throw new SgpError("Endereço do SGP não encontrado (confira a URL)");
+    if (c === "ECONNREFUSED" || c === "ECONNRESET") throw new SgpError("O SGP recusou a conexão (confira URL e porta)");
+    if (/certificate|SSL|TLS/i.test(String(err && (err.code || err.message)))) throw new SgpError("Falha de certificado SSL no SGP");
+    throw new SgpError("Não foi possível conectar ao SGP");
+  }
+  if (resp.status === 401 || resp.status === 403) throw new SgpError("SGP recusou as credenciais (app/token)");
+  if (resp.status === 404) throw new SgpError("Endpoint não encontrado no SGP (HTTP 404) — ajuste o campo Endpoint");
+  if (resp.status >= 300 && resp.status < 400) throw new SgpError("O SGP redirecionou a requisição — use a URL final (https) no cadastro");
+  if (resp.status >= 400) throw new SgpError(`SGP respondeu HTTP ${resp.status}`);
   const lista = extrairLista(resp.data);
-  if (!lista) throw new Error("Resposta do SGP em formato inesperado (lista de clientes não encontrada)");
-  return lista;
+  if (!lista) {
+    const dica = resp.data && typeof resp.data === "object" ? ` (chaves recebidas: ${Object.keys(resp.data).slice(0, 8).join(", ") || "nenhuma"})` : " (a resposta não é JSON)";
+    throw new SgpError(`Resposta do SGP em formato inesperado${dica}`);
+  }
+  return { http: resp.status, lista };
 }
 
-/** Testa credenciais buscando 1 pagina; devolve quantos registros vieram e as chaves da 1a linha. */
+/**
+ * Diagnostico: busca 1 pagina e informa o que o SGP devolveu, sem expor dados.
+ * Devolve nomes dos campos (achatados), mapeamento sugerido e se nome e CPF/CNPJ foram identificados.
+ */
 async function testar(cfg) {
-  const lista = await buscarPagina(cfg, 0);
-  return { amostra: lista.length, campos: lista[0] ? Object.keys(achatar(lista[0])) : [] };
+  const { http, lista } = await buscarPagina(cfg, 0);
+  const campos = [...new Set(lista.slice(0, 20).flatMap((c) => Object.keys(achatar(c))))];
+  const mapeamento = sugerirMapeamento(campos);
+  return {
+    http,
+    registros: lista.length,
+    campos,
+    mapeamento,
+    identificou: { nome: !!mapeamento.nome, documento: !!(mapeamento.cpf || mapeamento.cnpj) },
+  };
+}
+
+const soDig = (v) => String(v == null ? "" : v).replace(/\D/g, "");
+const ultimos = (v, n) => { const d = soDig(v); return d ? `${"*".repeat(Math.max(d.length - n, 0))}${d.slice(-n)}` : ""; };
+
+/** Mascara um valor conforme o nome do campo (para a amostra exibida ao admin). */
+function mascararValor(chave, valor) {
+  if (valor == null || valor === "") return "";
+  const k = String(chave).toLowerCase();
+  const v = String(valor);
+  if (/cpf|cnpj|documento|\brg\b|^rg|identidade/.test(k)) return ultimos(v, 2);
+  if (/mail/.test(k)) { const [u, d] = v.split("@"); return d ? `${u.slice(0, 2)}***@${d}` : "***"; }
+  if (/fone|tel|cel|whats/.test(k)) return ultimos(v, 4);
+  if (/nasc/.test(k)) { const m = /(\d{4})/.exec(v); return m ? `**/**/${m[1]}` : "***"; }
+  if (/nome|razao|cliente/.test(k)) return mascararNome(v);
+  // so o ultimo trecho do nome achatado (endereco_uf nao e' logradouro)
+  if (/^(cep|logradouro|endereco|rua|bairro|numero|complemento)$/.test(k.split("_").pop())) return `${v.slice(0, 3)}***`;
+  return v.length > 40 ? `${v.slice(0, 40)}…` : v;
+}
+
+/** Ate 3 registros da 1a pagina com dados pessoais mascarados. */
+async function amostra(cfg) {
+  const { lista } = await buscarPagina(cfg, 0);
+  return lista.slice(0, 3).map((c) => {
+    const plano = achatar(c);
+    const out = {};
+    for (const [k, v] of Object.entries(plano)) out[k] = mascararValor(k, v);
+    return out;
+  });
 }
 
 /** Busca todos os clientes (paginado) ja achatados. */
 async function buscarTodos(cfg) {
   const todos = [];
   for (let p = 0; p < MAX_PAGINAS; p++) {
-    const lista = await buscarPagina(cfg, p * PAGINA);
+    const { lista } = await buscarPagina(cfg, p * PAGINA);
     todos.push(...lista.map((c) => achatar(c)));
     if (lista.length < PAGINA) break;
   }
   return todos;
 }
 
-module.exports = { carregarConfig, salvarConfig, publica, testar, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, ENDPOINT_PADRAO };
+module.exports = { SgpError, carregarConfig, salvarConfig, publica, testar, amostra, mascararValor, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, ENDPOINT_PADRAO };
