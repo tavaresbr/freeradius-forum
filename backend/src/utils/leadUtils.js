@@ -191,7 +191,7 @@ async function atualizarLeadExistente(leadId, empresaId, dados = {}) {
 }
 
 // Mesmo default exibido no portal quando o admin nao customizou (PortalEditor/CadastroLGPD)
-const TEXTO_LGPD_DEFAULT = "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais. *";
+const TEXTO_LGPD_DEFAULT = "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais, incluindo a data de nascimento, que será utilizada para confirmar minha identidade e recuperar meu cadastro. *";
 
 /**
  * Busca a configuracao (JSON de portais.configuracoes) do portal que atende o cliente.

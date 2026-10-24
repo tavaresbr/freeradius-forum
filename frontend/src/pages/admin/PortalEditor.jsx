@@ -9,7 +9,7 @@ const defaultConfigs = {
     subtitulo: "Seus dados protegidos pela Lei Geral de Proteção de Dados",
     texto_botao: "Cadastrar e Continuar",
     texto_rodape: "Seus dados estão protegidos e serão utilizados apenas para os fins estabelecidos em nossa política de privacidade.",
-    texto_lgpd: "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais. *",
+    texto_lgpd: "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais, incluindo a data de nascimento, que será utilizada para confirmar minha identidade e recuperar meu cadastro. *",
     cor_fundo_1: "#075985",
     cor_fundo_2: "#172554",
     cor_botao: "#3B82F6",
