@@ -14,8 +14,10 @@ const CPF = '529.982.247-25';
 const PLANO = { id: 9, duracao_minutos: 5, velocidade_down: 2, velocidade_up: 1, mikrotik_id: 3, shared_users: 1, end_hotspot: 'hs.local' };
 
 // dob: { total, iguais } devolvido pelo COUNT; saldo: true => radcheck com Max-All-Session sobrando
-function montarDb({ existing, dob = { total: 0, iguais: 0 }, saldo = false, senhaSalva = 'senhaReal9' } = {}) {
+function montarDb({ existing, dob = { total: 0, iguais: 0 }, saldo = false, senhaSalva = 'senhaReal9', confirmado = true } = {}) {
   return criarDb(async (sql) => {
+    // confirmado = existe pagamento aprovado com o CPF (cadastro NAO provisorio)
+    if (/FROM pagamentos/.test(sql)) return [confirmado ? [{ 1: 1 }] : []];
     if (/FROM mikrotiks WHERE id/.test(sql)) return [[{ empresa_id: 5 }]];
     if (/FROM mikrotiks WHERE empresa_id/.test(sql)) return [[{ id: 3, end_hotspot: 'hs.local', ip: '10.0.0.1' }]];
     if (/FROM planos/.test(sql)) return [[PLANO]];
@@ -288,4 +290,150 @@ test('leadLogin: data divergente => 403', async () => {
   } finally { un(); }
   assert.strictEqual(res.statusCode, 403);
   assert.ok(!houve(db, /INSERT INTO radcheck/));
+});
+
+// ---------- grilagem de CPF: cadastro provisorio (sem pagamento aprovado) ----------
+// UPDATE da reivindicacao (sobrescreve a data). O de gravarDataNascimento so preenche data NULL.
+const dataDoUpdate = (db) => db.calls.find((c) => /UPDATE leads SET data_nascimento/.test(c.sql) && !/data_nascimento IS NULL/.test(c.sql));
+
+test('conferirDataNascimento: CPF sem pagamento + outra data => reivindicado (troca a data e conta como tentativa)', async () => {
+  limparCache();
+  const db = montarDb({ dob: { total: 1, iguais: 0 }, confirmado: false });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  const un = silencia(); let r;
+  try { r = await m.conferirDataNascimento(CPF, 5, '01/02/1990', { mac: 'aa:bb:cc:dd:ee:01', ip: '5.5.5.5' }); } finally { un(); }
+  assert.strictEqual(r, 'reivindicado');
+  const upd = dataDoUpdate(db);
+  assert.ok(upd, 'grava a data nova');
+  assert.strictEqual(upd.params[0], '1990-02-01');
+  assert.match(upd.sql, /empresa_id = \?/);
+});
+
+test('conferirDataNascimento: CPF COM pagamento aprovado continua trancado (divergente) e nao troca a data', async () => {
+  limparCache();
+  const db = montarDb({ dob: { total: 1, iguais: 0 }, confirmado: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  const un = silencia(); let r;
+  try { r = await m.conferirDataNascimento(CPF, 5, '01/02/1990', { mac: 'aa:bb:cc:dd:ee:01', ip: '5.5.5.5' }); } finally { un(); }
+  assert.strictEqual(r, 'divergente');
+  assert.ok(!dataDoUpdate(db));
+});
+
+test('conferirDataNascimento: sem data informada nao reivindica nada (continua divergente)', async () => {
+  limparCache();
+  const db = montarDb({ dob: { total: 1, iguais: 0 }, confirmado: false });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  const un = silencia(); let r;
+  try { r = await m.conferirDataNascimento(CPF, 5, '', { mac: 'aa:bb:cc:dd:ee:01', ip: '5.5.5.5' }); } finally { un(); }
+  assert.strictEqual(r, 'divergente');
+  assert.ok(!dataDoUpdate(db));
+});
+
+test('cpfConfirmado: so pagamento approved/expirado da empresa; erro de banco => confirmado (lado seguro)', async () => {
+  limparCache();
+  const db = montarDb({ confirmado: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  assert.strictEqual(await m.cpfConfirmado('52998224725', 5), true);
+  const q = db.calls.find((c) => /FROM pagamentos/.test(c.sql));
+  assert.match(q.sql, /status IN \('approved', 'expirado'\)/);
+  assert.match(q.sql, /empresa_id = \?/);
+  assert.deepStrictEqual(q.params, ['52998224725', 5]);
+  limparCache();
+  const quebrado = criarDb(async () => { throw new Error('db fora'); });
+  const m2 = carregar('src/utils/leadUtils.js', { db: quebrado });
+  const un = silencia(); let r;
+  try { r = await m2.cpfConfirmado('52998224725', 5); } finally { un(); }
+  assert.strictEqual(r, true);
+});
+
+test('lgpdLogin: CPF grilado (sem pagamento): o dono de verdade NAO e trancado; contato e data passam a ser dele', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: false, confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 403);
+  assert.ok(dataDoUpdate(db), 'data do dono gravada');
+  const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
+  assert.ok(upd.params.includes('11999990000'), 'contato passa a ser o de quem se cadastrou agora');
+  assert.ok(houve(db, /INSERT INTO radcheck/), 'e recebe acesso novo');
+});
+
+test('lgpdLogin: reivindicar NAO entrega credenciais existentes: com acesso ativo => 409 e RADIUS intacto', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9'));
+  assert.ok(!houve(db, /DELETE FROM (radcheck|radreply|radusergroup)/));
+});
+
+test('lgpdLogin: CPF sem pagamento mas SEM data informada => 403 (so reivindica quem informa uma data)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: false, confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd(), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 403);
+  assert.ok(!dataDoUpdate(db));
+});
+
+test('cadastroCliente: CPF sem pagamento + data diferente => reivindica, sem credenciais nem dados do cadastro anterior', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9', confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 403);
+  assert.strictEqual(res.body.planoAtivo, false);
+  assert.strictEqual(res.body.nome, 'Outra Pessoa');
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9') && !JSON.stringify(res.body).includes('Titular'));
+  const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
+  assert.ok(upd.params.includes('11999990000'), 'o telefone do cadastro passa a ser o de quem vai pagar (WhatsApp vai pra ele)');
+  assert.ok(dataDoUpdate(db));
+});
+
+test('cadastroCliente: cadastro legado sem data e sem pagamento tambem e reivindicado (contato vira o de quem vai pagar)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: false, confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.body.planoAtivo, false);
+  const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
+  assert.ok(upd && upd.params.includes('11999990000'));
+  assert.ok(dataDoUpdate(db), 'grava a data informada');
+});
+
+test('cadastroCliente: CPF COM pagamento aprovado e outra data => 403 e nada muda', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: true, confirmado: true });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 403);
+  assert.ok(!dataDoUpdate(db));
+  assert.ok(!houve(db, /UPDATE leads SET nome/));
+});
+
+test('leadLogin: reivindicar atualiza o contato mas nao devolve credenciais', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: false, confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.leadLogin(criarReq({ body: { nome: 'X', telefone: '11888887777', cpf: CPF, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3, data_nascimento: '01/02/1990' }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 403);
+  assert.notStrictEqual(res.body && res.body.existente, true);
+  const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
+  assert.ok(upd && upd.params.includes('11888887777'));
+});
+
+test('reivindicar tem limite: 10 trocas/hora no mesmo CPF => depois 429', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, saldo: false, confirmado: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const un = silencia(); let res;
+  try {
+    for (let i = 0; i < 11; i++) {
+      res = criarRes();
+      await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: `0${(i % 9) + 1}/02/1990` }), ip: '7.7.7.7' }), res);
+    }
+  } finally { un(); }
+  assert.strictEqual(res.statusCode, 429);
 });
