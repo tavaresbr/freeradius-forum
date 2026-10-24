@@ -133,16 +133,57 @@ test('lgpdLogin: data correta + saldo => devolve credenciais do titular', async 
   assert.strictEqual(res.body.password, 'senhaReal9');
 });
 
-test('lgpdLogin: cadastro legado sem data => nunca devolve a senha existente nem troca contato', async () => {
+test('lgpdLogin: cadastro legado sem data + saldo ativo => 409, sem credenciais nem tocar no RADIUS', async () => {
   const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9' });
   const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
   const res = criarRes(); const un = silencia();
   try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd(), ip: '7.7.7.7' }), res); } finally { un(); }
-  assert.notStrictEqual(res.body && res.body.existente, true);
-  assert.notStrictEqual(res.body && res.body.password, 'senhaReal9');
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9'));
+  assert.ok(!houve(db, /DELETE FROM (radcheck|radreply|radusergroup)/), 'plano do titular preservado');
+  assert.ok(!houve(db, /INSERT INTO (radcheck|radreply|radusergroup)/));
   const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
   assert.ok(upd, 'registra o novo aceite');
   assert.ok(!upd.params.includes('11999990000') && !upd.params.includes('o@x.com'), 'contato do titular preservado');
+});
+
+test('lgpdLogin: cadastro legado sem data + SEM saldo => renova (franquia esgotada segue livre)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd(), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.ok(houve(db, /INSERT INTO radcheck/));
+  const upd = db.calls.find((c) => /UPDATE leads SET nome/.test(c.sql));
+  assert.ok(!upd.params.includes('11999990000'), 'contato do titular preservado');
+});
+
+test('lgpdLogin: CPF sem lead mas username ja com saldo ativo => 409 e nao cria lead', async () => {
+  const db = montarDb({ existing: null, saldo: true, senhaSalva: 'senhaDeOutro' });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd(), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!houve(db, /INSERT INTO leads/));
+  assert.ok(!houve(db, /DELETE FROM radcheck|INSERT INTO radcheck/));
+});
+
+test('lgpdLogin: titular verificado, sem saldo => re-libera normalmente', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: false });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.ok(houve(db, /INSERT INTO radcheck/));
+});
+
+test('lgpdLogin: sem CPF (username = MAC do aparelho) nao e afetado pela trava', async () => {
+  const db = montarDb({ existing: null, saldo: true });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({ cpf: '' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.ok(houve(db, /INSERT INTO radcheck/));
 });
 
 test('lgpdLogin: bloqueado por excesso de tentativas => 429', async () => {
@@ -193,7 +234,7 @@ test('cadastroCliente: legado sem data => segue para planos sem credenciais nem 
 });
 
 // ---------- /api/lead-portal/login ----------
-test('leadLogin: data correta mas username (telefone) de OUTRA pessoa => nao devolve a senha dele', async () => {
+test('leadLogin: data correta mas username (telefone) de OUTRA pessoa com saldo => 409, senha dele intacta', async () => {
   const existing = { ...EXISTING, telefone: '55999991111' };
   const db = montarDb({ existing, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaDaVitima' });
   const ctrl = carregarCtrl('src/controllers/leadController.js', db);
@@ -201,7 +242,31 @@ test('leadLogin: data correta mas username (telefone) de OUTRA pessoa => nao dev
   try {
     await ctrl.leadLogin(criarReq({ body: { nome: 'X', email: '', telefone: '11888887777', cpf: CPF, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3, data_nascimento: '01/02/1990' }, ip: '7.7.7.7' }), res);
   } finally { un(); }
-  assert.notStrictEqual(res.body && res.body.password, 'senhaDaVitima');
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!JSON.stringify(res.body).includes('senhaDaVitima'));
+  assert.ok(!houve(db, /DELETE FROM (radcheck|radreply|radusergroup)/));
+});
+
+test('leadLogin: sem CPF, telefone que ja tem saldo ativo => 409 (nao sobrescreve a senha de quem tem o numero)', async () => {
+  const db = montarDb({ existing: null, saldo: true, senhaSalva: 'senhaDoDono' });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.leadLogin(criarReq({ body: { nome: 'X', telefone: '11888887777', mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3 }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!houve(db, /DELETE FROM radcheck|INSERT INTO radcheck/));
+});
+
+test('leadLogin: titular verificado com o proprio telefone, sem saldo => re-libera', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: false });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.leadLogin(criarReq({ body: { nome: 'X', telefone: '55999991111', cpf: CPF, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3, data_nascimento: '01/02/1990' }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.notStrictEqual(res.statusCode, 409);
+  assert.ok(houve(db, /INSERT INTO radcheck/));
 });
 
 test('leadLogin: data divergente => 403', async () => {

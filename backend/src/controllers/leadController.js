@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -27,6 +27,7 @@ exports.capturaPassiva = async (req, res) => {
 
     // Reconexao por CPF: se ja existe, atualiza o lead em vez de bloquear (409).
     let leadJaRegistrado = false;
+    let titularVerificado = false;
     if (cpf) {
       const existing = await verificarLeadExistente(cpf, empresaId);
       if (existing) {
@@ -169,6 +170,7 @@ exports.leadLogin = async (req, res) => {
         const verificado = conf === "ok";
         // Username deste fluxo e' telefone/e-mail/MAC: so devolve credencial se for o do proprio lead
         const usernameDoLead = verificado && usernamePertenceAoLead(existing, username);
+        titularVerificado = usernameDoLead;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
         await atualizarLeadExistente(existing.id, empresaId, verificado
           ? { nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
@@ -191,6 +193,12 @@ exports.leadLogin = async (req, res) => {
         }
         // Sem saldo: segue para re-liberacao abaixo.
       }
+    }
+
+    // Re-liberar troca senha e plano do username (telefone/e-mail/MAC): recusa se ele ja
+    // tem acesso ativo e nao e' o username do titular verificado deste lead.
+    if (await bloqueiaReliberacao({ username, titularVerificado, usernameEhMac: username === mac })) {
+      return res.status(409).json({ message: MSG_ACESSO_ATIVO, requer_data_nascimento: true });
     }
 
     // Salvar lead — apenas se novo CPF

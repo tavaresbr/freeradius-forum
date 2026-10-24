@@ -204,6 +204,23 @@ async function verificarSaldoRadius(username) {
 }
 
 /**
+ * A re-liberacao (DELETE + INSERT no radcheck/radreply/radusergroup do username) troca a
+ * senha e o plano. Para um username que JA tem saldo ativo isso destroi o acesso de quem
+ * pode ser outra pessoa (ex.: plano pago sobrescrito pelo plano gratis de quem so sabe o CPF).
+ * So permite quando o titular foi verificado (data de nascimento) ou o username e' o proprio
+ * MAC do aparelho; sem saldo ativo nao ha o que proteger (renovar a franquia esgotada segue livre).
+ * @param {{username: string, titularVerificado?: boolean, usernameEhMac?: boolean}} p
+ * @returns {Promise<boolean>} true = deve recusar a re-liberacao
+ */
+async function bloqueiaReliberacao({ username, titularVerificado = false, usernameEhMac = false }) {
+  if (titularVerificado || usernameEhMac || !username) return false;
+  const saldo = await verificarSaldoRadius(username);
+  return !!(saldo.existe && saldo.temSaldo);
+}
+
+const MSG_ACESSO_ATIVO = "Já existe um acesso ativo para este cadastro. Use o usuário e senha que você recebeu ou informe a data de nascimento do titular.";
+
+/**
  * Atualiza (re-registra) um lead existente com novos dados e, opcionalmente,
  * um novo aceite LGPD. Cada reconexao gera um novo consentimento LGPD valido
  * (timestamp atualizado). Preserva isolamento multi-tenant filtrando por empresa_id.
@@ -317,4 +334,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
