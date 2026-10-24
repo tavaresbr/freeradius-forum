@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
@@ -64,6 +64,7 @@ exports.lgpdLogin = async (req, res) => {
     const apInfo = await resolverApDoContexto(mikrotik_id, mac);
 
     let leadJaRegistrado = false;
+    let titularVerificado = false;
     if (cpf) {
       const existing = await verificarLeadExistente(cpfLimpo, empresaId);
       if (existing) {
@@ -77,6 +78,7 @@ exports.lgpdLogin = async (req, res) => {
           return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
         }
         const verificado = conf === "ok";
+        titularVerificado = verificado;
         // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
         await atualizarLeadExistente(existing.id, empresaId, verificado
           ? { nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
@@ -99,6 +101,12 @@ exports.lgpdLogin = async (req, res) => {
         }
         // Sem saldo: segue para re-liberacao abaixo.
       }
+    }
+
+    // Re-liberar troca senha e plano do username: recusa se ele ja tem acesso ativo e o
+    // titular nao foi verificado (cadastro legado sem data, ou CPF ainda sem lead).
+    if (await bloqueiaReliberacao({ username, titularVerificado, usernameEhMac: !cpfLimpo })) {
+      return res.status(409).json({ message: MSG_ACESSO_ATIVO, requer_data_nascimento: true });
     }
 
     // Salvar na tabela unificada leads (origem = 'lgpd') — apenas se novo CPF
