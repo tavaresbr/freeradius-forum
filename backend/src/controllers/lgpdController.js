@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
@@ -68,13 +68,21 @@ exports.lgpdLogin = async (req, res) => {
       const existing = await verificarLeadExistente(cpfLimpo, empresaId);
       if (existing) {
         leadJaRegistrado = true;
-        await atualizarLeadExistente(existing.id, empresaId, {
-          nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd,
-          ap_mac: apInfo.apMac, ssid: apInfo.ssid,
-        });
+        // Segundo fator: sem a data de nascimento correta nao ha reconexao nem
+        // alteracao do cadastro (o CPF sozinho e' publico/adivinhavel).
         await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
+        const conf = await conferirDataNascimento(cpfLimpo, empresaId, data_nascimento, { mac, ip: req.ip });
+        if (conf === "bloqueado") return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
+        if (conf === "divergente") {
+          return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
+        }
+        const verificado = conf === "ok";
+        // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
+        await atualizarLeadExistente(existing.id, empresaId, verificado
+          ? { nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
+          : { aceite: aceiteInt, termo: termoLgpd });
 
-        const saldo = await verificarSaldoRadius(username);
+        const saldo = verificado ? await verificarSaldoRadius(username) : { temSaldo: false };
         if (saldo.temSaldo) {
           const gatewaySaldo = plano.end_hotspot || ip;
           return res.json({

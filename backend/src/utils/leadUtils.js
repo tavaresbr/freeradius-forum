@@ -1,6 +1,7 @@
 const db = require("../../db");
 const { normalizarDataNascimento } = require("./dataNascimento");
 const { normalizarCampos } = require("./camposPortal");
+const dobTentativas = require("./dobTentativas");
 
 /**
  * Verifica se já existe um lead com o CPF informado para a empresa.
@@ -89,6 +90,61 @@ async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistent
   } catch (err) {
     console.warn("[gravarDataNascimento] ignorado:", err.message);
   }
+}
+
+/**
+ * Segundo fator da reconexao por CPF: confere a data de nascimento informada com a
+ * gravada no(s) lead(s) desse CPF/empresa (comparacao feita no SQL, sem fuso).
+ * Resultados:
+ *  - 'ok'         data bate;
+ *  - 'ausente'    cadastro sem data gravada (legado): nao ha como verificar;
+ *  - 'divergente' ha data gravada e a informada falta ou nao bate (conta como tentativa errada);
+ *  - 'bloqueado'  tentativas erradas demais (CPF ou dispositivo): nem consulta.
+ * @param {string} cpf
+ * @param {number|null} empresaId
+ * @param {*} data - 'AAAA-MM-DD' ou 'DD/MM/AAAA'
+ * @param {{mac?: string, ip?: string}} [origem]
+ */
+async function conferirDataNascimento(cpf, empresaId, data, { mac, ip } = {}) {
+  const ctx = { empresaId, cpf, ip, mac };
+  if (dobTentativas.bloqueado(ctx)) return "bloqueado";
+  const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+  const dataIso = normalizarDataNascimento(data);
+  let total = 0;
+  let iguais = 0;
+  try {
+    const [[row]] = await db.execute(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(data_nascimento = ?), 0) AS iguais
+       FROM leads
+       WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ? AND data_nascimento IS NOT NULL${empresaId ? " AND empresa_id = ?" : ""}`,
+      empresaId ? [dataIso || "0000-00-00", cpfLimpo, empresaId] : [dataIso || "0000-00-00", cpfLimpo]
+    );
+    total = Number(row?.total) || 0;
+    iguais = Number(row?.iguais) || 0;
+  } catch (err) {
+    // Ex.: migration 026 ainda nao rodou (sem coluna = nenhuma data gravada)
+    console.warn("[conferirDataNascimento] indisponivel:", err.message);
+    return "ausente";
+  }
+  if (total === 0) return "ausente";
+  if (dataIso && iguais > 0) return "ok";
+  dobTentativas.registrarFalha(ctx);
+  return "divergente";
+}
+
+/**
+ * O username RADIUS (telefone limpo, e-mail ou MAC) pertence a este lead? Evita que quem
+ * tem um CPF+data validos peca as credenciais do username (telefone) de outra pessoa.
+ * @param {{telefone?: string, email?: string, mac?: string}|null} lead
+ * @param {string} username
+ */
+function usernamePertenceAoLead(lead, username) {
+  if (!lead || !username) return false;
+  const u = String(username).toLowerCase();
+  const tel = String(lead.telefone || "").replace(/\D/g, "");
+  return [tel, String(lead.email || "").toLowerCase(), String(lead.mac || "").toLowerCase()]
+    .filter(Boolean)
+    .includes(u);
 }
 
 /**
@@ -261,4 +317,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
