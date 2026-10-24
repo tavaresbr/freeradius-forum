@@ -111,7 +111,13 @@ async function buscarPagina(cfg, offset) {
   if (resp.status === 401 || resp.status === 403) throw new SgpError("SGP recusou as credenciais (app/token)");
   if (resp.status === 404) throw new SgpError("Endpoint não encontrado no SGP (HTTP 404) — ajuste o campo Endpoint");
   if (resp.status >= 300 && resp.status < 400) throw new SgpError("O SGP redirecionou a requisição — use a URL final (https) no cadastro");
-  if (resp.status >= 400) throw new SgpError(`SGP respondeu HTTP ${resp.status}`);
+  if (resp.status >= 400) {
+    // Inclui o motivo devolvido pelo SGP (sem app/token) para o admin saber o que ajustar.
+    let motivo = typeof resp.data === "string" ? resp.data : resp.data ? JSON.stringify(resp.data) : "";
+    for (const segredo of [cfg.token, cfg.app]) if (segredo) motivo = motivo.split(segredo).join("***");
+    motivo = motivo.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+    throw new SgpError(`SGP respondeu HTTP ${resp.status}${motivo ? `: ${motivo}` : ""}`);
+  }
   const lista = extrairLista(resp.data);
   if (!lista) {
     const dica = resp.data && typeof resp.data === "object" ? ` (chaves recebidas: ${Object.keys(resp.data).slice(0, 8).join(", ") || "nenhuma"})` : " (a resposta não é JSON)";
