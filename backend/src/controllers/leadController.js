@@ -4,6 +4,8 @@ const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verifica
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
+const { validarCPF } = require("../utils/cpf");
+const { formatarTelefone, formatarCep, normalizarDataImport } = require("../utils/importCadastros");
 
 // Captura de lead sem liberar internet
 exports.capturaPassiva = async (req, res) => {
@@ -315,6 +317,69 @@ exports.leadLogin = async (req, res) => {
   }
 };
 
+// Campos do cadastro completo aceitos no CRUD manual (alem de nome/email/telefone/cpf/status/observacoes)
+const CAMPOS_TEXTO = {
+  rg: 30, cnpj: 20, razao_social: 255, logradouro: 255, numero: 20, complemento: 100,
+  bairro: 100, cidade: 100, id_externo: 64,
+};
+const STATUS_VALIDOS = ["novo", "contactado", "convertido", "descartado"];
+
+/**
+ * Limpa o corpo do CRUD: so devolve as chaves enviadas, ja normalizadas.
+ * @returns {{dados?: Object, erro?: string}}
+ */
+function sanitizarCadastro(body) {
+  const d = {};
+  const tem = (k) => body[k] !== undefined;
+  const txt = (v, max) => { const s = v == null ? "" : String(v).trim(); return s ? s.slice(0, max) : null; };
+
+  if (tem("nome")) d.nome = txt(body.nome, 255);
+  if (tem("email")) {
+    d.email = txt(body.email, 255);
+    if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return { erro: "E-mail inválido" };
+  }
+  if (tem("telefone")) {
+    const t = txt(body.telefone, 50);
+    d.telefone = t ? (formatarTelefone(t) || null) : null;
+    if (t && !d.telefone) return { erro: "Telefone inválido (use DDD + número)" };
+  }
+  if (tem("cpf")) {
+    const c = String(body.cpf || "").replace(/\D/g, "");
+    if (c && !validarCPF(c)) return { erro: "CPF inválido" };
+    d.cpf = c || null;
+  }
+  if (tem("cnpj")) {
+    const c = String(body.cnpj || "").replace(/\D/g, "");
+    if (c && c.length !== 14) return { erro: "CNPJ inválido" };
+    d.cnpj = c || null;
+  }
+  if (tem("data_nascimento")) {
+    const dn = body.data_nascimento ? normalizarDataImport(body.data_nascimento) : null;
+    if (body.data_nascimento && !dn) return { erro: "Data de nascimento inválida" };
+    d.data_nascimento = dn;
+  }
+  if (tem("tipo_pessoa")) d.tipo_pessoa = String(body.tipo_pessoa).toUpperCase() === "PJ" ? "PJ" : "PF";
+  if (tem("cep")) {
+    const c = txt(body.cep, 10);
+    d.cep = c ? (formatarCep(c) || null) : null;
+    if (c && !d.cep) return { erro: "CEP inválido" };
+  }
+  if (tem("uf")) {
+    const u = txt(body.uf, 2);
+    if (u && !/^[A-Za-z]{2}$/.test(u)) return { erro: "UF inválida" };
+    d.uf = u ? u.toUpperCase() : null;
+  }
+  for (const [k, max] of Object.entries(CAMPOS_TEXTO)) {
+    if (k !== "cnpj" && tem(k)) d[k] = txt(body[k], max);
+  }
+  if (tem("observacoes")) d.observacoes = txt(body.observacoes, 5000);
+  if (tem("status")) {
+    if (!STATUS_VALIDOS.includes(body.status)) return { erro: "Status inválido" };
+    d.status = body.status;
+  }
+  return { dados: d };
+}
+
 exports.listarLeads = async (req, res) => {
   try {
     const { status, q } = req.query;
@@ -327,12 +392,20 @@ exports.listarLeads = async (req, res) => {
     }
 
     if (q) {
-      query += " AND (nome LIKE ? OR email LIKE ? OR cpf LIKE ?)";
+      query += " AND (nome LIKE ? OR email LIKE ? OR cpf LIKE ? OR cnpj LIKE ? OR telefone LIKE ? OR id_externo LIKE ?)";
       const search = `%${q}%`;
-      params.push(search, search, search);
+      params.push(search, search, search, search, search, search);
     }
 
     query += " ORDER BY criado_em DESC";
+
+    // Paginacao opcional (sem limit = comportamento antigo, lista completa)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 0, 1000);
+    if (limit > 0) {
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      query += " LIMIT ? OFFSET ?";
+      params.push(limit, (page - 1) * limit);
+    }
 
     const [rows] = await db.query(query, params);
     res.json(rows);
@@ -344,27 +417,27 @@ exports.listarLeads = async (req, res) => {
 
 exports.criarLead = async (req, res) => {
   try {
-    const { nome, email, telefone, cpf, mac, ip, status, origem, observacoes, lgpd_aceite } = req.body;
+    const body = req.body || {};
+    const { dados, erro } = sanitizarCadastro(body);
+    if (erro) return res.status(400).json({ message: erro });
+
+    if (dados.cpf && await verificarLeadExistente(dados.cpf, req.empresa_id)) {
+      return res.status(409).json({ message: "Já existe um cadastro com este CPF" });
+    }
+
+    const mac = body.mac ? String(body.mac).slice(0, 50) : null;
+    const ip = body.ip ? String(body.ip).slice(0, 50) : null;
+    const colunas = ["empresa_id", "mac", "ip", "origem", "sistema_origem", "lgpd_aceite"];
+    const valores = [req.empresa_id, mac, ip, body.origem ? String(body.origem).slice(0, 30) : "manual", "manual", body.lgpd_aceite ? 1 : 0];
+    for (const [k, v] of Object.entries(dados)) { colunas.push(k); valores.push(v); }
+    if (!dados.status) { colunas.push("status"); valores.push("novo"); }
 
     const [result] = await db.execute(
-      `INSERT INTO leads (empresa_id, nome, email, telefone, cpf, mac, ip, status, origem, observacoes, lgpd_aceite)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.empresa_id,
-        nome || null,
-        email || null,
-        telefone || null,
-        cpf || null,
-        mac || null,
-        ip || null,
-        status || "novo",
-        origem || "manual",
-        observacoes || null,
-        lgpd_aceite ? 1 : 0
-      ]
+      `INSERT INTO leads (${colunas.join(", ")}) VALUES (${colunas.map(() => "?").join(", ")})`,
+      valores
     );
 
-    res.status(201).json({ id: result.insertId, message: "Lead criado com sucesso" });
+    res.status(201).json({ id: result.insertId, message: "Cadastro criado com sucesso" });
   } catch (err) {
     console.error("Erro ao criar lead:", err);
     res.status(500).json({ message: "Erro ao criar lead" });
@@ -374,27 +447,24 @@ exports.criarLead = async (req, res) => {
 exports.atualizarLead = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, email, telefone, cpf, status, observacoes } = req.body;
+    const { dados, erro } = sanitizarCadastro(req.body || {});
+    if (erro) return res.status(400).json({ message: erro });
 
-    const fields = [];
-    const params = [];
-
-    if (nome !== undefined) { fields.push("nome = ?"); params.push(nome); }
-    if (email !== undefined) { fields.push("email = ?"); params.push(email); }
-    if (telefone !== undefined) { fields.push("telefone = ?"); params.push(telefone); }
-    if (cpf !== undefined) { fields.push("cpf = ?"); params.push(cpf); }
-    if (status !== undefined) { fields.push("status = ?"); params.push(status); }
-    if (observacoes !== undefined) { fields.push("observacoes = ?"); params.push(observacoes); }
-
-    if (fields.length === 0) {
+    const chaves = Object.keys(dados);
+    if (chaves.length === 0) {
       return res.status(400).json({ message: "Nenhum campo para atualizar" });
     }
 
-    params.push(id, req.empresa_id);
+    if (dados.cpf) {
+      const outro = await verificarLeadExistente(dados.cpf, req.empresa_id);
+      if (outro && String(outro.id) !== String(id)) {
+        return res.status(409).json({ message: "Já existe um cadastro com este CPF" });
+      }
+    }
 
     const [result] = await db.execute(
-      `UPDATE leads SET ${fields.join(", ")} WHERE id = ? AND empresa_id = ?`,
-      params
+      `UPDATE leads SET ${chaves.map((k) => `${k} = ?`).join(", ")} WHERE id = ? AND empresa_id = ?`,
+      [...chaves.map((k) => dados[k]), id, req.empresa_id]
     );
 
     if (result.affectedRows === 0) {
@@ -431,26 +501,35 @@ exports.deletarLead = async (req, res) => {
 exports.exportarLeadsCSV = async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT nome, email, telefone, cpf, mac, ip, status, origem, observacoes, lgpd_aceite, criado_em FROM leads WHERE empresa_id = ? ORDER BY criado_em DESC",
+      `SELECT nome, email, telefone, cpf, cnpj, tipo_pessoa, rg, razao_social, data_nascimento,
+              cep, logradouro, numero, complemento, bairro, cidade, uf, id_externo, sistema_origem,
+              mac, ip, status, origem, observacoes, lgpd_aceite, criado_em
+       FROM leads WHERE empresa_id = ? ORDER BY criado_em DESC`,
       [req.empresa_id]
     );
 
-    const header = "Nome,Email,Telefone,CPF,MAC,IP,Status,Origem,Observacoes,LGPD Aceite,Criado Em\n";
-    const csvRows = rows.map(r => {
-      return [
-        `"${(r.nome || '').replace(/"/g, '""')}"`,
-        `"${(r.email || '').replace(/"/g, '""')}"`,
-        `"${(r.telefone || '').replace(/"/g, '""')}"`,
-        `"${(r.cpf || '').replace(/"/g, '""')}"`,
-        `"${(r.mac || '').replace(/"/g, '""')}"`,
-        `"${(r.ip || '').replace(/"/g, '""')}"`,
-        `"${r.status}"`,
-        `"${r.origem}"`,
-        `"${(r.observacoes || '').replace(/"/g, '""')}"`,
-        r.lgpd_aceite ? "Sim" : "Não",
-        `"${r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : ''}"`
-      ].join(",");
-    }).join("\n");
+    // Dados importados podem comecar com = + - @ : neutraliza formula ao abrir no Excel
+    const cel = (v) => {
+      let t = v == null ? "" : String(v);
+      if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+    // DATE do mysql2 vem como Date local: usa getters locais (toISOString poderia voltar um dia)
+    const data = (d) => {
+      if (!d) return "";
+      const x = new Date(d);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    };
+
+    const header = "Nome,Email,Telefone,CPF,CNPJ,Tipo,RG,Razao Social,Nascimento,CEP,Logradouro,Numero,Complemento,Bairro,Cidade,UF,ID Externo,Sistema Origem,MAC,IP,Status,Origem,Observacoes,LGPD Aceite,Criado Em\n";
+    const csvRows = rows.map(r => [
+      cel(r.nome), cel(r.email), cel(r.telefone), cel(r.cpf), cel(r.cnpj), cel(r.tipo_pessoa), cel(r.rg),
+      cel(r.razao_social), cel(data(r.data_nascimento)), cel(r.cep), cel(r.logradouro), cel(r.numero),
+      cel(r.complemento), cel(r.bairro), cel(r.cidade), cel(r.uf), cel(r.id_externo), cel(r.sistema_origem),
+      cel(r.mac), cel(r.ip), cel(r.status), cel(r.origem), cel(r.observacoes),
+      r.lgpd_aceite ? "Sim" : "Não",
+      cel(r.criado_em ? new Date(r.criado_em).toLocaleString('pt-BR') : ''),
+    ].join(",")).join("\n");
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", "attachment; filename=leads.csv");
