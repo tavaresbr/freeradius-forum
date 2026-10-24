@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { gerarSenhaRadius } = require("../utils/radiusPassword");
 const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
@@ -121,7 +122,7 @@ exports.leadLogin = async (req, res) => {
     // Username: usar telefone limpo, ou email, ou MAC
     const telLimpo = telefone ? telefone.replace(/\D/g, '') : null;
     const username = telLimpo || email || mac;
-    const senha = username;
+    const senha = gerarSenhaRadius(); // aleatoria; devolvida ao frontend/WhatsApp
 
     // Busca plano Lead da empresa
     let planoQuery = `

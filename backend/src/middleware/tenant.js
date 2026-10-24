@@ -8,7 +8,10 @@ module.exports = async (req, res, next) => {
     // Super admin: usa header x-empresa-id, ou empresa_id do JWT (set via switchEmpresa)
     const headerEmpresa = req.headers['x-empresa-id'] || req.query.empresa_id;
     const empresaId = headerEmpresa || user.empresa_id;
-    req.empresa_id = empresaId ? parseInt(empresaId, 10) : null;
+    // Aceita so inteiros puros: parseInt('8abc') daria 8 e aceitaria header malformado.
+    req.empresa_id = empresaId
+      ? (/^\d+$/.test(String(empresaId)) ? parseInt(empresaId, 10) : NaN)
+      : null;
 
     // Se o super_admin informou uma empresa via header/query, validar que ela
     // existe (evita operar sobre empresa_id arbitrario/inexistente).

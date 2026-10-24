@@ -9,8 +9,9 @@ const {
 } = require("../controllers/grupoPermissaoController");
 const { listarTodosAdmins } = require("../controllers/empresaController");
 
-// Todas requerem super_admin ou owner
-router.use(auth, authorize('super_admin', 'owner'));
+// Tabelas grupos_permissao/admin_grupos sao globais (sem empresa_id): apenas
+// super_admin pode gerir, senao owner de uma empresa afetaria todas as outras.
+router.use(auth, authorize('super_admin'));
 
 router.get("/modulos", listarModulos);
 router.get("/", listarGrupos);

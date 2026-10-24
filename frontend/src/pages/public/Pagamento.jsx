@@ -184,8 +184,8 @@ export default function Pagamento() {
         const data = await res.json();
         if (data.status === "approved" && data.gateway && data.username) {
           setPagamentoAprovado(true);
-          // O endpoint /status nao retorna mais `password` (== username).
-          redirecionarHotspot(data.gateway, data.username, data.username, 2000, data.gateway_info);
+          // /status devolve a senha real (aleatoria, do radcheck); fallback p/ legado.
+          redirecionarHotspot(data.gateway, data.username, data.password || data.username, 2000, data.gateway_info);
         }
       } catch (err) {
         console.error("Erro ao verificar status:", err);
