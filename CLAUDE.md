@@ -1704,6 +1704,20 @@ Acoes por linha ──▶ getDriver(row): MikrotikDriver | OmadaDriver | UnifiDr
 
 ---
 
+## Reconexao por CPF: data de nascimento e re-liberacao
+
+`/api/lgpd/login`, `/api/lead-portal/login` e `/api/clientes/cadastro` so devolvem credenciais RADIUS (ou alteram o cadastro) de um CPF ja existente se a data de nascimento informada bater com a gravada em `leads.data_nascimento`. Logica em `leadUtils.conferirDataNascimento` (`ok` / `ausente` / `divergente` / `bloqueado`):
+
+- `divergente` (ha data gravada e a informada falta ou nao bate): HTTP 403 com `requer_data_nascimento: true`; nada e' alterado nem devolvido.
+- `ausente` (cadastro legado sem data): nao da pra provar titularidade. Nunca devolve a senha existente nem troca telefone/e-mail/MAC; LGPD/Lead registram so o novo aceite; `cadastroCliente` segue para planos sem PII do titular. Do mesmo aparelho (MAC) a data e' gravada primeiro (`gravarDataNascimento`), entao o legado se "atualiza" sozinho.
+- `bloqueado`: HTTP 429 apos 10 tentativas erradas/hora por CPF (empresa+CPF) ou por dispositivo (IP+MAC), em memoria (`utils/dobTentativas.js`, zera no restart do PM2).
+- `leadLogin` usa telefone/e-mail/MAC como username: credencial so e' devolvida se o username pertence ao proprio lead (`usernamePertenceAoLead`).
+- Todo novo fluxo de reconexao por CPF TEM que chamar `conferirDataNascimento` antes de devolver credenciais.
+- **Re-liberacao (DELETE+INSERT em radcheck/radreply/radusergroup) nao pode sobrescrever acesso ativo de quem nao se provou.** `leadUtils.bloqueiaReliberacao` recusa com HTTP 409 (`requer_data_nascimento: true`) quando o username ja tem saldo ativo e o titular nao foi verificado (cadastro legado sem data, CPF sem lead mas com username ja em uso, telefone/e-mail de outra pessoa). Sem saldo ativo a renovacao segue livre (e' assim que a franquia esgotada se renova); username = MAC do proprio aparelho (portal sem CPF) fica fora da trava. Todo novo handler que regrave credenciais de um username existente TEM que passar por essa checagem.
+- Nao coberto: `liberarUsuario` (pagamento aprovado) regrava as credenciais do CPF/MAC apos o pagamento, o que troca o plano ativo; a politica de empilhar planos fica para decisao de produto.
+
+---
+
 ## Compliance: Relatorios Marco Civil e LGPD
 
 > **Doc tecnico completo:** `docs/COMPLIANCE-LGPD.md`
