@@ -13,7 +13,7 @@ const { sugerirMapeamento } = require("./importCadastros");
  */
 const ENDPOINT_PADRAO = "/api/ura/clientes/";
 const PAGINA = 100; // o SGP recusa limit > 100 (HTTP 400)
-const MAX_PAGINAS = 100;
+const MAX_PAGINAS = 500; // 50 mil clientes (paginas de 100)
 const TIMEOUT_MS = 20000;
 
 async function carregarConfig(empresaId) {
@@ -25,7 +25,10 @@ async function carregarConfig(empresaId) {
   return typeof row.config_json === "string" ? JSON.parse(row.config_json) : row.config_json;
 }
 
-async function salvarConfig(empresaId, { url, app, token, endpoint }) {
+const HORAS_PADRAO = 24;
+const horasValidas = (h) => { const n = Math.round(Number(h)); return n >= 1 && n <= 168 ? n : HORAS_PADRAO; };
+
+async function salvarConfig(empresaId, { url, app, token, endpoint, sync_auto, sync_horas }) {
   const atual = (await carregarConfig(empresaId)) || {};
   const nova = {
     url: normalizarUrl(url),
@@ -33,6 +36,10 @@ async function salvarConfig(empresaId, { url, app, token, endpoint }) {
     // token em branco = mantem o ja salvo (a tela nunca recebe o token de volta)
     token: token ? String(token).trim() : atual.token || "",
     endpoint: String(endpoint || ENDPOINT_PADRAO).trim(),
+    // sync automatica: so muda se o body trouxer o campo (clientes antigos da API nao o enviam)
+    sync_auto: sync_auto === undefined ? !!atual.sync_auto : !!sync_auto,
+    sync_horas: sync_horas === undefined ? horasValidas(atual.sync_horas) : horasValidas(sync_horas),
+    ultima_sync: atual.ultima_sync || null,
   };
   await db.execute(
     `INSERT INTO empresa_configs (empresa_id, config_type, config_json) VALUES (?, 'sgp', ?)
@@ -58,10 +65,23 @@ function urlPermitida(url) {
   return true;
 }
 
+/** Grava o resultado da ultima sincronizacao automatica (sem tocar no resto da config). */
+async function registrarSync(empresaId, info) {
+  const atual = await carregarConfig(empresaId);
+  if (!atual) return;
+  await db.execute(
+    "UPDATE empresa_configs SET config_json = ? WHERE empresa_id = ? AND config_type = 'sgp'",
+    [JSON.stringify({ ...atual, ultima_sync: info }), empresaId]
+  );
+}
+
 /** Config sem o token, para devolver a tela. */
 function publica(cfg) {
-  if (!cfg) return { configurado: false, url: "", app: "", endpoint: ENDPOINT_PADRAO, token_definido: false };
-  return { configurado: !!(cfg.url && cfg.app && cfg.token), url: cfg.url || "", app: cfg.app || "", endpoint: cfg.endpoint || ENDPOINT_PADRAO, token_definido: !!cfg.token };
+  if (!cfg) return { configurado: false, url: "", app: "", endpoint: ENDPOINT_PADRAO, token_definido: false, sync_auto: false, sync_horas: HORAS_PADRAO, ultima_sync: null };
+  return {
+    configurado: !!(cfg.url && cfg.app && cfg.token), url: cfg.url || "", app: cfg.app || "", endpoint: cfg.endpoint || ENDPOINT_PADRAO, token_definido: !!cfg.token,
+    sync_auto: !!cfg.sync_auto, sync_horas: horasValidas(cfg.sync_horas), ultima_sync: cfg.ultima_sync || null,
+  };
 }
 
 // Achata { endereco: { cidade } } em { endereco_cidade } e mantem a chave curta (cidade) se nao colidir.
@@ -183,4 +203,4 @@ async function buscarTodos(cfg) {
   return todos;
 }
 
-module.exports = { SgpError, carregarConfig, salvarConfig, publica, testar, amostra, mascararValor, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, ENDPOINT_PADRAO };
+module.exports = { SgpError, carregarConfig, salvarConfig, registrarSync, horasValidas, publica, testar, amostra, mascararValor, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, ENDPOINT_PADRAO };

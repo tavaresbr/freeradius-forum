@@ -14,6 +14,8 @@ const fakeDb = {
   },
   execute: async (sql, params) => {
     chamadas.push({ sql, params });
+    if (/SELECT empresa_id FROM empresa_configs/.test(sql)) return [cfgSalva ? [{ empresa_id: 1 }] : []];
+    if (/UPDATE empresa_configs SET config_json/.test(sql)) { cfgSalva = JSON.parse(params[0]); return [{ affectedRows: 1 }]; }
     if (/FROM empresa_configs/.test(sql)) return [cfgSalva ? [{ config_json: JSON.stringify(cfgSalva) }] : []];
     if (/INSERT INTO empresa_configs/.test(sql)) { cfgSalva = JSON.parse(params[1]); }
     return [{ affectedRows: 1 }];
@@ -123,7 +125,7 @@ test('controller: guard SSRF bloqueia localhost; salvar nao devolve token', asyn
   assert.strictEqual(cfgSalva.url, 'https://sgp.exemplo.com.br');
   res = resFalso();
   await ctrl.obterSgp({ empresa_id: 1 }, res);
-  assert.deepStrictEqual(Object.keys(res.corpo).sort(), ['app', 'configurado', 'endpoint', 'token_definido', 'url']);
+  assert.deepStrictEqual(Object.keys(res.corpo).sort(), ['app', 'configurado', 'endpoint', 'sync_auto', 'sync_horas', 'token_definido', 'ultima_sync', 'url']);
   assert.ok(!JSON.stringify(res.corpo).includes('"t"'));
   // token em branco mantem o salvo
   res = resFalso();
@@ -158,4 +160,44 @@ test('importacao ponta a ponta contra o SGP falso: simula e grava, preenchendo s
   assert.ok(ins.params[0][0].includes('sgp'));
   const upd = chamadas.find((c) => /UPDATE leads/.test(c.sql));
   assert.match(upd.sql, /COALESCE\(NULLIF/);
+});
+
+test('syncSgp: so roda para sync_auto vencida e registra o resultado sem expor token', async () => {
+  modo = 'ok';
+  existentes = [];
+  const syncSgp = require('../../src/jobs/syncSgp');
+  const base = { ...cfg(), sync_auto: true, sync_horas: 24 };
+  const urlPermitidaReal = sgp.urlPermitida;
+  sgp.urlPermitida = () => true;   // o SGP falso escuta em 127.0.0.1, que o guard SSRF bloquearia
+  test.after(() => { sgp.urlPermitida = urlPermitidaReal; });
+
+  cfgSalva = { ...base, sync_auto: false };                       // desligada: nao roda
+  await syncSgp();
+  assert.strictEqual(cfgSalva.ultima_sync, undefined);
+
+  const recente = new Date(Date.now() - 3600 * 1000).toISOString();
+  cfgSalva = { ...base, ultima_sync: { em: recente, ok: true } };  // dentro do prazo: nao roda
+  await syncSgp();
+  assert.strictEqual(cfgSalva.ultima_sync.em, recente);
+
+  cfgSalva = { ...base, ultima_sync: { em: new Date(Date.now() - 25 * 3600 * 1000).toISOString(), ok: true } };
+  await syncSgp();                                                 // vencida: roda
+  assert.strictEqual(cfgSalva.ultima_sync.ok, true);
+  assert.strictEqual(cfgSalva.ultima_sync.total, 250);
+  assert.strictEqual(cfgSalva.token, 'tok123');                    // config preservada
+
+  cfgSalva = { ...base, token: 'errado' };                         // SGP recusa: registra erro, sem token
+  await syncSgp();
+  assert.strictEqual(cfgSalva.ultima_sync.ok, false);
+  assert.ok(!JSON.stringify(cfgSalva.ultima_sync).includes('errado'));
+});
+
+test('salvarConfig: sync_auto/sync_horas so mudam quando enviados; horas fora da faixa voltam ao padrao', async () => {
+  cfgSalva = { url: 'https://x.com', app: 'a', token: 't', sync_auto: true, sync_horas: 6 };
+  await sgp.salvarConfig(1, { url: 'https://x.com', app: 'a', token: '' });
+  assert.strictEqual(cfgSalva.sync_auto, true);
+  assert.strictEqual(cfgSalva.sync_horas, 6);
+  await sgp.salvarConfig(1, { url: 'https://x.com', app: 'a', token: '', sync_auto: false, sync_horas: 9999 });
+  assert.strictEqual(cfgSalva.sync_auto, false);
+  assert.strictEqual(cfgSalva.sync_horas, 24);
 });

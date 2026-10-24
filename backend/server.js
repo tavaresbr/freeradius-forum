@@ -566,6 +566,13 @@ cron.schedule('*/5 * * * *', () => {
   syncUnifiSessions().catch(err => console.error('[CRON] Erro syncUnifiSessions:', err));
 });
 
+// Importacao automatica de clientes do SGP (empresas com "sincronizar automaticamente"
+// ligado em Integracoes > SGP). Roda de hora em hora e so importa quem esta no prazo.
+const syncSgp = require('./src/jobs/syncSgp');
+cron.schedule('10 * * * *', () => {
+  syncSgp().catch(err => console.error('[CRON] Erro syncSgp:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));
