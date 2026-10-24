@@ -1,12 +1,15 @@
 const db = require("../../db");
-const { verificarLeadExistente, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { validarCPF } = require("../utils/cpf");
+const { normalizarDataNascimento } = require("../utils/dataNascimento");
+const { mascararNome } = require("../utils/mascararDados");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
 
 exports.lgpdLogin = async (req, res) => {
   try {
-    const { cpf, aceite, mac, ip, email, nome, telefone, mikrotik_id } = req.body;
+    const { cpf, aceite, mac, ip, email, nome, telefone, mikrotik_id, data_nascimento } = req.body;
 
     if (aceite === undefined || !mac || !ip) {
       return res.status(400).json({ message: "Dados obrigatórios faltando" });
@@ -63,6 +66,7 @@ exports.lgpdLogin = async (req, res) => {
           nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd,
           ap_mac: apInfo.apMac, ssid: apInfo.ssid,
         });
+        await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
 
         const saldo = await verificarSaldoRadius(username);
         if (saldo.temSaldo) {
@@ -90,6 +94,7 @@ exports.lgpdLogin = async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'lgpd', ?, NOW(), ?)`,
         [empresaId, nome || null, email || null, telefone || null, cpf || null, mac, ip, apInfo.apMac, apInfo.ssid, aceiteInt, termoLgpd]
       );
+      await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento);
     }
 
     // Remove autenticações antigas
@@ -263,7 +268,7 @@ exports.exportarLgpdCSV = async (req, res) => {
 
 exports.lgpdCadastro = async (req, res) => {
   try {
-    const { cpf, aceite, mac, ip, nome, telefone, email, mikrotik_id } = req.body;
+    const { cpf, aceite, mac, ip, nome, telefone, email, mikrotik_id, data_nascimento } = req.body;
 
     if (!cpf || aceite === undefined) {
       return res.status(400).json({ message: "CPF e aceite são obrigatórios" });
@@ -305,10 +310,56 @@ exports.lgpdCadastro = async (req, res) => {
         [empresaId, nome || null, email || null, telefone || null, cpf, mac || null, ip || null, apInfo.apMac, apInfo.ssid, aceiteInt, termoLgpd]
       );
     }
+    await gravarDataNascimento(cpf, empresaId, data_nascimento);
 
     res.json({ success: true, message: "Cadastro LGPD realizado com sucesso" });
   } catch (err) {
     console.error("Erro ao cadastrar LGPD:", err);
     res.status(500).json({ message: "Erro interno ao cadastrar LGPD" });
+  }
+};
+
+/**
+ * POST /api/lgpd/consulta-cpf (publico) — preenche o cadastro a partir do proprio banco.
+ * Corpo: { cpf, data_nascimento, mikrotik_id, confirmar }.
+ * So acha se CPF + data de nascimento baterem com um cadastro da MESMA empresa.
+ * "Nao encontrado" e' sempre a mesma resposta (CPF inexistente, data diferente, cadastro
+ * antigo sem data): nao da pra descobrir quais CPFs existem. Passo 1 devolve o nome
+ * mascarado; com confirmar=true devolve nome e telefone. Nunca loga CPF, nome ou data.
+ */
+exports.consultaCpf = async (req, res) => {
+  try {
+    const { cpf, data_nascimento, mikrotik_id, confirmar } = req.body || {};
+    const dataIso = normalizarDataNascimento(data_nascimento);
+    if (typeof cpf !== "string" || !validarCPF(cpf) || !dataIso) {
+      return res.status(400).json({ message: "Informe um CPF e uma data de nascimento válidos" });
+    }
+
+    let empresaId = null;
+    const mtkId = Number(mikrotik_id);
+    if (Number.isInteger(mtkId) && mtkId > 0) {
+      const [[mtk]] = await db.execute("SELECT empresa_id FROM mikrotiks WHERE id = ?", [mtkId]);
+      empresaId = mtk?.empresa_id || null;
+    }
+
+    let cadastro = null;
+    if (empresaId) {
+      try {
+        cadastro = await buscarCadastroPorCpf(cpf, dataIso, empresaId);
+      } catch (err) {
+        // Ex.: migration 026 ainda nao rodou. Nao revela nada ao cliente.
+        console.warn("[consulta-cpf] busca indisponivel:", err.message);
+      }
+    }
+    console.log(`[consulta-cpf] empresa=${empresaId || "-"} resultado=${cadastro ? "achou" : "nao-achou"} ip=${req.ip}`);
+
+    if (!cadastro) return res.json({ encontrado: false });
+    if (confirmar === true) {
+      return res.json({ encontrado: true, nome: cadastro.nome, telefone: cadastro.telefone || "" });
+    }
+    return res.json({ encontrado: true, nome_mascarado: mascararNome(cadastro.nome) });
+  } catch (err) {
+    console.error("Erro na consulta de CPF:", err.message);
+    res.status(500).json({ message: "Erro interno na consulta" });
   }
 };

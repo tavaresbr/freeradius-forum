@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
+import BuscaCpf from "../../components/public/BuscaCpf";
 
 export default function CadastroLGPD() {
   const [form, setForm] = useState({
     cpf: "",
     nome: "",
     telefone: "",
+    data_nascimento: "",
     aceite: false,
     mac: "",
     ip: "",
@@ -147,6 +149,16 @@ export default function CadastroLGPD() {
               </div>
               {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
             </div>
+
+            <BuscaCpf
+              cpf={form.cpf}
+              dataNascimento={form.data_nascimento}
+              onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
+              mac={form.mac}
+              mikrotikId={mikrotikId}
+              onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: nome || f.nome, telefone: telefone || f.telefone }))}
+              ringClass="focus:ring-blue-500"
+            />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

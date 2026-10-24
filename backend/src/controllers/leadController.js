@@ -1,5 +1,5 @@
 const db = require("../../db");
-const { verificarLeadExistente, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -105,7 +105,7 @@ exports.capturaPassiva = async (req, res) => {
 // Login público para portal Lead (cria RADIUS + retorna gateway)
 exports.leadLogin = async (req, res) => {
   try {
-    const { nome, email, telefone, cpf, mac, ip, mikrotik_id } = req.body;
+    const { nome, email, telefone, cpf, mac, ip, mikrotik_id, data_nascimento } = req.body;
 
     if (!mac || !ip) {
       return res.status(400).json({ message: "MAC e IP são obrigatórios" });
@@ -161,6 +161,7 @@ exports.leadLogin = async (req, res) => {
           nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd,
           ap_mac: apInfo.apMac, ssid: apInfo.ssid,
         });
+        await gravarDataNascimento(cpf, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
 
         const saldo = await verificarSaldoRadius(username);
         if (saldo.temSaldo) {
@@ -189,6 +190,7 @@ exports.leadLogin = async (req, res) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'portal_lead', 1, NOW(), ?)`,
           [empresaId, nome || null, email || null, telefone || null, cpf || null, mac || null, ip || null, apInfo.apMac, apInfo.ssid, termoLgpd]
         );
+        await gravarDataNascimento(cpf, empresaId, data_nascimento);
       } catch (leadErr) {
         console.warn("Aviso: erro ao inserir lead:", leadErr.message);
       }
