@@ -222,8 +222,8 @@ test('cadastroCliente: data correta + saldo => auto-login com a senha real', asy
   assert.ok(houve(db, /UPDATE leads SET nome/), 'verificado pode atualizar contato');
 });
 
-test('cadastroCliente: legado sem data => segue para planos sem credenciais nem PII do titular', async () => {
-  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9' });
+test('cadastroCliente: legado sem data, SEM acesso ativo => segue para planos sem credenciais nem PII do titular', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: false });
   const ctrl = carregarCtrl('src/controllers/leadController.js', db);
   const res = criarRes(); const un = silencia();
   try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente(), ip: '7.7.7.7' }), res); } finally { un(); }
@@ -231,6 +231,16 @@ test('cadastroCliente: legado sem data => segue para planos sem credenciais nem 
   assert.ok(!res.body.password && !res.body.username);
   assert.strictEqual(res.body.nome, 'Outra Pessoa');
   assert.ok(!houve(db, /UPDATE leads SET nome/), 'nao troca contato do titular');
+});
+
+test('cadastroCliente: legado sem data + acesso ativo em OUTRO aparelho => 409 (nem chega nos planos)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, saldo: true, senhaSalva: 'senhaReal9' });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente(), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 409);
+  assert.strictEqual(res.body.requer_data_nascimento, true);
+  assert.ok(!JSON.stringify(res.body).includes('senhaReal9') && !JSON.stringify(res.body).includes('Titular'));
 });
 
 // ---------- /api/lead-portal/login ----------

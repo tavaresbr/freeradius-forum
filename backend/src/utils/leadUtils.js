@@ -204,6 +204,34 @@ async function verificarSaldoRadius(username) {
 }
 
 /**
+ * Pagamento para o CPF de OUTRA pessoa: o username RADIUS e' o CPF, entao pagar por ele
+ * troca a senha dele e (com empilhamento) funde o tempo restante do titular na conta de quem
+ * pagou. As rotas de pagamento sao publicas e aceitam `cpf`/`cliente_id` do corpo, entao nao
+ * da pra confiar no cadastro anterior. Regra: se o CPF ja tem acesso ATIVO no RADIUS, so quem
+ * esta no mesmo aparelho (MAC) registrado no lead desse CPF pode pagar; de outro aparelho
+ * precisa antes confirmar a data de nascimento no cadastro (que passa o MAC do lead para o
+ * aparelho novo). Sem acesso ativo nao ha o que proteger. Sem CPF o username e' o proprio MAC.
+ * @param {{cpf: string, mac: string, empresaId: number|null}} p
+ * @returns {Promise<boolean>} true = deve recusar o pagamento (antes de cobrar)
+ */
+async function bloqueiaPagamentoAlheio({ cpf, mac, empresaId }) {
+  const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+  if (cpfLimpo.length !== 11) return false;
+  const saldo = await verificarSaldoRadius(cpfLimpo);
+  if (!(saldo.existe && saldo.temSaldo)) return false;
+  let query = "SELECT mac FROM leads WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ?";
+  const params = [cpfLimpo];
+  if (empresaId) {
+    query += " AND empresa_id = ?";
+    params.push(empresaId);
+  }
+  const [rows] = await db.execute(query, params);
+  return !rows.some((r) => mesmoDispositivo(r, mac));
+}
+
+const MSG_PAGAMENTO_ALHEIO = "Já existe um acesso ativo para este CPF em outro aparelho. Volte ao cadastro e informe a data de nascimento do titular, ou use o usuário e senha que você recebeu.";
+
+/**
  * A re-liberacao (DELETE + INSERT no radcheck/radreply/radusergroup do username) troca a
  * senha e o plano. Para um username que JA tem saldo ativo isso destroi o acesso de quem
  * pode ser outra pessoa (ex.: plano pago sobrescrito pelo plano gratis de quem so sabe o CPF).
@@ -334,4 +362,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };

@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -489,6 +489,11 @@ exports.cadastroCliente = async (req, res) => {
       if (conf === "ausente") {
         // Cadastro legado sem data: nao da pra provar a titularidade. Segue para planos
         // sem devolver credenciais, sem trocar o contato e sem expor dados do titular.
+        // Se o CPF ja tem acesso ativo em outro aparelho, nem chega nos planos: pagar
+        // por ele trocaria a senha/fundiria o tempo do titular (ver bloqueiaPagamentoAlheio).
+        if (await bloqueiaPagamentoAlheio({ cpf: cpfLimpo, mac, empresaId })) {
+          return res.status(409).json({ message: MSG_PAGAMENTO_ALHEIO, requer_data_nascimento: true });
+        }
         return res.json({ id: existing.id, nome, email, existente: true, planoAtivo: false });
       }
 
