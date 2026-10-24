@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, usernamePertenceAoLead, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -158,13 +158,23 @@ exports.leadLogin = async (req, res) => {
       const existing = await verificarLeadExistente(cpf, empresaId);
       if (existing) {
         leadJaRegistrado = true;
-        await atualizarLeadExistente(existing.id, empresaId, {
-          nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd,
-          ap_mac: apInfo.apMac, ssid: apInfo.ssid,
-        });
+        // Segundo fator: sem a data de nascimento correta nao ha reconexao nem
+        // alteracao do cadastro (o CPF sozinho e' publico/adivinhavel).
         await gravarDataNascimento(cpf, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
+        const conf = await conferirDataNascimento(cpf, empresaId, data_nascimento, { mac, ip: req.ip });
+        if (conf === "bloqueado") return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
+        if (conf === "divergente") {
+          return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
+        }
+        const verificado = conf === "ok";
+        // Username deste fluxo e' telefone/e-mail/MAC: so devolve credencial se for o do proprio lead
+        const usernameDoLead = verificado && usernamePertenceAoLead(existing, username);
+        // Cadastro legado sem data: registra so o novo aceite (nao troca contato/MAC de quem nao se provou)
+        await atualizarLeadExistente(existing.id, empresaId, verificado
+          ? { nome, email, telefone, mac, ip, aceite: 1, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
+          : { aceite: 1, termo: termoLgpd });
 
-        const saldo = await verificarSaldoRadius(username);
+        const saldo = usernameDoLead ? await verificarSaldoRadius(username) : { temSaldo: false };
         if (saldo.temSaldo) {
           const gatewaySaldo = plano.end_hotspot || ip;
           return res.json({
@@ -443,7 +453,7 @@ exports.exportarLeadsCSV = async (req, res) => {
 // Cadastro de cliente para portal Planos (pré-pagamento)
 exports.cadastroCliente = async (req, res) => {
   try {
-    const { nome, email, telefone, cpf, mac, ip, mikrotik_id } = req.body;
+    const { nome, email, telefone, cpf, mac, ip, mikrotik_id, data_nascimento } = req.body;
 
     if (!nome || !email || !telefone || !cpf) {
       return res.status(400).json({ message: "Nome, email, telefone e CPF são obrigatórios" });
@@ -459,6 +469,20 @@ exports.cadastroCliente = async (req, res) => {
     const existing = await verificarLeadExistente(cpf, empresaId);
     if (existing) {
       const cpfLimpo = cpf.replace(/\D/g, "");
+
+      // Segundo fator: sem a data de nascimento correta nao ha reconexao, nem
+      // alteracao do cadastro, nem retorno de nome/e-mail do titular.
+      await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento, { permitirLeadExistente: mesmoDispositivo(existing, mac) });
+      const conf = await conferirDataNascimento(cpfLimpo, empresaId, data_nascimento, { mac, ip: req.ip });
+      if (conf === "bloqueado") return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
+      if (conf === "divergente") {
+        return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
+      }
+      if (conf === "ausente") {
+        // Cadastro legado sem data: nao da pra provar a titularidade. Segue para planos
+        // sem devolver credenciais, sem trocar o contato e sem expor dados do titular.
+        return res.json({ id: existing.id, nome, email, existente: true, planoAtivo: false });
+      }
 
       // Atualiza os dados do lead existente com os novos valores do formulario.
       // Sem isso, o sistema sempre usaria o telefone/nome/email do PRIMEIRO cadastro

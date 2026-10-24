@@ -99,7 +99,7 @@ export default function BuscaCpf({ cpf, dataNascimento, onDataChange, mac, mikro
           {estado === "buscando" ? "Buscando..." : "Buscar meu cadastro"}
         </button>
       </div>
-      <p className="text-gray-500 text-xs mt-1">Opcional. Se você já se cadastrou aqui, preenchemos seus dados.</p>
+      <p className="text-gray-500 text-xs mt-1">Se você já se cadastrou aqui, informe a mesma data para reconectar e preenchermos seus dados.</p>
 
       {estado === "achou" && (
         <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">

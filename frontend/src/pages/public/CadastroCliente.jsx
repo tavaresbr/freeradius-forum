@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
+import { mascaraData, dataNascimentoValida } from "../../utils/dataUtils";
 
 export default function CadastroCliente() {
   const [searchParams] = useSearchParams();
@@ -14,7 +15,7 @@ export default function CadastroCliente() {
   // Necessario propagar pra que /planos-cliente ainda saiba qual portal usar.
   const portalId = searchParams.get("portal_id") || "";
 
-  const [form, setForm] = useState({ nome: "", email: "", telefone: "", cpf: "" });
+  const [form, setForm] = useState({ nome: "", email: "", telefone: "", cpf: "", data_nascimento: "" });
   const [erro, setErro] = useState(null);
   const [cpfErro, setCpfErro] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -41,6 +42,8 @@ export default function CadastroCliente() {
       }
     }
 
+    if (name === "data_nascimento") val = mascaraData(val);
+
     if (name === "telefone") {
       val = val.replace(/\D/g, "").slice(0, 11);
       val = val.replace(/(\d{2})(\d)/, "($1) $2");
@@ -60,6 +63,7 @@ export default function CadastroCliente() {
     if (!form.email.trim()) { setErro("Informe seu email"); return; }
     if (!form.telefone.trim()) { setErro("Informe seu telefone"); return; }
     if (!validarCPF(form.cpf)) { setCpfErro("CPF inválido"); return; }
+    if (form.data_nascimento && !dataNascimentoValida(form.data_nascimento)) { setErro("Data de nascimento inválida"); return; }
     setCpfErro("");
 
     setEnviando(true);
@@ -165,6 +169,14 @@ export default function CadastroCliente() {
                   }`} />
               </div>
               {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data de nascimento</label>
+              <input type="text" inputMode="numeric" name="data_nascimento" value={form.data_nascimento} onChange={handleChange}
+                placeholder="DD/MM/AAAA" autoComplete="bday"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+              <p className="text-gray-500 text-xs mt-1">Se você já se cadastrou antes, informe a mesma data para reconectar.</p>
             </div>
 
             <div>
