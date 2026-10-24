@@ -23,9 +23,5 @@ router.get("/campos", ctrl.campos);
 router.get("/modelo.csv", ctrl.modelo);
 router.post("/planilha/preview", comArquivo, ctrl.previewPlanilha);
 router.post("/planilha/importar", comArquivo, ctrl.importarPlanilha);
-router.get("/sgp/config", ctrl.obterSgp);
-router.put("/sgp/config", ctrl.salvarSgp);
-router.post("/sgp/testar", ctrl.testarSgp);
-router.post("/sgp/importar", ctrl.importarSgp);
 
 module.exports = router;

@@ -1819,8 +1819,9 @@ Impacto no `install.sh`: o loop roda todas as migrations em servidor novo; 001 e
 
 Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`) edita o cadastro completo em `leads`. Importacao em `/admin/:slug/importar-clientes` (`ImportarClientes.jsx`), API `/api/clientes-import` (permissao do modulo `leads`).
 
-- Logica: `backend/src/utils/importCadastros.js` (mapeamento, normalizacao, `processarImportacao`, parse CSV/XLSX) e `backend/src/utils/sgpClient.js` (config por empresa em `empresa_configs` tipo `sgp`).
+- Logica: `backend/src/utils/importCadastros.js` (mapeamento, normalizacao, `processarImportacao`, parse CSV/XLSX) e `backend/src/utils/sgpClient.js` (config por empresa em `empresa_configs` tipo `sgp`; `testar`, `amostra` mascarada, `buscarTodos`).
+- **Integracao SGP fica em Configuracoes > Integracoes > SGP** (`Integracoes.jsx`, `IntegracaoSgp.jsx`; rotas `/admin/:slug/integracoes[/sgp]`), API `/api/integracoes/sgp/{,testar,amostra,importar}` (modulo `configuracoes`; controller `integracaoController.js`). Fluxo da tela: salvar -> testar conexao (HTTP + campos recebidos + mapeamento) -> ver amostra mascarada -> simular -> importar. A aba SGP de *Importar clientes* so aponta para la.
 - **CPF/CNPJ existente: so preenche campos vazios** (`COALESCE(NULLIF(col,''), ?)`); nunca toca `lgpd_aceite`/`lgpd_termo`/`status`/CPF. Importados entram com `origem='importacao'`, `lgpd_aceite=0`.
 - Importar `data_nascimento` torna o lead localizavel por CPF+data em `/api/lgpd/consulta-cpf`.
-- **SGP:** o endpoint padrao (`/api/ura/clientes/`) e o formato da resposta NAO foram validados contra um SGP real; o cliente aceita a lista em `clientes|results|data|items` e achata objetos aninhados. Ajustar o campo "Endpoint" na tela se a versao do SGP for diferente. A URL e validada contra destinos internos (SSRF).
-- Testes: `backend/tests/unit/importCadastros.test.js`.
+- **SGP:** o endpoint padrao (`/api/ura/clientes/`) e o formato da resposta NAO foram validados contra um SGP real (so contra um SGP simulado em `sgpIntegracao.test.js`); o cliente aceita a lista em `clientes|results|data|items` e achata objetos aninhados. Ajustar o campo "Endpoint" na tela se a versao do SGP for diferente. A URL e validada contra destinos internos (SSRF) no controller; erros do SGP viram mensagens seguras (`SgpError`), sem app/token.
+- Testes: `backend/tests/unit/importCadastros.test.js`, `backend/tests/unit/sgpIntegracao.test.js`.
