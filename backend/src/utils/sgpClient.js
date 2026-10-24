@@ -12,7 +12,7 @@ const { sugerirMapeamento } = require("./importCadastros");
  * (endereco.cidade -> endereco_cidade) para o mapeamento automatico de colunas.
  */
 const ENDPOINT_PADRAO = "/api/ura/clientes/";
-const PAGINA = 200;
+const PAGINA = 100; // o SGP recusa limit > 100 (HTTP 400)
 const MAX_PAGINAS = 100;
 const TIMEOUT_MS = 20000;
 
