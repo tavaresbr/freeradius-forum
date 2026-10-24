@@ -1,7 +1,8 @@
 // Rate limiters compartilhados (express-rate-limit v8).
 // Protegem endpoints publicos sensiveis contra brute-force / abuso.
 // Atras do nginx: server.js define app.set('trust proxy', 1) pra keying por IP real.
-const { rateLimit } = require('express-rate-limit');
+const crypto = require('crypto');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const jsonHandler = (mensagem) => (req, res /*, next, options */) => {
   res.status(429).json({ error: mensagem });
@@ -45,4 +46,46 @@ const updateCheckLimiter = rateLimit({
   handler: jsonHandler('Muitas verificacoes de atualizacao. Aguarde.'),
 });
 
-module.exports = { loginLimiter, registroLimiter, publicApiLimiter, updateCheckLimiter };
+// Busca de cadastro por CPF (POST /api/lgpd/consulta-cpf): protege dados de terceiros.
+// Tres travas empilhadas (cada busca bem-sucedida usa 2 chamadas: buscar + confirmar):
+//  - por dispositivo (IP + MAC do corpo): 10 chamadas/hora;
+//  - por CPF consultado: 10 chamadas/hora, para barrar tentativa de adivinhar a data de nascimento;
+//  - por IP: 120 chamadas/hora, teto de seguranca (hotspots dividem o IP publico, por isso folgado).
+// Memoria do processo: zera se o PM2 reiniciar.
+const macDoCorpo = (req) => String((req.body && req.body.mac) || '').toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 12);
+const cpfDoCorpo = (req) => String((req.body && req.body.cpf) || '').replace(/\D/g, '').slice(0, 11);
+const msgCpf = 'Muitas tentativas de busca. Tente novamente mais tarde.';
+
+const cpfLookupPorDispositivo = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${macDoCorpo(req)}`,
+  handler: jsonHandler(msgCpf),
+});
+
+const cpfLookupPorCpf = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Guarda so um hash do CPF na memoria do limitador
+  keyGenerator: (req) => {
+    const cpf = cpfDoCorpo(req);
+    return cpf ? 'cpf:' + crypto.createHash('sha256').update(cpf).digest('hex') : ipKeyGenerator(req.ip);
+  },
+  handler: jsonHandler(msgCpf),
+});
+
+const cpfLookupPorIp = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler(msgCpf),
+});
+
+const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
+
+module.exports = { loginLimiter, registroLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };

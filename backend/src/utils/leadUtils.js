@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { normalizarDataNascimento } = require("./dataNascimento");
 
 /**
  * Verifica se já existe um lead com o CPF informado para a empresa.
@@ -11,7 +12,7 @@ async function verificarLeadExistente(cpf, empresaId) {
   const cpfLimpo = cpf.replace(/\D/g, "");
   if (cpfLimpo.length < 11) return null;
 
-  let query = "SELECT id, nome, email, telefone, cpf, origem, criado_em FROM leads WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ?";
+  let query = "SELECT id, nome, email, telefone, cpf, mac, origem, criado_em FROM leads WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ?";
   const params = [cpfLimpo];
 
   if (empresaId) {
@@ -22,6 +23,71 @@ async function verificarLeadExistente(cpf, empresaId) {
   query += " ORDER BY criado_em DESC LIMIT 1";
   const [[existing]] = await db.execute(query, params);
   return existing || null;
+}
+
+/**
+ * Busca o cadastro (nome e telefone) de um CPF, mas SO se a data de nascimento
+ * gravada for igual a informada (segundo fator contra consulta de dados de terceiros).
+ * Exige empresa: nunca consulta entre empresas. Nao revela por que nao achou
+ * (CPF inexistente, data diferente e cadastro antigo sem data dao o mesmo resultado: null).
+ * @param {string} cpf - com ou sem mascara
+ * @param {string} dataIso - 'AAAA-MM-DD'
+ * @param {number} empresaId
+ * @returns {Promise<{nome: string, telefone: string|null}|null>}
+ */
+async function buscarCadastroPorCpf(cpf, dataIso, empresaId) {
+  const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+  if (cpfLimpo.length !== 11 || !dataIso || !empresaId) return null;
+  const [[row]] = await db.execute(
+    `SELECT nome, telefone FROM leads
+     WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ? AND empresa_id = ? AND data_nascimento = ?
+       AND nome IS NOT NULL AND nome <> ''
+     ORDER BY criado_em DESC LIMIT 1`,
+    [cpfLimpo, empresaId, dataIso]
+  );
+  return row || null;
+}
+
+const normMac = (m) => String(m || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+
+/**
+ * Indica se o MAC da requisicao e' o mesmo guardado no lead (mesmo aparelho de antes).
+ * @param {{mac?: string}|null} lead
+ * @param {string} mac
+ */
+function mesmoDispositivo(lead, mac) {
+  const a = normMac(lead && lead.mac);
+  return a.length === 12 && a === normMac(mac);
+}
+
+/**
+ * Grava a data de nascimento no lead desse CPF/empresa (best-effort: nunca lanca;
+ * se a migration 026 ainda nao rodou ou a data for invalida, apenas ignora).
+ *
+ * Anti-sequestro (o cadastro e' publico: qualquer um pode digitar o CPF de outra pessoa):
+ *  - nunca sobrescreve uma data ja gravada (so preenche quando esta NULL);
+ *  - so grava em lead recem-criado (ultimos 5 min) ou, com permitirLeadExistente,
+ *    quando a requisicao vem do mesmo aparelho (MAC) do cadastro anterior.
+ * Assim ninguem "assume" o cadastro de um CPF alheio para depois le-lo pela busca.
+ * @param {string} cpf
+ * @param {number|null} empresaId
+ * @param {*} data - 'AAAA-MM-DD' ou 'DD/MM/AAAA'
+ * @param {{permitirLeadExistente?: boolean}} [opcoes]
+ */
+async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistente = false } = {}) {
+  try {
+    const dataIso = normalizarDataNascimento(data);
+    const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+    if (!dataIso || cpfLimpo.length !== 11 || !empresaId) return;
+    const janela = permitirLeadExistente ? "" : " AND criado_em >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
+    await db.execute(
+      `UPDATE leads SET data_nascimento = ?
+       WHERE REPLACE(REPLACE(cpf, '.', ''), '-', '') = ? AND empresa_id = ? AND data_nascimento IS NULL${janela}`,
+      [dataIso, cpfLimpo, empresaId]
+    );
+  } catch (err) {
+    console.warn("[gravarDataNascimento] ignorado:", err.message);
+  }
 }
 
 /**
@@ -172,4 +238,4 @@ async function resolverTextoLgpd({ portalId, mikrotikId, empresaId, tipoPortal =
   return TEXTO_LGPD_DEFAULT;
 }
 
-module.exports = { verificarLeadExistente, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, TEXTO_LGPD_DEFAULT };

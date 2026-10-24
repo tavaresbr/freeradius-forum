@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
+import BuscaCpf from "../../components/public/BuscaCpf";
 
 export default function CadastroLead() {
   const [form, setForm] = useState({
@@ -8,6 +9,7 @@ export default function CadastroLead() {
     cpf: "",
     email: "",
     telefone: "",
+    data_nascimento: "",
     mac: "",
     ip: "",
   });
@@ -173,6 +175,18 @@ export default function CadastroLead() {
                 </div>
                 {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
               </div>
+            )}
+
+            {cfg.exibir_cpf !== false && (
+              <BuscaCpf
+                cpf={form.cpf}
+                dataNascimento={form.data_nascimento}
+                onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
+                mac={form.mac}
+                mikrotikId={mikrotikId}
+                onPreencher={({ nome, telefone }) => setForm((f) => ({ ...f, nome: nome || f.nome, telefone: telefone || f.telefone }))}
+                ringClass="focus:ring-emerald-500"
+              />
             )}
 
             <div>
