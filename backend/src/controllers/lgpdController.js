@@ -1,5 +1,6 @@
 const db = require("../../db");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
 const { mascararNome } = require("../utils/mascararDados");
@@ -21,6 +22,10 @@ exports.lgpdLogin = async (req, res) => {
       const [[mtk]] = await db.execute("SELECT empresa_id FROM mikrotiks WHERE id = ?", [mikrotik_id]);
       empresaId = mtk?.empresa_id || null;
     }
+
+    // Campos obrigatorios configurados no Editor do portal (vale tambem no servidor)
+    const erroCampos = validarCampos(await resolverCamposPortal({ mikrotikId: mikrotik_id, empresaId, tipoPortal: "lgpd" }), { nome, email, telefone });
+    if (erroCampos) return res.status(400).json({ message: erroCampos });
 
     const aceiteInt = aceite ? 1 : 0;
     // Limpar caracteres especiais do CPF para usar como username RADIUS
@@ -279,6 +284,10 @@ exports.lgpdCadastro = async (req, res) => {
       const [[mtk]] = await db.execute("SELECT empresa_id FROM mikrotiks WHERE id = ?", [mikrotik_id]);
       empresaId = mtk?.empresa_id || null;
     }
+
+    // Campos obrigatorios configurados no Editor do portal (vale tambem no servidor)
+    const erroCampos = validarCampos(await resolverCamposPortal({ mikrotikId: mikrotik_id, empresaId, tipoPortal: "lgpd" }), { nome, email, telefone });
+    if (erroCampos) return res.status(400).json({ message: erroCampos });
 
     const aceiteInt = aceite ? 1 : 0;
 

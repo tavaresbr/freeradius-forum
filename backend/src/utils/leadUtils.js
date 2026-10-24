@@ -1,5 +1,6 @@
 const db = require("../../db");
 const { normalizarDataNascimento } = require("./dataNascimento");
+const { normalizarCampos } = require("./camposPortal");
 
 /**
  * Verifica se já existe um lead com o CPF informado para a empresa.
@@ -193,14 +194,13 @@ async function atualizarLeadExistente(leadId, empresaId, dados = {}) {
 const TEXTO_LGPD_DEFAULT = "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais. *";
 
 /**
- * Resolve o texto do termo LGPD exibido no portal, pra guardar como snapshot
- * no aceite (leads.lgpd_termo). Ordem: portal_id explicito -> portal vinculado
- * ao equipamento (mikrotiks.portal_id) -> portal do tipo na empresa -> default.
- * Nunca lanca erro (prova de consentimento nao pode bloquear a liberacao).
+ * Busca a configuracao (JSON de portais.configuracoes) do portal que atende o cliente.
+ * Ordem: portal_id explicito -> portal vinculado ao equipamento (mikrotiks.portal_id) ->
+ * portal do tipo na empresa. Nunca lanca: sem portal ou com JSON ruim devolve null.
  * @param {Object} p - { portalId, mikrotikId, empresaId, tipoPortal }
- * @returns {Promise<string>}
+ * @returns {Promise<Object|null>}
  */
-async function resolverTextoLgpd({ portalId, mikrotikId, empresaId, tipoPortal = "lgpd" } = {}) {
+async function resolverConfigPortal({ portalId, mikrotikId, empresaId, tipoPortal = "lgpd" } = {}) {
   try {
     let portal = null;
     if (portalId) {
@@ -230,12 +230,35 @@ async function resolverTextoLgpd({ portalId, mikrotikId, empresaId, tipoPortal =
     }
     if (portal?.configuracoes) {
       const cfg = typeof portal.configuracoes === "string" ? JSON.parse(portal.configuracoes) : portal.configuracoes;
-      if (cfg?.texto_lgpd) return String(cfg.texto_lgpd);
+      return cfg && typeof cfg === "object" ? cfg : null;
     }
   } catch (err) {
-    console.warn("[resolverTextoLgpd] fallback pro texto default:", err.message);
+    console.warn("[resolverConfigPortal] sem config do portal:", err.message);
   }
+  return null;
+}
+
+/**
+ * Resolve o texto do termo LGPD exibido no portal, pra guardar como snapshot
+ * no aceite (leads.lgpd_termo). Nunca lanca erro (prova de consentimento nao
+ * pode bloquear a liberacao): sem texto customizado cai no default.
+ * @param {Object} p - { portalId, mikrotikId, empresaId, tipoPortal }
+ * @returns {Promise<string>}
+ */
+async function resolverTextoLgpd(p = {}) {
+  const cfg = await resolverConfigPortal(p);
+  if (cfg?.texto_lgpd) return String(cfg.texto_lgpd);
   return TEXTO_LGPD_DEFAULT;
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, TEXTO_LGPD_DEFAULT };
+/**
+ * Campos do formulario (visivel/obrigatorio) do portal que atende o cliente.
+ * Nunca lanca: sem config ou com config ruim devolve os padroes.
+ * @param {Object} p - { portalId, mikrotikId, empresaId, tipoPortal }
+ */
+async function resolverCamposPortal(p = {}) {
+  const cfg = await resolverConfigPortal(p);
+  return normalizarCampos(cfg?.campos);
+}
+
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };

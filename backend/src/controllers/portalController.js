@@ -1,5 +1,6 @@
 const db = require("../../db");
 const { DEFAULT_WHATSAPP_TEMPLATE } = require("../constants/whatsappDefaults");
+const { normalizarCampos } = require("../utils/camposPortal");
 
 exports.listarPortais = async (req, res) => {
   try {
@@ -86,7 +87,18 @@ exports.atualizarPortal = async (req, res) => {
       if (tmpl) finalHtml = tmpl.html_template;
     }
 
-    const configJson = configuracoes ? (typeof configuracoes === 'string' ? configuracoes : JSON.stringify(configuracoes)) : portal.configuracoes;
+    // Campos do formulario (visivel/obrigatorio): higieniza o que o admin enviou.
+    // Aceita configuracoes como objeto ou como string JSON (o resto segue igual).
+    let configuracoesFinal = configuracoes;
+    if (typeof configuracoesFinal === 'string') {
+      try { configuracoesFinal = JSON.parse(configuracoesFinal); } catch (e) { /* mantem a string original */ }
+    }
+    if (configuracoesFinal && typeof configuracoesFinal === 'object' && configuracoesFinal.campos !== undefined) {
+      configuracoesFinal = { ...configuracoesFinal, campos: normalizarCampos(configuracoesFinal.campos) };
+    }
+    const configJson = configuracoesFinal
+      ? (typeof configuracoesFinal === 'string' ? configuracoesFinal : JSON.stringify(configuracoesFinal))
+      : portal.configuracoes;
 
     await db.execute(
       `UPDATE portais SET
