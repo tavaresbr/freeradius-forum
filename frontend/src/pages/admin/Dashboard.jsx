@@ -12,7 +12,13 @@ export default function Dashboard() {
       const res = await fetch("/api/dashboard", {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
+      // Resposta de erro (403 sem grupo de permissao, 402 assinatura, 500...) nao tem os
+      // totais: antes ia direto para `dados` e o Dashboard quebrava (tela branca).
+      if (!res.ok || !json.pagamentos) {
+        setErro(json.message || json.error || "Erro ao carregar dashboard");
+        return;
+      }
       setDados(json);
     } catch (err) {
       setErro("Erro ao carregar dashboard");
