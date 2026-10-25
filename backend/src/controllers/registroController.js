@@ -2,6 +2,7 @@ const db = require("../../db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { criarPortaisPadrao } = require("../utils/empresaSetup");
+const { criarTrial } = require("../utils/assinatura");
 
 function gerarSlug(nome) {
   return nome
@@ -17,7 +18,7 @@ exports.registrarEmpresa = async (req, res) => {
   const conn = await db.getConnection();
 
   try {
-    const { nome, email, cnpj, telefone, senha } = req.body;
+    const { nome, email, cnpj, telefone, senha, plano_id } = req.body;
 
     if (!nome || !email || !senha) {
       return res.status(400).json({ message: "Nome, email e senha são obrigatórios" });
@@ -62,6 +63,9 @@ exports.registrarEmpresa = async (req, res) => {
     // Portais padrao: sem eles os fluxos publicos (LGPD/lead/planos/login)
     // falham em silencio — resolucao por tipo nao encontra nada.
     await criarPortaisPadrao(conn, empresaId);
+
+    // SaaS: toda empresa nova nasce em trial (7 dias) no plano escolhido
+    await criarTrial(conn, empresaId, plano_id);
 
     await conn.commit();
 

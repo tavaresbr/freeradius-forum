@@ -18,6 +18,11 @@ export default function EmpresasAdmin() {
   const [vinculandoAdmin, setVinculandoAdmin] = useState({ admin_id: "", role: "operator" });
   const [uploadingLogo, setUploadingLogo] = useState(null);
 
+  // Assinatura SaaS (modal do super admin)
+  const [saasPlanos, setSaasPlanos] = useState([]);
+  const [assinaturaModal, setAssinaturaModal] = useState(null); // empresa
+  const [assForm, setAssForm] = useState({ plano_id: "", status: "ativa", estender_dias: "" });
+
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -88,6 +93,38 @@ export default function EmpresasAdmin() {
     fetchEmpresas();
   };
 
+  // --- Assinatura SaaS ---
+  const abrirAssinatura = async (empresa) => {
+    setAssinaturaModal(empresa);
+    setAssForm({ plano_id: empresa.assinatura_plano_id || "", status: empresa.assinatura_status || "ativa", estender_dias: "" });
+    const res = await fetch(`${API}/api/assinatura/admin/planos`, { headers });
+    if (res.ok) setSaasPlanos(await res.json());
+  };
+
+  const salvarAssinatura = async (e) => {
+    e.preventDefault();
+    const body = { status: assForm.status };
+    if (assForm.plano_id) body.plano_id = assForm.plano_id;
+    if (assForm.estender_dias) body.estender_dias = assForm.estender_dias;
+    const res = await fetch(`${API}/api/assinatura/admin/empresa/${assinaturaModal.id}`, { method: "PUT", headers, body: JSON.stringify(body) });
+    if (res.ok) { setAssinaturaModal(null); fetchEmpresas(); } else alert("Erro ao salvar assinatura");
+  };
+
+  const badgeAssinatura = (e) => {
+    const st = e.assinatura_status;
+    if (!st) return <span className="px-2 py-0.5 rounded text-xs bg-red-900/30 text-red-400">Sem assinatura</span>;
+    const fim = st === "trial" ? e.trial_ate : e.vence_em;
+    const vencida = fim && new Date(fim) < new Date();
+    const cor = st === "cancelada" || vencida || st === "vencida" ? "bg-red-900/30 text-red-400" : st === "trial" ? "bg-blue-900/30 text-blue-300" : "bg-green-900/30 text-green-400";
+    const rotulo = vencida && st !== "cancelada" ? "vencida" : st;
+    return (
+      <div>
+        <span className={`px-2 py-0.5 rounded text-xs ${cor}`}>{rotulo}</span>
+        <p className="text-[11px] text-gray-500 mt-1">{e.assinatura_plano_nome || "—"}{fim ? ` · ${new Date(fim).toLocaleDateString("pt-BR")}` : ""}</p>
+      </div>
+    );
+  };
+
   // --- Admin vinculation ---
   const openAdminsModal = async (empresaId) => {
     setShowAdminsModal(empresaId);
@@ -150,6 +187,7 @@ export default function EmpresasAdmin() {
                   <th className="text-left px-5 py-3 font-medium">Contato</th>
                   <th className="text-center px-5 py-3 font-medium">Stats</th>
                   <th className="text-center px-5 py-3 font-medium">Status</th>
+                  <th className="text-center px-5 py-3 font-medium">Assinatura</th>
                   <th className="text-right px-5 py-3 font-medium">Ações</th>
                 </tr>
               </thead>
@@ -189,8 +227,12 @@ export default function EmpresasAdmin() {
                         {e.ativo ? "Ativo" : "Inativo"}
                       </span>
                     </td>
+                    <td className="px-5 py-4 text-center">{badgeAssinatura(e)}</td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex gap-2 justify-end">
+                        <button onClick={() => abrirAssinatura(e)} className="px-2.5 py-1.5 bg-green-600/20 text-green-400 rounded-lg text-xs hover:bg-green-600/30 transition-colors" title="Gerenciar assinatura">
+                          Assinatura
+                        </button>
                         <button onClick={() => openAdminsModal(e.id)} className="px-2.5 py-1.5 bg-cyan-600/20 text-cyan-400 rounded-lg text-xs hover:bg-cyan-600/30 transition-colors" title="Gerenciar Admins">
                           👥
                         </button>
@@ -249,6 +291,44 @@ export default function EmpresasAdmin() {
                   className="flex-1 bg-gray-700 text-gray-300 py-2.5 rounded-lg hover:bg-gray-600 text-sm">
                   Cancelar
                 </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Modal Assinatura SaaS */}
+        {assinaturaModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <form onSubmit={salvarAssinatura} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-lg font-bold text-white mb-4">Assinatura – {assinaturaModal.nome}</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Plano</label>
+                  <select value={assForm.plano_id} onChange={(e) => setAssForm({ ...assForm, plano_id: e.target.value })}
+                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+                    <option value="">Manter atual</option>
+                    {saasPlanos.map((p) => <option key={p.id} value={p.id}>{p.nome} – R$ {Number(p.valor).toFixed(2)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Status</label>
+                  <select value={assForm.status} onChange={(e) => setAssForm({ ...assForm, status: e.target.value })}
+                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+                    <option value="trial">Teste (trial)</option>
+                    <option value="ativa">Ativa</option>
+                    <option value="vencida">Vencida</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Estender por (dias)</label>
+                  <input type="number" min="0" value={assForm.estender_dias} onChange={(e) => setAssForm({ ...assForm, estender_dias: e.target.value })}
+                    placeholder="Ex.: 30 (soma ao vencimento atual)" className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-500 text-sm font-medium">Salvar</button>
+                <button type="button" onClick={() => setAssinaturaModal(null)} className="flex-1 bg-gray-700 text-gray-300 py-2.5 rounded-lg hover:bg-gray-600 text-sm">Cancelar</button>
               </div>
             </form>
           </div>

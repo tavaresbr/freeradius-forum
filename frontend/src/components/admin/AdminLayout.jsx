@@ -13,11 +13,29 @@ export default function AdminLayout({ children }) {
   const [openMenus, setOpenMenus] = useState({});
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [whatsappAvisoFechado, setWhatsappAvisoFechado] = useState(false);
+  const [assinatura, setAssinatura] = useState(null);
 
   const toggleMenu = (key) => setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
 
   const slug = empresaSlug || user?.empresa_slug || 'default';
   const basePath = `/admin/${slug}`;
+
+  // SaaS: status da assinatura da empresa (super admin nunca e' bloqueado).
+  // Vencida alem da carencia -> so a tela de Assinatura fica acessivel.
+  useEffect(() => {
+    if (isSuperAdmin || !user) return;
+    let ativo = true;
+    fetch('/api/assinatura/status', { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (ativo && d) setAssinatura(d); })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, [isSuperAdmin, user, location.pathname]);
+
+  const naTelaAssinatura = location.pathname.startsWith(`${basePath}/assinatura`);
+  useEffect(() => {
+    if (assinatura?.bloqueada && !naTelaAssinatura) navigate(`${basePath}/assinatura`, { replace: true });
+  }, [assinatura, naTelaAssinatura, basePath]);
 
   // Buscar logo da empresa ativa
   useEffect(() => {
@@ -79,6 +97,26 @@ export default function AdminLayout({ children }) {
         </svg>
       )
     },
+    {
+      key: "assinatura",
+      title: "Assinatura",
+      path: `${basePath}/assinatura`,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+      )
+    },
+    ...(isSuperAdmin ? [{
+      key: "planos-saas",
+      title: "Planos SaaS",
+      path: `${basePath}/planos-saas`,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+        </svg>
+      )
+    }] : []),
     ...(isSuperAdmin ? [{
       key: "empresas",
       title: "Empresas",
@@ -228,17 +266,17 @@ export default function AdminLayout({ children }) {
   const filteredMenuItems = menuItems.map(item => {
     if (item.children) {
       const filteredChildren = item.children.filter(child => {
-        if (!child.key || child.key === 'dashboard') return true;
+        if (!child.key || child.key === 'dashboard' || child.key === 'assinatura') return true;
         if (isSuperAdmin) return true;
-        if (child.key === 'empresas' || child.key === 'grupos-permissao' || child.key === 'logs') return false;
+        if (child.key === 'empresas' || child.key === 'planos-saas' || child.key === 'grupos-permissao' || child.key === 'logs') return false;
         return hasPermission(child.key, 'ver');
       });
       return filteredChildren.length > 0 ? { ...item, children: filteredChildren } : null;
     }
     
-    if (!item.key || item.key === 'dashboard') return item;
+    if (!item.key || item.key === 'dashboard' || item.key === 'assinatura') return item;
     if (isSuperAdmin) return item;
-    if (item.key === 'empresas' || item.key === 'grupos-permissao' || item.key === 'logs') return null;
+    if (item.key === 'empresas' || item.key === 'planos-saas' || item.key === 'grupos-permissao' || item.key === 'logs') return null;
     return hasPermission(item.key, 'ver') ? item : null;
   }).filter(Boolean);
 
@@ -479,6 +517,18 @@ export default function AdminLayout({ children }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
+            </div>
+          )}
+          {assinatura && !assinatura.bloqueada && !naTelaAssinatura && (assinatura.status === 'trial' || assinatura.em_carencia || assinatura.dias_restantes <= 5) && (
+            <div className="mb-4 flex items-center justify-between gap-3 bg-blue-900/20 border border-blue-700/40 text-blue-200 rounded-xl px-4 py-3 text-sm">
+              <span>
+                {assinatura.em_carencia
+                  ? 'Sua assinatura venceu. Renove para não perder o acesso ao painel.'
+                  : assinatura.status === 'trial'
+                    ? `Período de teste: ${Math.max(assinatura.dias_restantes, 0)} dia(s) restante(s).`
+                    : `Sua assinatura vence em ${Math.max(assinatura.dias_restantes, 0)} dia(s).`}
+              </span>
+              <Link to={`${basePath}/assinatura`} className="font-semibold underline whitespace-nowrap">Ver assinatura</Link>
             </div>
           )}
           {children}

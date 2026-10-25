@@ -1,5 +1,6 @@
 const db = require("../../db");
 const { criarPortaisPadrao } = require("../utils/empresaSetup");
+const { criarTrial } = require("../utils/assinatura");
 
 function gerarSlug(nome) {
   return nome
@@ -16,8 +17,11 @@ exports.listarEmpresas = async (req, res) => {
       SELECT e.*,
         (SELECT COUNT(*) FROM admins WHERE empresa_id = e.id) AS total_admins,
         (SELECT COUNT(*) FROM mikrotiks WHERE empresa_id = e.id) AS total_mikrotiks,
-        (SELECT COUNT(*) FROM planos WHERE empresa_id = e.id) AS total_planos
+        (SELECT COUNT(*) FROM planos WHERE empresa_id = e.id) AS total_planos,
+        a.status AS assinatura_status, a.trial_ate, a.vence_em, a.plano_id AS assinatura_plano_id, sp.nome AS assinatura_plano_nome
       FROM empresas e
+      LEFT JOIN assinaturas a ON a.empresa_id = e.id
+      LEFT JOIN saas_planos sp ON sp.id = a.plano_id
       ORDER BY e.criado_em DESC
     `);
     res.json(empresas);
@@ -29,7 +33,7 @@ exports.listarEmpresas = async (req, res) => {
 
 exports.criarEmpresa = async (req, res) => {
   try {
-    const { nome, cnpj, email, telefone } = req.body;
+    const { nome, cnpj, email, telefone, plano_id } = req.body;
     if (!nome || !email) {
       return res.status(400).json({ message: "Nome e email são obrigatórios" });
     }
@@ -51,6 +55,7 @@ exports.criarEmpresa = async (req, res) => {
 
     // Auto-criar os 5 portais padrao (helper compartilhado com /api/registro).
     await criarPortaisPadrao(db, empresaId);
+    await criarTrial(db, empresaId, plano_id);
 
     res.status(201).json({ id: empresaId, nome, slug, email });
   } catch (err) {

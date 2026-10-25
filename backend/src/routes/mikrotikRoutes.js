@@ -7,6 +7,7 @@ const { obterInformacoes } = require("../controllers/mikrotikAPIController");
 const { exec } = require("child_process");
 const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
 const { peersLivres } = require("../utils/vpnPeers");
+const { checarLimiteSeguro } = require("../utils/assinatura");
 
 // FreeRADIUS só lê NAS clients na inicialização, precisamos recarregar após mudanças
 function reloadFreeRADIUS() {
@@ -123,6 +124,9 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    const lim = await checarLimiteSeguro(req.empresa_id, "equipamentos");
+    if (!lim.ok) return res.status(403).json({ message: lim.mensagem });
+
     // Verificar se já existe gateway com esse IP na empresa
     const [existente] = await db.query("SELECT id FROM mikrotiks WHERE ip = ? AND empresa_id = ?", [dados.ip, req.empresa_id]);
     if (existente.length > 0) {

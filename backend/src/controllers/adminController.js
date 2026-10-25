@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const Admin = require("../models/Admin");
+const { checarLimiteSeguro } = require("../utils/assinatura");
 
 // Hierarquia de roles (maior = mais privilegio). Um ator so pode
 // criar/editar/atribuir roles com rank <= ao proprio, e nunca modificar
@@ -41,6 +42,9 @@ const criarAdmin = async (req, res) => {
   }
 
   try {
+    const lim = await checarLimiteSeguro(req.empresa_id, "admins");
+    if (!lim.ok) return res.status(403).json({ message: lim.mensagem });
+
     const hash = await bcrypt.hash(senha, 10);
     await Admin.create(email, hash, req.empresa_id, allowedRole, nome || null);
     res.status(201).json({ message: "Administrador criado com sucesso" });
