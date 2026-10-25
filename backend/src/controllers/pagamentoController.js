@@ -1147,6 +1147,16 @@ exports.liberarPixTrial = async (req, res) => {
 
     if (!pag) return res.status(404).json({ message: "Pagamento nao encontrado" });
 
+    // 0. Uma vez por pagamento (e so enquanto ele esta em aberto): quem ja recebeu o acesso gratis deste
+    //    PIX nao tem as credenciais regravadas (trocaria a senha de quem esta conectado), e pagamento
+    //    ja aprovado/expirado nao precisa de trial. O front trata 409 como "ja liberado".
+    if (pag.trial_liberado_em) {
+      return res.status(409).json({ ja_liberado: true, message: "Acesso gratis ja utilizado neste pagamento" });
+    }
+    if (pag.status === "approved" || pag.status === "expirado") {
+      return res.status(409).json({ message: "Pagamento ja finalizado" });
+    }
+
     // 1. Verificar se portal tem o trial habilitado
     let portalCfg = {};
     try {

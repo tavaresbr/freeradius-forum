@@ -20,8 +20,10 @@
  * @param {string} password - Senha (geralmente igual ao username)
  * @param {number} delayMs - Delay opcional antes do redirect (ms)
  * @param {Object} [gatewayInfo] - `gateway_info` da resposta do backend
+ * @param {{voltarPara?: string}} [opcoes] - `voltarPara`: URL para onde o hotspot MikroTik devolve o cliente
+ *   apos o login (`dst`); usado pelo acesso gratis do PIX para voltar a tela com o codigo. Outros vendors ignoram.
  */
-export function redirecionarHotspot(gateway, username, password, delayMs = 0, gatewayInfo = null) {
+export function redirecionarHotspot(gateway, username, password, delayMs = 0, gatewayInfo = null, opcoes = {}) {
   const tipo = gatewayInfo?.tipo || "mikrotik";
 
   const executar = () => {
@@ -74,7 +76,8 @@ export function redirecionarHotspot(gateway, username, password, delayMs = 0, ga
     if (!url.includes("/login")) {
       url = url.replace(/\/$/, "") + "/login";
     }
-    window.location.href = `${url}?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password || username)}`;
+    const dst = opcoes?.voltarPara ? `&dst=${encodeURIComponent(opcoes.voltarPara)}` : "";
+    window.location.href = `${url}?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password || username)}${dst}`;
   };
 
   if (delayMs > 0) {

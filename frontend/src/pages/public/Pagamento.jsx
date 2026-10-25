@@ -1,7 +1,20 @@
 import { useParams, useSearchParams } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { redirecionarHotspot, limparCpf } from "../../utils/hotspotRedirect";
 import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
+
+// Retomada do PIX (sem gerar outro pagamento) quando o acesso gratis manda o cliente ao login do hotspot e
+// ele volta para esta mesma pagina. Fica so na aba (sessionStorage); tudo em try/catch.
+const chavePix = (planoId, clienteId) => `hs_pix_${planoId}_${clienteId || "-"}`;
+const lerPixSalvo = (planoId, clienteId) => {
+  try { return JSON.parse(sessionStorage.getItem(chavePix(planoId, clienteId)) || "null"); } catch { return null; }
+};
+const salvarPix = (planoId, clienteId, dados) => {
+  try { sessionStorage.setItem(chavePix(planoId, clienteId), JSON.stringify(dados)); } catch { /* sem storage */ }
+};
+const limparPix = (planoId, clienteId) => {
+  try { sessionStorage.removeItem(chavePix(planoId, clienteId)); } catch { /* sem storage */ }
+};
 
 export default function Pagamento() {
   const { id } = useParams();
@@ -161,6 +174,18 @@ export default function Pagamento() {
   useEffect(() => {
     if (metodo !== "pix" || !plano) return;
 
+    // Voltou do login do acesso gratis: retoma o MESMO PIX (nao cria outro pagamento)
+    const salvo = lerPixSalvo(id, clienteId);
+    if (salvo?.mpPagamentoId && salvo?.copiaCola) {
+      setQrCode(salvo.qrCode);
+      setCopiaCola(salvo.copiaCola);
+      setMpPagamentoId(salvo.mpPagamentoId);
+      setPagamentoId(salvo.pagamentoId || null);
+      setTrialLiberado(!!salvo.trialLiberado);
+      setStatus("gerado");
+      return;
+    }
+
     setStatus("gerando");
     fetch("/api/pagamentos/gerar", {
       method: "POST",
@@ -175,9 +200,29 @@ export default function Pagamento() {
         setMpPagamentoId(data.mp_pagamento_id);
         setPagamentoId(data.pagamento_id || null);
         setStatus("gerado");
+        salvarPix(id, clienteId, {
+          mpPagamentoId: data.mp_pagamento_id, pagamentoId: data.pagamento_id || null,
+          qrCode: data.qr_code_base64, copiaCola: data.copia_cola, trialLiberado: false,
+        });
       })
       .catch(() => setStatus("erro"));
   }, [metodo, plano]);
+
+  // Se ha um PIX salvo desta aba (voltou do login do acesso gratis), vai direto para ele mesmo quando o
+  // portal oferece PIX e cartao (senao a tela de escolha apareceria de novo).
+  useEffect(() => {
+    if (plano && metodo === null && lerPixSalvo(id, clienteId)?.mpPagamentoId) setMetodo("pix");
+  }, [plano]);
+
+  // Acesso gratis assim que o PIX e' gerado: o cliente sai para o app do banco e precisa de internet.
+  // Uma tentativa automatica por carregamento; o botao "Copiar" continua como plano B.
+  const autoTrialTentado = useRef(false);
+  useEffect(() => {
+    if (status !== "gerado" || autoTrialTentado.current) return;
+    if (!plano?.pix_trial_enabled || trialLiberado || trialLoading || !pagamentoId || !mpPagamentoId) return;
+    autoTrialTentado.current = true;
+    liberarTrial();
+  }, [status, plano, pagamentoId, mpPagamentoId, trialLiberado]);
 
   // Polling status (PIX e cartao em pending)
   useEffect(() => {
@@ -190,6 +235,7 @@ export default function Pagamento() {
         const data = await res.json();
         if (data.status === "approved" && data.gateway && data.username) {
           setPagamentoAprovado(true);
+          limparPix(id, clienteId);
           if (data.requer_desconexao) { setSessaoAtiva(data); return; }
           // /status devolve a senha real (aleatoria, do radcheck); fallback p/ legado.
           redirecionarHotspot(data.gateway, data.username, data.password || data.username, 2000, data.gateway_info);
@@ -228,7 +274,10 @@ export default function Pagamento() {
         body: JSON.stringify({ pagamento_id: pagamentoId, mp_pagamento_id: mpPagamentoId, mac }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (res.status === 409 && data.ja_liberado) {
+        // 1 vez por pagamento: ja liberado antes (ex.: voltou do login). Nada a fazer, sem erro.
+        setTrialLiberado(true);
+      } else if (!res.ok) {
         setTrialErro(data.message || "Nao foi possivel liberar acesso free");
       } else if (data.requer_desconexao) {
         setSessaoTrial(data);
@@ -237,9 +286,13 @@ export default function Pagamento() {
         setTrialLiberado(true);
         // Auto-redireciona pro hotspot login com as creds temporarias
         // para o cliente ter internet e conseguir abrir o app do banco.
+        salvarPix(id, clienteId, {
+          mpPagamentoId, pagamentoId, qrCode, copiaCola, trialLiberado: true,
+        });
         if (data.gateway && data.username) {
           setTimeout(() => {
-            redirecionarHotspot(data.gateway, data.username, data.password, 1500, data.gateway_info);
+            // voltarPara: o hotspot devolve o cliente a esta pagina (o PIX e' retomado do sessionStorage)
+            redirecionarHotspot(data.gateway, data.username, data.password, 1500, data.gateway_info, { voltarPara: window.location.href });
           }, 2000); // 2s pro usuario ler a mensagem antes de redirecionar
         }
       }
@@ -503,8 +556,8 @@ export default function Pagamento() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                       </svg>
                       <div className="text-xs text-emerald-900 leading-relaxed">
-                        <strong>Acesso liberado por {plano.pix_trial_duracao_minutos || 5} minutos!</strong> Ao clicar em
-                        <strong> "Copiar codigo Pix"</strong> abaixo voce recebera internet temporaria
+                        <strong>Internet liberada por {plano.pix_trial_duracao_minutos || 5} minutos!</strong> Assim que o
+                        codigo Pix e gerado voce recebe internet temporaria (uma unica vez por pagamento)
                         para abrir o app do seu banco e efetuar o pagamento.
                         <br/><br/>
                         Assim que o pagamento for aprovado voce recebera o <strong>usuario e senha
