@@ -1908,3 +1908,9 @@ Perfil = grupo de permissao (`grupos_permissao`, tabela GLOBAL sem `empresa_id`;
 ## Cadastro de empresa pelo CNPJ
 
 `GET /api/cnpj/:cnpj` (publico, `cnpjLookupLimiter` 60/h por IP, `routes/cnpjRoutes.js`) valida os digitos (`utils/cnpjClient.validarCNPJ`), consulta a BrasilAPI e devolve razao social, nome fantasia, e-mail, telefone e endereco normalizados; erros viram mensagens seguras (400/404/502/503). So le dado publico, nao grava. Usado pelo componente `CamposEmpresa.jsx` em `/registro` e no modal da tela Empresas (busca ao completar 14 digitos ou no botao "Buscar"; os campos continuam editaveis). `registroController`/`empresaController` gravam os campos novos via `utils/empresaCadastro.sanitizarEmpresa` (CNPJ so digitos, CNPJ/telefone/CEP/UF invalidos => 400). A BrasilAPI so foi testada com mock (`tests/unit/cnpj.test.js`); o servidor precisa de saida HTTPS para `brasilapi.com.br`. **CNPJ unico:** `registrarEmpresa`, `criarEmpresa` e `atualizarEmpresa` recusam com 409 (`Já existe uma empresa cadastrada com este CNPJ`) quando outra empresa tem o mesmo CNPJ (`empresaCadastro.cnpjDuplicado`, compara so os digitos; a propria empresa pode salvar). Nao ha indice UNIQUE no banco (cadastros antigos podem ter duplicatas).
+
+---
+
+## Identidade do site (logo e nome da plataforma)
+
+Global (nao por empresa), editavel so pelo super admin em Configuracoes > "Identidade do site". Guardado em `plataforma_configs` chave `branding` (`{nome, logo_url}`; padrao "Apex Telecom" + logo SVG `LogoApex.jsx`). API: `GET /api/branding` (publica), `PUT /api/branding`, `POST/DELETE /api/branding/logo` (super_admin; JPG/PNG/WEBP 2 MB, SVG bloqueado; arquivos `site-*` em `uploads/logos`). Frontend: hook `useBranding` (cache em modulo) usado por `MarcaApex`, `Login`, `ApexHome`. Teste: `backend/tests/unit/branding.test.js`. O teste `registro publico: dono vira owner...` ja falhava na `main` antes desta mudanca.

@@ -56,6 +56,7 @@ const empresaRoutes = require("./src/routes/empresaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
 const registroRoutes = require("./src/routes/registroRoutes");
 const siteRoutes = require("./src/routes/siteRoutes");
+const brandingRoutes = require("./src/routes/brandingRoutes");
 const assinaturaRoutes = require("./src/routes/assinaturaRoutes");
 const grupoPermissaoRoutes = require("./src/routes/grupoPermissaoRoutes");
 const loginPortalRoutes = require("./src/routes/loginPortalRoutes");
@@ -128,6 +129,8 @@ app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
 app.use("/api/assinatura", assinaturaRoutes);     // SaaS: assinatura das empresas
+app.use("/api/branding/logo", publicApiLimiter);
+app.use("/api/branding", brandingRoutes);       // Identidade do site (nome + logo)
 app.use("/api/site", siteRoutes);                // Site institucional (pedido de contratação)
 app.use("/api/registro", registroRoutes);       // Registro público de empresas
 app.use("/api/cnpj", require("./src/routes/cnpjRoutes")); // Consulta de CNPJ (preenche cadastro da empresa)
