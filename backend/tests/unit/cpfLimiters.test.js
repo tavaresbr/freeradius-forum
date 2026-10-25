@@ -39,3 +39,22 @@ test('limitadores: por CPF (10/h), mesmo mudando MAC; outro CPF segue liberado',
     assert.strictEqual((await post(srv, { cpf: '111.444.777-35', mac: '77:77:77:77:77:77' })).status, 200);
   } finally { srv.close(); }
 });
+
+test('limitadores: buscas que ACHARAM nao consomem a cota por CPF/dispositivo; palpites errados sim', async () => {
+  const express2 = require('express');
+  const app = express2();
+  app.use(express2.json());
+  app.post('/consulta', ...cpfLookupLimiters, (req, res) => {
+    if (req.body.acerta) res.locals.consultaEncontrada = true;
+    res.json({ encontrado: !!req.body.acerta });
+  });
+  const srv = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  try {
+    const cpf = '390.533.447-05';
+    // 25 consultas bem-sucedidas (titular consultando e confirmando varias vezes) nao travam
+    for (let i = 0; i < 25; i++) assert.strictEqual((await post(srv, { cpf, mac: 'aa:aa:aa:aa:aa:01', acerta: true })).status, 200, `acerto ${i + 1}`);
+    // 10 palpites errados consomem a cota e o 11o e barrado — inclusive para quem acertaria
+    for (let i = 0; i < 10; i++) assert.strictEqual((await post(srv, { cpf, mac: 'bb:bb:bb:bb:bb:' + String(i).padStart(2, '0') })).status, 200);
+    assert.strictEqual((await post(srv, { cpf, mac: 'cc:cc:cc:cc:cc:01' })).status, 429);
+  } finally { srv.close(); }
+});
