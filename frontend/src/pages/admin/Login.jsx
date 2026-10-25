@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import SiteHeader from '../../components/public/SiteHeader'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -34,7 +35,8 @@ export default function Login() {
   }
 
   return (
-    <div className="flex items-center justify-center h-screen bg-[#0f111a]">
+    <div className="flex items-center justify-center min-h-screen pt-16 bg-[#0f111a]">
+      <SiteHeader />
       <form onSubmit={handleLogin} className="bg-[#1a1d27] border border-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm">
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-white">SpotControl Pro</h2>

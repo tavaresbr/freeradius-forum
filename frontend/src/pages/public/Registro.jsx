@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import SiteHeader from "../../components/public/SiteHeader";
 
 export default function Registro() {
   const navigate = useNavigate();
@@ -68,7 +69,8 @@ export default function Registro() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0f111a] p-4">
+    <div className="flex items-center justify-center min-h-screen bg-[#0f111a] p-4 pt-24">
+      <SiteHeader />
       <form
         onSubmit={handleSubmit}
         className="bg-[#1a1d27] border border-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md"
