@@ -100,16 +100,24 @@ async function desconectarSessao({ sessao, username, empresaId }) {
  *  - nada ({}) se nao ha sessao aberta, ou se era o MESMO aparelho (sessao velha: derrubada sozinha);
  *  - { requer_desconexao:true, sessao_ativa:{desde, aparelho} } se ha sessao em OUTRO aparelho.
  * Com manterMesmoAparelho (fluxos de pagamento) a sessao do MESMO aparelho tambem devolve {} sem ser derrubada.
+ * A derrubada automatica do MESMO aparelho so ocorre com `autorizado` (titular verificado pelo chamador);
+ * sem isso o MAC informado nao prova nada e o resultado e' o aviso `requer_desconexao`.
  */
-async function tratarSessaoAtiva({ username, mac, empresaId, manterMesmoAparelho = false }) {
+async function tratarSessaoAtiva({ username, mac, empresaId, manterMesmoAparelho = false, autorizado = false }) {
   try {
     const sessao = await buscarSessaoAtiva(username, empresaId);
     if (!sessao) return {};
     if (mesmoMac(sessao.callingstationid, mac)) {
       // Pagamento: a sessao do proprio aparelho (ex.: trial) ja recebeu o upgrade por CoA; derrubar causaria queda
       if (manterMesmoAparelho) return {};
-      const r = await desconectarSessao({ sessao, username, empresaId });
-      if (r.ok) return {};
+      // O MAC vem do corpo da requisicao e e' visivel no ar: quem sabe o CPF e o MAC do titular nao
+      // pode derrubar a sessao dele. So derruba sozinho quem ja provou ser o titular (`autorizado`:
+      // data de nascimento conferida e acesso liberavel); os demais recebem o aviso e a derrubada
+      // passa por POST /api/sessao/desconectar-anterior (CPF + data).
+      if (autorizado) {
+        const r = await desconectarSessao({ sessao, username, empresaId });
+        if (r.ok) return {};
+      }
     }
     const mm = normMac(sessao.callingstationid);
     return {
