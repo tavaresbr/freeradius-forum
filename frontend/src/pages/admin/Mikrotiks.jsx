@@ -169,6 +169,7 @@ export default function Mikrotiks() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let finalizou = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -187,6 +188,7 @@ export default function Mikrotiks() {
             } else if (event.type === "error") {
               setHotspotLog(prev => [...prev, `[erro] ${event.message}`]);
             } else if (event.type === "done") {
+              finalizou = true;
               if (event.success) {
                 setHotspotLog(prev => [...prev, "--- Configuracao finalizada com sucesso! ---"]);
               }
@@ -195,8 +197,11 @@ export default function Mikrotiks() {
           } catch (e) { /* parse error, ignora */ }
         }
       }
+      if (!finalizou) {
+        setHotspotLog(prev => [...prev, "[aviso] A conexao com o servidor foi encerrada antes do fim. O roteador pode ter sido configurado: confira e, se preciso, use 'Aplicar padroes em todos'."]);
+      }
     } catch (err) {
-      setHotspotLog(prev => [...prev, `[erro] Falha de conexao: ${err.message}`]);
+      setHotspotLog(prev => [...prev, `[aviso] Conexao com o servidor caiu (${err.message}). O roteador pode ter sido configurado: confira e, se preciso, use 'Aplicar padroes em todos'.`]);
     } finally {
       setEnviandoHotspot(null);
     }
