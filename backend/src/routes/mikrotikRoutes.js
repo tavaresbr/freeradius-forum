@@ -141,7 +141,7 @@ router.post("/", async (req, res) => {
       }
     }
 
-    await db.execute(
+    const [insGw] = await db.execute(
       `INSERT INTO mikrotiks
         (empresa_id, nome, ip, usuario, senha, porta, end_hotspot, portal_id,
          tipo, controller_url, controller_site, omadac_id, api_user, api_pass, verify_tls,
@@ -153,6 +153,12 @@ router.post("/", async (req, res) => {
         dados.controller_site, dados.omadac_id, dados.api_user, dados.api_pass, dados.verify_tls,
         dados.gwn_api_key, dados.gwn_api_secret, dados.gwn_network_id,
       ]
+    );
+
+    // Planos padrao (LGPD/Lead) nascem sem equipamento: o primeiro cadastrado os assume.
+    await db.execute(
+      "UPDATE planos SET mikrotik_id = ? WHERE empresa_id = ? AND mikrotik_id IS NULL",
+      [insGw.insertId, req.empresa_id]
     );
 
     if (usaRadius(dados)) {

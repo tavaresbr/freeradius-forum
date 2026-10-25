@@ -40,4 +40,32 @@ async function criarPortaisPadrao(executor, empresaId) {
   );
 }
 
-module.exports = { criarPortaisPadrao };
+// Planos gratis que os portais LGPD e Lead resolvem por NOME (lgpdController / leadController).
+// Sem eles o portal responde 404 e as telas Portais/Planos mostram o aviso "Plano nao encontrado".
+const PLANOS_PADRAO = [
+  { nome: "LGPD", descricao: "Acesso gratuito do portal LGPD", duracao_minutos: 5 },
+  { nome: "Lead", descricao: "Acesso gratuito do portal de Leads", duracao_minutos: 1 },
+];
+
+/**
+ * Cria os planos gratis padrao (LGPD e Lead) da empresa, se ainda nao existirem.
+ * Nascem com mikrotik_id NULL (empresa nova nao tem equipamento); o primeiro
+ * equipamento cadastrado os vincula (mikrotikRoutes.js).
+ *
+ * @param {Object} executor - pool `db` ou uma connection de transacao
+ * @param {number} empresaId
+ * @param {number|null} [mikrotikId] - equipamento ja existente (backfill)
+ */
+async function criarPlanosPadrao(executor, empresaId, mikrotikId = null) {
+  for (const p of PLANOS_PADRAO) {
+    await executor.execute(
+      `INSERT INTO planos (empresa_id, nome, descricao, valor, duracao_minutos,
+                           velocidade_down, velocidade_up, mikrotik_id, shared_users, ativo)
+       SELECT ?, ?, ?, 0, ?, 2, 2, ?, 1, 1 FROM DUAL
+       WHERE NOT EXISTS (SELECT 1 FROM planos WHERE empresa_id = ? AND LOWER(nome) = LOWER(?))`,
+      [empresaId, p.nome, p.descricao, p.duracao_minutos, mikrotikId, empresaId, p.nome]
+    );
+  }
+}
+
+module.exports = { criarPortaisPadrao, criarPlanosPadrao, PLANOS_PADRAO };

@@ -1,7 +1,7 @@
 const db = require("../../db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { criarPortaisPadrao } = require("../utils/empresaSetup");
+const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
 
 function gerarSlug(nome) {
@@ -63,6 +63,7 @@ exports.registrarEmpresa = async (req, res) => {
     // Portais padrao: sem eles os fluxos publicos (LGPD/lead/planos/login)
     // falham em silencio — resolucao por tipo nao encontra nada.
     await criarPortaisPadrao(conn, empresaId);
+    await criarPlanosPadrao(conn, empresaId);
 
     // SaaS: toda empresa nova nasce em trial (7 dias) no plano escolhido
     await criarTrial(conn, empresaId, plano_id);
