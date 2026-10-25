@@ -27,6 +27,15 @@ const registroLimiter = rateLimit({
   handler: jsonHandler('Muitas solicitacoes de registro. Tente novamente mais tarde.'),
 });
 
+// Consulta de CNPJ (GET /api/cnpj/:cnpj): publica, chama API externa; teto por IP.
+const cnpjLookupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas consultas de CNPJ. Tente novamente mais tarde.'),
+});
+
 // Pedido de contratacao do site (POST /api/site/pedido): evita spam de leads.
 const sitePedidoLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -114,4 +123,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };

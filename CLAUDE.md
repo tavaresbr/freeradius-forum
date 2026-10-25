@@ -194,6 +194,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 031 | `031_assinaturas` | SaaS: `saas_planos`, `assinaturas` (1/empresa), `assinatura_cobrancas`, `plataforma_configs`; seeds: 3 planos exemplo + assinatura de cortesia (ativa, +1 ano) p/ empresas existentes |
 | 032 | `032_admin_empresas_backfill` | vincula em `admin_empresas` os admins sem vinculo (criados pela tela Usuarios antes da correcao); idempotente |
 | 033 | `033_perfis_usuario` | garante os perfis do sistema (Acesso Completo / Usuário Padrão) e promove a Administrador o primeiro admin de cada empresa sem grupo |
+| 037 | `037_empresas_cadastro_completo` | `empresas`: razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf |
 | 034 | `034_planos_padrao_60min` | atualiza os planos gratis LGPD (5 min) e Lead (1 min) com 2/2 Mbps para 60 min, 100M down / 50M up; so toca quem ainda esta no padrao antigo (nao sobrescreve plano personalizado); idempotente |
 | 035 | `035_planos_padrao_20_10` | planos gratis LGPD/Lead de 100/50 para 20M down / 10M up (60 min mantidos); so toca quem ainda esta em 60 min + 100/50 (nao sobrescreve personalizado); idempotente |
 | 036 | `036_planos_default_dedup` | empresa `default`: deixa UM plano LGPD e UM Lead (o mais referenciado), reaponta `plano_id` de todas as tabelas + `radusergroup` e apaga os duplicados; o que fica vira 60 min / 20M down / 10M up. So age com duplicados (nao repete); `--dry` so mostra |
@@ -1896,3 +1897,9 @@ Perfil = grupo de permissao (`grupos_permissao`, tabela GLOBAL sem `empresa_id`;
 - **Primeiro usuario da empresa e' SEMPRE Administrador/owner** (`criarAdmin` forca, mesmo pedindo `padrao`). `perfil` Administrador so e' concedido por owner/super_admin. A empresa nunca fica sem Administrador (nao rebaixa nem remove o ultimo).
 - API: `GET /api/admins/perfis` (so os 2 perfis), `perfil` no `POST/PUT /api/admins`, `GET /api/admins` devolve `perfil` por admin. Tela: `Usuarios.jsx` (Nome + Perfil).
 - `garantirPerfil` nunca sobrescreve permissao ja ajustada pelo super admin; `atribuirPerfil` so troca entre os 2 grupos do sistema (grupos customizados ficam). Testes: `backend/tests/unit/perfisUsuario.test.js`. Nao testado contra MySQL real.
+
+---
+
+## Cadastro de empresa pelo CNPJ
+
+`GET /api/cnpj/:cnpj` (publico, `cnpjLookupLimiter` 60/h por IP, `routes/cnpjRoutes.js`) valida os digitos (`utils/cnpjClient.validarCNPJ`), consulta a BrasilAPI e devolve razao social, nome fantasia, e-mail, telefone e endereco normalizados; erros viram mensagens seguras (400/404/502/503). So le dado publico, nao grava. Usado pelo componente `CamposEmpresa.jsx` em `/registro` e no modal da tela Empresas (busca ao completar 14 digitos ou no botao "Buscar"; os campos continuam editaveis). `registroController`/`empresaController` gravam os campos novos via `utils/empresaCadastro.sanitizarEmpresa` (CNPJ so digitos, CNPJ/telefone/CEP/UF invalidos => 400). A BrasilAPI so foi testada com mock (`tests/unit/cnpj.test.js`); o servidor precisa de saida HTTPS para `brasilapi.com.br`.
