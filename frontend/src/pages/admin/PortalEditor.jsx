@@ -570,6 +570,12 @@ export default function PortalEditor() {
                     {/* Preview do Cadastro */}
                     <div className="mb-4">
                       <p className="text-xs text-gray-400 font-semibold mb-3 uppercase tracking-wide text-center">Etapa 1: Cadastro do Cliente</p>
+                      {/* Titulo fixo da pagina real de cadastro (CadastroCliente.jsx): nao e' editavel */}
+                      <div className="text-center mb-4">
+                        <h2 className="text-2xl font-bold text-gray-800">Seus Dados</h2>
+                        <p className="text-sm text-gray-500">Preencha seus dados para continuar</p>
+                        <p className="text-[10px] text-gray-400 mt-1">Título fixo desta etapa (o título editável acima é o da tela de planos)</p>
+                      </div>
                       <div className="space-y-3">
                         {renderPassoCpf()}
                         {renderSeparadorPasso()}
@@ -599,6 +605,7 @@ export default function PortalEditor() {
 
                     <div className="border-t border-gray-200 pt-4 mt-4">
                       <p className="text-xs text-gray-400 font-semibold mb-2 uppercase tracking-wide text-center">Etapa 2: Seleção de Plano</p>
+                      <p className="text-center text-base font-bold text-gray-800">{config.titulo || "Escolha seu Plano"}</p>
                       <p className="text-center text-sm text-gray-500">Os planos disponíveis serão listados aqui</p>
                     </div>
 
