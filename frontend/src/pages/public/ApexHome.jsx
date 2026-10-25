@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Wifi, Zap, ShieldCheck, BarChart3, Check, Menu, X, MessageCircle } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import SiteHeader from "../../components/public/SiteHeader";
+import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle } from "lucide-react";
 
 const WHATSAPP = "5593991935695";
 const TELEFONE = "(93) 99193-5695";
@@ -28,8 +29,15 @@ const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", curren
 const limite = (v) => (v == null ? "Ilimitados" : v);
 
 export default function ApexHome() {
-  const [menu, setMenu] = useState(false);
   const [planos, setPlanos] = useState(PLANOS_FALLBACK);
+  const { hash } = useLocation();
+
+  // Vindo de /login ou /registro com /#planos: o React Router nao rola sozinho ate a ancora
+  useEffect(() => {
+    if (!hash) return;
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth" }), 50);
+    return () => clearTimeout(t);
+  }, [hash]);
 
   useEffect(() => {
     document.title = "Apex Telecom | Sistema de Wi-Fi Hotspot para provedores";
@@ -50,30 +58,10 @@ export default function ApexHome() {
   }, []);
 
   const cadastro = (p) => (p?.id ? `/registro?plano=${p.id}` : "/registro");
-  const links = [["#vantagens", "Recursos"], ["#planos", "Planos"], ["#faq", "Dúvidas"]];
 
   return (
     <div className="min-h-screen bg-white text-gray-800">
-      <header className="fixed top-0 inset-x-0 z-40 bg-blue-950/95 backdrop-blur text-white">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <a href="#topo" className="flex items-center gap-2 font-bold text-xl">
-            <Wifi className="text-orange-400" size={26} /> Apex<span className="text-orange-400">Telecom</span>
-          </a>
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            {links.map(([h, t]) => <a key={h} href={h} className="hover:text-orange-300">{t}</a>)}
-            <Link to="/login" className="hover:text-orange-300">Entrar</Link>
-            <Link to="/registro" className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg font-semibold">Teste grátis</Link>
-          </nav>
-          <button className="md:hidden" onClick={() => setMenu(!menu)} aria-label="Menu">{menu ? <X /> : <Menu />}</button>
-        </div>
-        {menu && (
-          <nav className="md:hidden px-4 pb-4 flex flex-col gap-3 text-sm">
-            {links.map(([h, t]) => <a key={h} href={h} onClick={() => setMenu(false)}>{t}</a>)}
-            <Link to="/login">Entrar</Link>
-            <Link to="/registro" className="text-orange-300 font-semibold">Teste grátis</Link>
-          </nav>
-        )}
-      </header>
+      <SiteHeader />
 
       <section id="topo" className="pt-32 pb-20 px-4 bg-gradient-to-br from-blue-800 via-blue-900 to-blue-950 text-white">
         <div className="max-w-6xl mx-auto text-center">
