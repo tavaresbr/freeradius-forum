@@ -42,8 +42,8 @@ async function criarPortaisPadrao(executor, empresaId) {
 
 // Planos gratis que os portais LGPD e Lead resolvem por NOME (lgpdController / leadController).
 // Sem eles o portal responde 404 e as telas Portais/Planos mostram o aviso "Plano nao encontrado".
-const VELOCIDADE_DOWN = 100; // Mbps
-const VELOCIDADE_UP = 50; // Mbps
+const VELOCIDADE_DOWN = 20; // Mbps
+const VELOCIDADE_UP = 10; // Mbps
 const PLANOS_PADRAO = [
   { nome: "LGPD", descricao: "Acesso gratuito do portal LGPD", duracao_minutos: 60 },
   { nome: "Lead", descricao: "Acesso gratuito do portal de Leads", duracao_minutos: 60 },

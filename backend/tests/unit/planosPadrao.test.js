@@ -17,7 +17,7 @@ test('criarPlanosPadrao cria LGPD e Lead da empresa, sem equipamento', async () 
     assert.strictEqual(c.params[0], 9);
     assert.strictEqual(c.params[6], null); // mikrotik_id
     assert.strictEqual(c.params[7], 9);
-    assert.deepStrictEqual(c.params.slice(3, 6), [60, 100, 50]); // minutos, down, up
+    assert.deepStrictEqual(c.params.slice(3, 6), [60, 20, 10]); // minutos, down, up
   }
 });
 
