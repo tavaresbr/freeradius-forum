@@ -340,6 +340,7 @@ test('cpfConfirmado: so pagamento approved/expirado da empresa; erro de banco =>
   const q = db.calls.find((c) => /FROM pagamentos/.test(c.sql));
   assert.match(q.sql, /status IN \('approved', 'expirado'\)/);
   assert.match(q.sql, /empresa_id = \?/);
+  assert.match(q.sql, /metodo_pagamento <> 'cartao'/, 'cartao (CPF digitado, nao verificavel) nao confirma o CPF');
   assert.match(q.sql, /pagador_cpf IS NULL OR \? LIKE REPLACE\(pagador_cpf, '\*', '_'\)/, 'o pagador tem que ser o dono do CPF (ou desconhecido)');
   assert.deepStrictEqual(q.params, ['52998224725', '52998224725', 5]);
   limparCache();

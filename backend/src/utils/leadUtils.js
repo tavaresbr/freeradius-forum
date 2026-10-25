@@ -111,6 +111,7 @@ async function cpfConfirmado(cpfLimpo, empresaId) {
       `SELECT 1 FROM pagamentos
         WHERE status IN ('approved', 'expirado')
           AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
+          AND (metodo_pagamento IS NULL OR metodo_pagamento <> 'cartao')
           AND (pagador_cpf IS NULL OR ? LIKE REPLACE(pagador_cpf, '*', '_'))${empresaId ? " AND empresa_id = ?" : ""}
         LIMIT 1`,
       empresaId ? [cpfLimpo, cpfLimpo, empresaId] : [cpfLimpo, cpfLimpo]
