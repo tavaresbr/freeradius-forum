@@ -1924,3 +1924,5 @@ Constantes em `backend/src/constants/hotspotDefaults.js` (`HOTSPOT_PADROES`), ap
 - **hotspot profile `hsprof-hotspot`: `radius-interim-update=5m`** — com `received` o roteador so manda atualizacao se o servidor pedir; se o Accounting-Start se perder a sessao nao aparece em Sessoes Ativas. O FreeRADIUS cria a linha do radacct na primeira atualizacao.
 - **cliente RADIUS: `timeout=3s`** (era 1s100ms), mais tolerancia ao primeiro pacote pela VPN.
 Perfis de usuario customizados (grupos diferentes de `default`) nao sao alterados. Nao testado contra MikroTik real (so mocks). Teste: `backend/tests/unit/hotspotDefaults.test.js`.
+
+**Visual (azul claro + branco):** tokens `apex-*` em `frontend/tailwind.config.js` (50..900, principal `apex-500`); landing/login/registro claros, CTA laranja. A sidebar e o cabecalho mobile do `AdminLayout` sao claros, mas a area de conteudo das paginas do painel continua escura (migracao pendente). `MarcaApex`/`LogoApex` aceitam `tema` ("escuro" = texto escuro p/ fundo claro; "claro" = texto branco).
