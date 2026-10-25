@@ -239,7 +239,7 @@ test('cadastroCliente: auto-login com sessao aberta em outro aparelho => requer_
   assert.strictEqual(res.body.planoAtivo, true);
   assert.strictEqual(res.body.requer_desconexao, true);
   assert.strictEqual(res.body.username, '52998224725');
-  assert.deepStrictEqual(chamado, { username: '52998224725', mac: 'AA:BB:CC:DD:EE:01', empresaId: 5 });
+  assert.deepStrictEqual(chamado, { username: '52998224725', mac: 'AA:BB:CC:DD:EE:01', empresaId: 5, autorizado: true }, 'titular verificado (data conferida)');
 });
 
 test('cadastroCliente: legado sem data, SEM acesso ativo => segue para planos sem credenciais nem PII do titular', async () => {
@@ -654,4 +654,16 @@ test('conferirDataNascimento: cliente importado + outra data => divergente (403)
   const m2 = carregar('src/utils/leadUtils.js', { db: db2 });
   assert.strictEqual(await m2.conferirDataNascimento('52998224725', 5, '01/01/1999', { mac: 'AA', ip: '1.1.1.1' }), 'reivindicado');
   limparCache();
+});
+
+test('lgpdLogin: re-liberacao (titular nao provado) NAO autoriza a derrubada automatica da sessao do mesmo MAC', async () => {
+  const db = montarDb({ existing: null, saldo: false });
+  let chamado = null;
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db, {
+    'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async (a) => { chamado = a; return {}; } },
+  });
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdLogin(criarReq({ body: corpoLgpd({}), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.ok(chamado, 'tratarSessaoAtiva foi chamada');
+  assert.ok(!chamado.autorizado, 'sem autorizado: o MAC do corpo nao prova que e o titular');
 });
