@@ -164,7 +164,7 @@ export default function Registro() {
 
         <p className="text-center text-gray-500 text-sm mt-4">
           Já tem conta?{" "}
-          <Link to="/" className="text-blue-400 hover:text-blue-300">
+          <Link to="/login" className="text-blue-400 hover:text-blue-300">
             Fazer login
           </Link>
         </p>

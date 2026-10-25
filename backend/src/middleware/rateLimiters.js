@@ -27,6 +27,15 @@ const registroLimiter = rateLimit({
   handler: jsonHandler('Muitas solicitacoes de registro. Tente novamente mais tarde.'),
 });
 
+// Pedido de contratacao do site (POST /api/site/pedido): evita spam de leads.
+const sitePedidoLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitos pedidos enviados. Tente novamente mais tarde.'),
+});
+
 // Endpoints publicos do captive portal (pagamentos, acesso temporario, etc).
 // Limite mais folgado por causa de polling de status, mas ainda limita abuso/enumeracao.
 const publicApiLimiter = rateLimit({
@@ -88,4 +97,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, registroLimiter, sitePedidoLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };

@@ -1839,3 +1839,12 @@ Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`
 - Importar `data_nascimento` torna o lead localizavel por CPF+data em `/api/lgpd/consulta-cpf`.
 - **SGP:** o endpoint padrao (`/api/ura/clientes/`) e o formato da resposta NAO foram validados contra um SGP real (so contra um SGP simulado em `sgpIntegracao.test.js`); o cliente aceita a lista em `clientes|results|data|items` e achata objetos aninhados. Ajustar o campo "Endpoint" na tela se a versao do SGP for diferente. A URL e validada contra destinos internos (SSRF) no controller; erros do SGP viram mensagens seguras (`SgpError`), sem app/token.
 - Testes: `backend/tests/unit/importCadastros.test.js`, `backend/tests/unit/sgpIntegracao.test.js`.
+
+---
+
+## Site institucional Apex Telecom (pagina inicial)
+
+- `/` agora e a landing page `frontend/src/pages/public/ApexHome.jsx` (planos de EXEMPLO na constante `PLANOS`, WhatsApp/contatos placeholders); o login admin passou para `/login`. Todo redirect de "nao autenticado" aponta para `/login`.
+- Pedido de contratacao: `POST /api/site/pedido` (`siteController.criarPedido`, limiter `sitePedidoLimiter` 10/h por IP, honeypot `website`). Grava em `leads` com `origem='site'`, endereco (migration 029), `lgpd_termo` via `resolverTextoLgpd` e plano em `observacoes`.
+- `empresa_id` vem de `SITE_EMPRESA_ID` no `.env` (default 1), NUNCA do body. CPF ja existente so recebe nova linha em `observacoes` (nao sobrescreve cadastro de hotspot).
+- Teste: `backend/tests/unit/siteController.test.js`.

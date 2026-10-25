@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, registroLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, registroLimiter, sitePedidoLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -54,6 +54,7 @@ const complianceRoutes = require("./src/routes/complianceRoutes");
 const empresaRoutes = require("./src/routes/empresaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
 const registroRoutes = require("./src/routes/registroRoutes");
+const siteRoutes = require("./src/routes/siteRoutes");
 const grupoPermissaoRoutes = require("./src/routes/grupoPermissaoRoutes");
 const loginPortalRoutes = require("./src/routes/loginPortalRoutes");
 const systemBackupRoutes = require("./src/routes/systemBackupRoutes");
@@ -108,6 +109,7 @@ app.use('/api/admin/login', loginLimiter)         // login admin (routes/admin.j
 app.use('/api/auth/login', loginLimiter)          // login admin (authRoutes)
 app.use('/api/auth/temp', publicApiLimiter)       // acesso temporario
 app.use('/api/login-portal/auth', publicApiLimiter)   // login portal wifi (muitos clientes por IP do estabelecimento)
+app.use('/api/site', sitePedidoLimiter)         // pedido de contratacao do site
 app.use('/api/registro', registroLimiter)         // registro de empresa
 app.use('/api/pagamentos', publicApiLimiter)      // captive portal (gerar/status/pix-trial/webhook)
 
@@ -119,6 +121,7 @@ app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
 app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
 app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/site", siteRoutes);                // Site institucional (pedido de contratação)
 app.use("/api/registro", registroRoutes);       // Registro público de empresas
 
 app.use("/api/public/campanha", campanhasPublicRoutes);

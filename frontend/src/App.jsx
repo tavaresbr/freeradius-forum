@@ -44,12 +44,13 @@ import CadastroCliente from "./pages/public/CadastroCliente";
 import Registro from "./pages/public/Registro";
 import CampanhaPlayer from "./pages/public/CampanhaPlayer";
 import LoginHotspot from "./pages/public/LoginHotspot";
+import ApexHome from "./pages/public/ApexHome";
 
 // Componente de proteção
 const RotaPrivada = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/login" />;
   return children;
 };
 
@@ -57,7 +58,7 @@ const RotaPrivada = ({ children }) => {
 const AdminRedirect = () => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/login" />;
   return <Navigate to={`/admin/${user.empresa_slug}`} replace />;
 };
 
@@ -65,7 +66,8 @@ function App() {
   return (
     <Routes>
       {/* Público */}
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<ApexHome />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/cadastro-cliente" element={<CadastroCliente />} />
       <Route path="/planos-cliente" element={<PlanosCliente />} />
       <Route path="/pagamento/:id" element={<Pagamento />} />
