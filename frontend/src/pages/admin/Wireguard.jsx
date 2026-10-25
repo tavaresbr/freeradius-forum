@@ -1,7 +1,33 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { useAuth } from "../../contexts/AuthContext";
+
+// "Nova Telecom" -> "Nova-Telecom" (sem acentos; so letras, numeros e hifen, como o nome do roteador exige)
+function baseNomePeer(nomeEmpresa) {
+  return String(nomeEmpresa || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    .slice(0, 40).replace(/-+$/, "") || "Peer";
+}
+
+// Proximo nome livre: base-01, base-02... (maior sufixo existente + 1)
+function sugerirNomePeer(nomeEmpresa, peers) {
+  const base = baseNomePeer(nomeEmpresa);
+  const nomes = new Set((peers || []).map((c) => String(c.name || "").toLowerCase()));
+  const re = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`, "i");
+  let maior = 0;
+  for (const c of peers || []) {
+    const m = re.exec(String(c.name || ""));
+    if (m) maior = Math.max(maior, parseInt(m[1], 10));
+  }
+  let n = maior + 1;
+  const nome = (i) => `${base}-${String(i).padStart(2, "0")}`;
+  while (nomes.has(nome(n).toLowerCase())) n++;
+  return nome(n);
+}
 
 export default function Wireguard() {
+  const { user } = useAuth();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newPeerName, setNewPeerName] = useState("");
@@ -151,7 +177,10 @@ export default function Wireguard() {
             VPN WireGuard
           </h1>
           <button 
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setNewPeerName(sugerirNomePeer(user?.empresa_nome || user?.empresa_slug, status?.clients));
+              setShowAddModal(true);
+            }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold shadow-lg shadow-green-900/40 hover:bg-green-500 transition-colors"
           >
             <span className="text-lg leading-none">+</span> Adicionar Peer
@@ -325,6 +354,7 @@ export default function Wireguard() {
                 <label className="text-sm text-gray-400 block mb-1">Identificação (Nome do Mikrotik)</label>
                 <input
                   autoFocus
+                  onFocus={(e) => e.target.select()}
                   placeholder="Ex: RB-Torre-Centro"
                   className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
                   value={newPeerName}
