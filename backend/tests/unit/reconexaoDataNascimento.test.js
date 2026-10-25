@@ -37,7 +37,7 @@ function montarDb({ existing, dob = { total: 0, iguais: 0 }, saldo = false, senh
   });
 }
 
-function carregarCtrl(rel, db) {
+function carregarCtrl(rel, db, extrasMais = {}) {
   limparCache();
   return carregar(rel, {
     db,
@@ -45,6 +45,7 @@ function carregarCtrl(rel, db) {
       'src/utils/apInfo.js': { resolverApDoContexto: async () => ({ apMac: null, ssid: null }) },
       'src/services/whatsappNotify.js': { notificarLiberacao: async () => {} },
       'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({ tipo: 'mikrotik' }) },
+      ...extrasMais,
     },
   });
 }
@@ -225,6 +226,20 @@ test('cadastroCliente: data correta + saldo => auto-login com a senha real', asy
   assert.strictEqual(res.body.planoAtivo, true);
   assert.strictEqual(res.body.password, 'senhaReal9');
   assert.ok(houve(db, /UPDATE leads SET nome/), 'verificado pode atualizar contato');
+});
+
+test('cadastroCliente: auto-login com sessao aberta em outro aparelho => requer_desconexao (credenciais seguem na resposta)', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 1 }, saldo: true, senhaSalva: 'senhaReal9' });
+  let chamado = null;
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db, {
+    'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async (a) => { chamado = a; return { requer_desconexao: true, sessao_ativa: { desde: null, aparelho: '…64:F4' } }; } },
+  });
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.cadastroCliente(criarReq({ body: corpoCliente({ data_nascimento: '01/02/1990' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.body.planoAtivo, true);
+  assert.strictEqual(res.body.requer_desconexao, true);
+  assert.strictEqual(res.body.username, '52998224725');
+  assert.deepStrictEqual(chamado, { username: '52998224725', mac: 'AA:BB:CC:DD:EE:01', empresaId: 5 });
 });
 
 test('cadastroCliente: legado sem data, SEM acesso ativo => segue para planos sem credenciais nem PII do titular', async () => {

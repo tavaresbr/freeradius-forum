@@ -647,6 +647,8 @@ exports.cadastroCliente = async (req, res) => {
             existente: true, planoAtivo: true,
             gateway, username: cpfLimpo, password: saldo.password,
             tempoRestante: saldo.tempoRestante,
+            // Sessao aberta em outro aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+            ...(await tratarSessaoAtiva({ username: cpfLimpo, mac, empresaId })),
             gateway_info: await montarGatewayInfo({
               mikrotik_id: mkId, empresa_id: empresaId, mac, username: cpfLimpo,
             }),
