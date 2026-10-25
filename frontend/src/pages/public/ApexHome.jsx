@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
+import useBranding from "../../hooks/useBranding";
 import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle } from "lucide-react";
 
 const WHATSAPP = "5593991935695";
@@ -29,6 +30,7 @@ const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", curren
 const limite = (v) => (v == null ? "Ilimitados" : v);
 
 export default function ApexHome() {
+  const { nome } = useBranding();
   const [planos, setPlanos] = useState(PLANOS_FALLBACK);
   const { hash } = useLocation();
 
@@ -40,7 +42,7 @@ export default function ApexHome() {
   }, [hash]);
 
   useEffect(() => {
-    document.title = "Apex Telecom | Sistema de Wi-Fi Hotspot para provedores";
+    document.title = `${nome} | Sistema de Wi-Fi Hotspot para provedores`;
     let meta = document.querySelector('meta[name="description"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -48,7 +50,7 @@ export default function ApexHome() {
       document.head.appendChild(meta);
     }
     meta.content = "Sistema de Wi-Fi Hotspot com captive portal, pagamentos PIX/cartão e conformidade LGPD. Teste grátis por 7 dias.";
-  }, []);
+  }, [nome]);
 
   useEffect(() => {
     fetch("/api/assinatura/planos")
@@ -134,9 +136,9 @@ export default function ApexHome() {
       </section>
 
       <footer className="bg-blue-950 text-blue-200 py-8 px-4 text-center text-sm">
-        <p className="font-bold text-white">Apex Telecom</p>
+        <p className="font-bold text-white">{nome}</p>
         <p className="mt-1">Atendimento: <a href={`https://wa.me/${WHATSAPP}`} className="underline hover:text-white">{TELEFONE}</a> (WhatsApp) | <a href={`mailto:${EMAIL}`} className="underline hover:text-white">{EMAIL}</a></p>
-        <p className="mt-3 text-blue-400">&copy; {new Date().getFullYear()} Apex Telecom. Todos os direitos reservados.</p>
+        <p className="mt-3 text-blue-400">&copy; {new Date().getFullYear()} {nome}. Todos os direitos reservados.</p>
       </footer>
 
       <a href={`https://wa.me/${WHATSAPP}`} aria-label="WhatsApp" className="fixed bottom-5 right-5 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg">

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
+import IdentidadeSite from "../../components/admin/IdentidadeSite";
+import { useAuth } from "../../contexts/AuthContext";
 
 const acoes = [
   {
@@ -25,6 +27,7 @@ const acoes = [
 const PALAVRA_CONFIRMACAO = "LIMPAR";
 
 export default function Configuracoes() {
+  const { isSuperAdmin } = useAuth();
   const [modal, setModal] = useState(null);
   const [confirmacao, setConfirmacao] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,6 +66,8 @@ export default function Configuracoes() {
   return (
     <AdminLayout>
       <h1 className="text-2xl font-semibold mb-6">Configurações</h1>
+
+      {isSuperAdmin && <IdentidadeSite />}
 
       <div className="space-y-4">
         {acoes.map((acao) => (
