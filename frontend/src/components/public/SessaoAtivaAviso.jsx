@@ -7,9 +7,10 @@ import { mascaraData, dataNascimentoValida } from "../../utils/dataUtils";
  * "Desconectar o outro e conectar aqui" chama o servidor (exige CPF + data de nascimento
  * ja informados) e, em caso de sucesso, faz o login final com as credenciais ja recebidas.
  * Props: dados (resposta do login: sessao_ativa, gateway, username, password, gateway_info),
- * cpf, dataNascimento, mac, mikrotikId, onCancelar(). Sem dataNascimento (ex.: veio de outra pagina), pede a data aqui.
+ * cpf, dataNascimento, mac, mikrotikId, onCancelar(). Com modoSenha (tela de login usuario+senha) a prova e' a senha
+ * recebida no login (sem CPF/data). Sem dataNascimento (ex.: veio de outra pagina), pede a data aqui.
  */
-export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikrotikId, onCancelar }) {
+export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikrotikId, onCancelar, modoSenha = false }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
   const [dataInformada, setDataInformada] = useState("");
@@ -21,14 +22,16 @@ export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikr
   const aparelho = dados?.sessao_ativa?.aparelho;
 
   const confirmar = async () => {
-    if (!dataNascimentoValida(dataFinal)) { setErro("Informe sua data de nascimento (DD/MM/AAAA)."); return; }
+    if (!modoSenha && !dataNascimentoValida(dataFinal)) { setErro("Informe sua data de nascimento (DD/MM/AAAA)."); return; }
     setEnviando(true);
     setErro("");
     try {
       const res = await fetch("/api/sessao/desconectar-anterior", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cpf, data_nascimento: dataFinal, username: dados.username, mac, mikrotik_id: mikrotikId }),
+        body: JSON.stringify(modoSenha
+          ? { username: dados.username, password: dados.password, mac, mikrotik_id: mikrotikId }
+          : { cpf, data_nascimento: dataFinal, username: dados.username, mac, mikrotik_id: mikrotikId }),
       });
       const r = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(r.message || "Não foi possível desconectar o outro aparelho.");
@@ -46,7 +49,7 @@ export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikr
         Este acesso está em uso{aparelho ? ` no aparelho final ${aparelho}` : ""}{desde ? ` desde ${desde}` : ""}.
         Só é possível usar um aparelho por vez. Para conectar aqui, desconecte o outro.
       </p>
-      {!dataNascimento && (
+      {!modoSenha && !dataNascimento && (
         <div>
           <label className="block text-xs font-medium mb-1">Confirme sua data de nascimento</label>
           <input
