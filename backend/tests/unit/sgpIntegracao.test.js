@@ -80,10 +80,11 @@ test('buscarTodos pagina ate o fim e envia app/token/offset/limit', async () => 
   assert.strictEqual(todos[0].endereco_cidade, 'Santarém');
 });
 
-test('amostra: 3 registros com dados pessoais mascarados', async () => {
+test('amostra: consulta so 10 registros e mascara os dados pessoais', async () => {
   modo = 'ok';
   const a = await sgp.amostra(cfg());
-  assert.strictEqual(a.length, 3);
+  assert.strictEqual(a.length, 10);
+  assert.strictEqual(ultimoCorpo.limit, 10);
   const txt = JSON.stringify(a);
   for (const proibido of ['529.982.247-25', 'c0@exemplo.com', '99193-5695', 'Rua das Flores', '68000000', 'Cliente 0']) {
     assert.ok(!txt.includes(proibido), proibido);

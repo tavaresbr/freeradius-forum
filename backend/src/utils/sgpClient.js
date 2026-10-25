@@ -111,13 +111,13 @@ function extrairLista(corpo) {
 /** Erro com mensagem segura para o usuario (nunca inclui app/token). */
 class SgpError extends Error {}
 
-async function buscarPagina(cfg, offset) {
+async function buscarPagina(cfg, offset, limite = PAGINA) {
   const caminho = cfg.endpoint && cfg.endpoint.startsWith("/") ? cfg.endpoint : `/${cfg.endpoint || ENDPOINT_PADRAO}`;
   let resp;
   try {
     resp = await axios.post(
       `${cfg.url}${caminho}`,
-      { app: cfg.app, token: cfg.token, offset, limit: PAGINA },
+      { app: cfg.app, token: cfg.token, offset, limit: limite },
       { timeout: TIMEOUT_MS, validateStatus: () => true, maxRedirects: 0 }
     );
   } catch (err) {
@@ -181,10 +181,12 @@ function mascararValor(chave, valor) {
   return v.length > 40 ? `${v.slice(0, 40)}…` : v;
 }
 
-/** Ate 3 registros da 1a pagina com dados pessoais mascarados. */
+const TAM_AMOSTRA = 10;
+
+/** Ate 10 registros (consulta so 10 ao SGP, mais rapido que uma pagina inteira) com dados pessoais mascarados. */
 async function amostra(cfg) {
-  const { lista } = await buscarPagina(cfg, 0);
-  return lista.slice(0, 3).map((c) => {
+  const { lista } = await buscarPagina(cfg, 0, TAM_AMOSTRA);
+  return lista.slice(0, TAM_AMOSTRA).map((c) => {
     const plano = achatar(c);
     const out = {};
     for (const [k, v] of Object.entries(plano)) out[k] = mascararValor(k, v);
