@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
-import { mascaraData, dataNascimentoValida } from "../../utils/dataUtils";
+import { dataNascimentoValida } from "../../utils/dataUtils";
+import BuscaCpf from "../../components/public/BuscaCpf";
 
 export default function CadastroCliente() {
   const [searchParams] = useSearchParams();
@@ -20,6 +21,15 @@ export default function CadastroCliente() {
   const [cpfErro, setCpfErro] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [cfg, setCfg] = useState({});
+  // Passo 1: so CPF + data de nascimento; o restante aparece depois da busca do cadastro
+  const [mostrarResto, setMostrarResto] = useState(false);
+  // Dados de contato trazidos de um cadastro existente: se CPF ou data mudarem, somem (nao vazam para outro CPF)
+  const preenchidoAuto = useRef(false);
+  const limparPreenchido = () => {
+    if (!preenchidoAuto.current) return;
+    preenchidoAuto.current = false;
+    setForm((f) => ({ ...f, nome: "", email: "", telefone: "" }));
+  };
 
   useEffect(() => {
     if (empresaId) {
@@ -42,8 +52,6 @@ export default function CadastroCliente() {
       }
     }
 
-    if (name === "data_nascimento") val = mascaraData(val);
-
     if (name === "telefone") {
       val = val.replace(/\D/g, "").slice(0, 11);
       val = val.replace(/(\d{2})(\d)/, "($1) $2");
@@ -57,13 +65,14 @@ export default function CadastroCliente() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!mostrarResto) return; // Enter no passo 1 nao envia o cadastro
     setErro(null);
 
     if (!form.nome.trim()) { setErro("Informe seu nome"); return; }
     if (!form.email.trim()) { setErro("Informe seu email"); return; }
     if (!form.telefone.trim()) { setErro("Informe seu telefone"); return; }
     if (!validarCPF(form.cpf)) { setCpfErro("CPF inválido"); return; }
-    if (form.data_nascimento && !dataNascimentoValida(form.data_nascimento)) { setErro("Data de nascimento inválida"); return; }
+    if (!dataNascimentoValida(form.data_nascimento)) { setErro("Data de nascimento inválida"); return; }
     setCpfErro("");
 
     setEnviando(true);
@@ -143,19 +152,6 @@ export default function CadastroCliente() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <input type="text" name="nome" value={form.nome} onChange={handleChange} placeholder="Seu nome completo" required
-                  className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
-              </div>
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -171,12 +167,33 @@ export default function CadastroCliente() {
               {cpfErro && <p className="text-red-500 text-xs mt-1">{cpfErro}</p>}
             </div>
 
+            <BuscaCpf
+              cpf={form.cpf}
+              dataNascimento={form.data_nascimento}
+              onDataChange={(v) => setForm((f) => ({ ...f, data_nascimento: v }))}
+              mac={mac}
+              mikrotikId={mikrotikId}
+              onPreencher={({ nome, telefone, email }) => { preenchidoAuto.current = true; setForm((f) => ({
+                ...f, nome: nome || f.nome, telefone: telefone || f.telefone, email: email || f.email,
+              })); }}
+              onLiberarResto={() => setMostrarResto(true)}
+              onResetar={() => { setMostrarResto(false); limparPreenchido(); }}
+              ringClass="focus:ring-blue-500"
+            />
+
+            {mostrarResto && (<>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Data de nascimento</label>
-              <input type="text" inputMode="numeric" name="data_nascimento" value={form.data_nascimento} onChange={handleChange}
-                placeholder="DD/MM/AAAA" autoComplete="bday"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
-              <p className="text-gray-500 text-xs mt-1">Se você já se cadastrou antes, informe a mesma data para reconectar.</p>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <input type="text" name="nome" value={form.nome} onChange={handleChange} placeholder="Seu nome completo" required
+                  className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+              </div>
             </div>
 
             <div>
@@ -205,6 +222,9 @@ export default function CadastroCliente() {
               </div>
             </div>
 
+            </>)}
+
+            {mostrarResto && (
             <button type="submit" disabled={enviando}
               className={`w-full text-white py-3.5 rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 ${!btnStyle ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700' : 'hover:opacity-90'}`}
               style={btnStyle}>
@@ -213,6 +233,7 @@ export default function CadastroCliente() {
               </svg>
               <span>{enviando ? "Processando..." : "Continuar para os Planos"}</span>
             </button>
+            )}
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-200">
