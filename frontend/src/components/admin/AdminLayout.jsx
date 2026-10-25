@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import MarcaApex from "../public/MarcaApex";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
@@ -310,7 +311,9 @@ export default function AdminLayout({ children }) {
         {/* Logo Header */}
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center justify-between">
-            <img src={empresaLogo || '/logo-forum.jpg'} alt="Logo" className="h-12 max-w-[160px] object-contain" />
+            {empresaLogo
+              ? <img src={empresaLogo} alt="Logo" className="h-12 max-w-[160px] object-contain" />
+              : <MarcaApex className="text-lg" />}
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-2 rounded-lg hover:bg-gray-800 text-gray-400"
@@ -465,13 +468,6 @@ export default function AdminLayout({ children }) {
           </div>
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-800">
-          <div className="text-center text-xs text-gray-600">
-            Desenvolvido por<br/>
-            <span className="font-semibold text-gray-400">Forum Telecom</span>
-          </div>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -487,7 +483,9 @@ export default function AdminLayout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
             </button>
-            <img src="/logo-forum.jpg" alt="Logo" className="h-8" />
+            {empresaLogo
+              ? <img src={empresaLogo} alt="Logo" className="h-8" />
+              : <MarcaApex className="text-base" />}
             <div className="w-10" />
           </div>
         </header>

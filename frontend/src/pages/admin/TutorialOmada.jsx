@@ -7,6 +7,9 @@ import AdminLayout from "../../components/admin/AdminLayout";
  * Prints reais do controller em /public/tutorial-omada/.
  */
 
+// Dominio do proprio servidor (o tutorial vale para qualquer instalacao)
+const HOST = typeof window !== "undefined" ? window.location.host : "seu-servidor";
+
 function Print({ src, alt }) {
   return (
     <a href={src} target="_blank" rel="noreferrer" title="Clique para ampliar">
@@ -112,7 +115,7 @@ export default function TutorialOmada() {
               fica centralizado aqui — igual ao MikroTik.
             </p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>O cliente conecta no Wi-Fi e o Omada o redireciona para <code className="bg-gray-100 rounded px-1">https://glpi.forumtelecom.com.br/hotspot/redirect/&lt;ID&gt;</code>;</li>
+              <li>O cliente conecta no Wi-Fi e o Omada o redireciona para <code className="bg-gray-100 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>;</li>
               <li>O portal (lead, LGPD, planos ou login) abre no celular do cliente;</li>
               <li>Após o cadastro/pagamento, o sistema cria as credenciais no RADIUS e o navegador conclui a autenticação no controller automaticamente;</li>
               <li>O controller valida no RADIUS (porta 1812), inicia o accounting (porta 1813) e libera a navegação;</li>
@@ -154,7 +157,7 @@ export default function TutorialOmada() {
             <Aviso tipo="ok">
               Ao salvar, o sistema cria o cliente RADIUS (NAS) e reinicia o FreeRADIUS automaticamente.
               Anote o <strong>ID do equipamento</strong> exibido na lista — ele monta a URL do portal externo:{" "}
-              <code className="bg-green-100 rounded px-1">https://glpi.forumtelecom.com.br/hotspot/redirect/&lt;ID&gt;</code>
+              <code className="bg-green-100 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>
             </Aviso>
             <Aviso tipo="atencao">
               Se não souber o IP público do local, cadastre com o IP aproximado e corrija depois: na primeira
@@ -176,7 +179,7 @@ export default function TutorialOmada() {
               Vá em <strong>Network Config → Profile → RADIUS Profile → Create New RADIUS Profile</strong>:
             </p>
             <ul className="space-y-1 mt-2">
-              <Campo nome="Name" valor="Radius Hotspot Forum (ou outro nome)" />
+              <Campo nome="Name" valor="Radius Hotspot Apex (ou outro nome)" />
               <Campo nome="Authentication Server IP" valor="92.113.34.197" />
               <Campo nome="Authentication Port" valor="1812" />
               <Campo nome="Authentication Password" valor="o Secret RADIUS cadastrado no equipamento" />
@@ -212,7 +215,7 @@ export default function TutorialOmada() {
               <strong>Basic</strong>:
             </p>
             <ul className="space-y-1 mt-2">
-              <Campo nome="Portal Name" valor="Hotspot Forum Lead (ou outro nome)" />
+              <Campo nome="Portal Name" valor="Hotspot Apex Lead (ou outro nome)" />
               <Campo nome="SSID & Network" valor="selecione o SSID do passo 2" />
               <Campo nome="HTTPS Redirection" valor="Enable ✓" />
               <Campo nome="Landing Page" valor="Original URL" />
@@ -228,7 +231,7 @@ export default function TutorialOmada() {
               <Campo nome="Disconnect Requests" valor="Enable ✓ (porta 3799)" />
               <Campo nome="Authentication Mode" valor="PAP" />
               <Campo nome="Portal Customization" valor="External Web Portal" />
-              <Campo nome="URL" valor="https://glpi.forumtelecom.com.br/hotspot/redirect/<ID_DO_EQUIPAMENTO>" />
+              <Campo nome="URL" valor={`https://${HOST}/hotspot/redirect/<ID_DO_EQUIPAMENTO>`} />
             </ul>
             <Print src="/tutorial-omada/06-portal-auth-radius.jpg" alt="Portal - Authentication (RADIUS)" />
             <Print src="/tutorial-omada/07-portal-auth-external.jpg" alt="Portal - PAP e External Web Portal" />
@@ -247,7 +250,7 @@ export default function TutorialOmada() {
             </p>
             <ul className="space-y-1 mt-2">
               <Campo nome="IP Range" valor="92.113.34.197 / 32" />
-              <Campo nome="URL" valor="glpi.forumtelecom.com.br" />
+              <Campo nome="URL" valor={HOST} />
             </ul>
             <Print src="/tutorial-omada/08-access-control.jpg" alt="Pre-Authentication Access" />
             <Aviso tipo="atencao">
