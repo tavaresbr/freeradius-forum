@@ -4,6 +4,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const db = require('../../db');
 const { ssidDoPeer } = require('../utils/ssid');
+const { linhasWifi } = require('../utils/wifiScript');
 
 const WG_URL = `http://127.0.0.1:${process.env.WG_PANEL_PORT || '51821'}`;
 const WG_PASS = process.env.WG_PASS || '';
@@ -289,8 +290,7 @@ exports.getClientConfig = async (req, res) => {
       `/ip service set www disabled=yes`,
 
       `# --- Wi-Fi aberto, com clientes isolados entre si (o portal cativo controla o acesso) ---`,
-      `:do { /interface wireless set [find default-name=wlan1] mode=ap-bridge ssid="${SSID}" country=brazil frequency-mode=regulatory-domain default-forwarding=no disabled=no } on-error={ :put "Aviso: nao foi possivel configurar o Wi-Fi (wlan1)" }`,
-      `:do { /interface wireless set [find default-name=wlan1] band=2ghz-b/g/n } on-error={ }`,
+      ...linhasWifi(SSID),
 
       `# --- Falta so: senha do admin e o wizard de Hotspot no painel ---`,
       `:put "ATENCAO: defina a senha do admin com: /user set admin password=SUA_SENHA (use a mesma no cadastro do equipamento no painel)"`,
