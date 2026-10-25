@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
+import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 
 export default function LoginHotspot() {
   const [form, setForm] = useState({
@@ -14,6 +15,8 @@ export default function LoginHotspot() {
   const [enviando, setEnviando] = useState(false);
   const [mikrotikId, setMikrotikId] = useState("");
   const [cfg, setCfg] = useState({});
+  // Resposta do login quando o acesso ja esta conectado em outro aparelho (aguarda a decisao do cliente)
+  const [sessaoAtiva, setSessaoAtiva] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -55,6 +58,10 @@ export default function LoginHotspot() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro de autenticação");
+      if (data.requer_desconexao) {
+        setSessaoAtiva(data);
+        return;
+      }
       setMensagem("Autenticado! Conectando à internet...");
 
       if (data.gateway && data.username) {
@@ -107,6 +114,18 @@ export default function LoginHotspot() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {erro}
+            </div>
+          )}
+
+          {sessaoAtiva && (
+            <div className="mb-6">
+              <SessaoAtivaAviso
+                modoSenha
+                dados={sessaoAtiva}
+                mac={form.mac}
+                mikrotikId={mikrotikId}
+                onCancelar={() => setSessaoAtiva(null)}
+              />
             </div>
           )}
 

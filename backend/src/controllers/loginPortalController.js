@@ -3,6 +3,7 @@ const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const loginTentativas = require("../utils/loginTentativas");
 const { ehSenhaLegada } = require("../utils/radiusPassword");
 const { dispositivoJaUsouAcesso } = require("../utils/leadUtils");
+const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 
 // Mesma resposta para usuario inexistente e senha errada: nao deixa enumerar CPFs/telefones com acesso.
 const MSG_CREDENCIAIS = "Usuário ou senha inválidos";
@@ -89,7 +90,11 @@ exports.login = async (req, res) => {
 
     // password canonico do radcheck: o digitado pode estar formatado (CPF com
     // pontos/traco) e o MikroTik/RADIUS compara com o valor limpo do banco.
-    res.json({ message: "Autenticado com sucesso", gateway, username, password: user.value, gateway_info: gatewayInfo });
+    // Acesso ja aberto em OUTRO aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+    // (mesmo aparelho = sessao velha, derrubada sozinha).
+    const sessao = await tratarSessaoAtiva({ username, mac: req.body.mac, empresaId: mk.empresa_id });
+
+    res.json({ message: "Autenticado com sucesso", gateway, username, password: user.value, gateway_info: gatewayInfo, ...sessao });
 
   } catch (err) {
     console.error("Erro no login-portal:", err);

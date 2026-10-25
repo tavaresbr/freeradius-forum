@@ -4,19 +4,22 @@ const path = require('path');
 
 // ---- banco simulado ----
 const chamadas = [];
-const estado = { sessao: null, mikrotik: null, aberta: true, empresaMtk: 7, cpfConfirmado: true, planoDoAcesso: null, aparelhoJaUsou: false, pagouAgora: false };
+const estado = { senha: 'abc23456', usernameGravado: '52998224725', donoEmpresa: 7, sessao: null, mikrotik: null, aberta: true, empresaMtk: 7, cpfConfirmado: true, planoDoAcesso: null, aparelhoJaUsou: false, pagouAgora: false };
 const fakeDb = {
   query: async (sql, params) => {
     chamadas.push({ sql, params });
     if (/FROM radacct ra/.test(sql)) return [[estado.sessao].filter(Boolean)];
     if (/SELECT acctstoptime FROM radacct/.test(sql)) return [[{ acctstoptime: estado.aberta ? null : new Date() }]];
     if (/FROM mikrotiks WHERE ip/.test(sql)) return [[estado.mikrotik].filter(Boolean)];
+    if (/FROM radius_users WHERE username/.test(sql)) return [estado.donoEmpresa ? [{ empresa_id: estado.donoEmpresa }] : []];
     if (/FROM pagamentos/.test(sql)) return [estado.pagouAgora ? [{ 1: 1 }] : []];            // pagamento recente deste aparelho
     return [{ affectedRows: 1 }];
   },
   execute: async (sql, params) => {
     chamadas.push({ sql, params });
     if (/FROM mikrotiks WHERE id/.test(sql)) return [[{ empresa_id: estado.empresaMtk }].filter(() => estado.empresaMtk)];
+    if (/FROM radcheck WHERE username/.test(sql)) return [params[0] === estado.usernameGravado ? [{ value: estado.senha }] : []];
+    if (/FROM radius_users WHERE username/.test(sql)) return [estado.donoEmpresa ? [{ empresa_id: estado.donoEmpresa }] : []];
     if (/FROM pagamentos/.test(sql)) return [estado.cpfConfirmado ? [{ 1: 1 }] : []];          // CPF confirmado por pagamento
     if (/FROM radius_users ru JOIN planos/.test(sql)) return [[estado.planoDoAcesso ? { nome: estado.planoDoAcesso } : undefined].filter(Boolean)];
     if (/FROM radacct\s+WHERE username = \? AND LOWER/.test(sql)) return [estado.aparelhoJaUsou ? [{ 1: 1 }] : []];
@@ -59,7 +62,8 @@ const sessaoOutroAparelho = { radacctid: 11, acctsessionid: 'abc', nasipaddress:
 const reset = () => {
   chamadas.length = 0; estado.sessao = { ...sessaoOutroAparelho }; estado.mikrotik = { ip: '10.0.0.1', usuario: 'u', senha: 's', porta: 8728 };
   estado.aberta = true; estado.empresaMtk = 7; api.ativos = []; api.falhaConexao = false; api.removidos = []; confResp = 'ok'; leadResp = null;
-  estado.cpfConfirmado = true; estado.planoDoAcesso = null; estado.aparelhoJaUsou = false; estado.pagouAgora = false;
+  estado.cpfConfirmado = true; estado.planoDoAcesso = null; estado.aparelhoJaUsou = false; estado.pagouAgora = false; estado.senha = 'abc23456'; estado.usernameGravado = '52998224725'; estado.donoEmpresa = 7;
+  require('../../src/utils/loginTentativas')._resetar();
   coa.desconectarSessaoCoA = async () => ({ ok: true });
 };
 const resFalso = () => { const r = { statusCode: 200, corpo: null }; r.status = (c) => { r.statusCode = c; return r; }; r.json = (o) => { r.corpo = o; return r; }; return r; };
@@ -263,4 +267,61 @@ test('desconectarAnterior: sem pagamento recente, sem uso previo e acesso pago =
   const res = resFalso();
   await desconectarAnterior({ body: { cpf: CPF, data_nascimento: '01/02/1990', username: '52998224725', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3 }, ip: '1.1.1.1' }, res);
   assert.strictEqual(res.statusCode, 403);
+});
+
+// ---- modo usuario + senha (tela LoginHotspot) ----
+const corpoSenha = (extra = {}) => ({ body: { username: '529.982.247-25', password: 'abc23456', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3, ...extra }, ip: '1.1.1.1' });
+
+test('desconectarAnterior por senha: senha certa derruba a sessao anterior (sem CPF/data e sem tocar em credenciais)', async () => {
+  reset();
+  coa.desconectarSessaoCoA = async () => { fechaNoStop(); return { ok: true }; };
+  const res = resFalso();
+  await desconectarAnterior(corpoSenha(), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.corpo.desconectado, true);
+  assert.ok(!chamadas.some((c) => ESCRITA_RADIUS.test(c.sql)));
+});
+
+test('desconectarAnterior por senha: senha errada => 401 generico; usuario inexistente => mesma resposta; nada derrubado', async () => {
+  reset();
+  let chamou = false;
+  coa.desconectarSessaoCoA = async () => { chamou = true; return { ok: true }; };
+  const a = resFalso(); await desconectarAnterior(corpoSenha({ password: 'errada' }), a);
+  const b = resFalso(); await desconectarAnterior(corpoSenha({ username: '11122233396' }), b);
+  assert.strictEqual(a.statusCode, 401);
+  assert.strictEqual(b.statusCode, 401);
+  assert.deepStrictEqual(a.corpo, b.corpo);
+  assert.strictEqual(chamou, false);
+});
+
+test('desconectarAnterior por senha: 10 erros do mesmo IP => 429', async () => {
+  reset();
+  let ultimo;
+  for (let i = 0; i < 11; i++) { ultimo = resFalso(); await desconectarAnterior(corpoSenha({ password: `err${i}` }), ultimo); }
+  assert.strictEqual(ultimo.statusCode, 429);
+});
+
+test('desconectarAnterior por senha: senha legada (== username) so em aparelho que ja usou o acesso', async () => {
+  reset();
+  estado.senha = '52998224725'; estado.aparelhoJaUsou = false;
+  const a = resFalso(); await desconectarAnterior(corpoSenha({ password: '52998224725' }), a);
+  assert.strictEqual(a.statusCode, 401);
+  estado.aparelhoJaUsou = true;
+  coa.desconectarSessaoCoA = async () => { fechaNoStop(); return { ok: true }; };
+  const b = resFalso(); await desconectarAnterior(corpoSenha({ password: '52998224725' }), b);
+  assert.strictEqual(b.statusCode, 200);
+});
+
+test('desconectarAnterior por senha: acesso de OUTRA empresa => 401 (multi-tenant)', async () => {
+  reset();
+  estado.donoEmpresa = 99;
+  const res = resFalso(); await desconectarAnterior(corpoSenha(), res);
+  assert.strictEqual(res.statusCode, 401);
+});
+
+test('desconectarAnterior por senha: equipamento invalido => 400', async () => {
+  reset();
+  estado.empresaMtk = null;
+  const res = resFalso(); await desconectarAnterior(corpoSenha(), res);
+  assert.strictEqual(res.statusCode, 400);
 });
