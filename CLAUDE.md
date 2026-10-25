@@ -194,6 +194,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 031 | `031_assinaturas` | SaaS: `saas_planos`, `assinaturas` (1/empresa), `assinatura_cobrancas`, `plataforma_configs`; seeds: 3 planos exemplo + assinatura de cortesia (ativa, +1 ano) p/ empresas existentes |
 | 032 | `032_admin_empresas_backfill` | vincula em `admin_empresas` os admins sem vinculo (criados pela tela Usuarios antes da correcao); idempotente |
 | 033 | `033_perfis_usuario` | garante os perfis do sistema (Acesso Completo / Usuário Padrão) e promove a Administrador o primeiro admin de cada empresa sem grupo |
+| 034 | `034_planos_padrao_60min` | atualiza os planos gratis LGPD (5 min) e Lead (1 min) com 2/2 Mbps para 60 min, 100M down / 50M up; so toca quem ainda esta no padrao antigo (nao sobrescreve plano personalizado); idempotente |
 
 ---
 
