@@ -667,3 +667,35 @@ test('lgpdLogin: re-liberacao (titular nao provado) NAO autoriza a derrubada aut
   assert.ok(chamado, 'tratarSessaoAtiva foi chamada');
   assert.ok(!chamado.autorizado, 'sem autorizado: o MAC do corpo nao prova que e o titular');
 });
+
+// ---------- rotas publicas que alteravam cadastro existente sem segundo fator ----------
+test('capturaPassiva: CPF de cadastro existente NAO altera nome/e-mail/telefone/MAC (nem insere duplicata)', async () => {
+  const db = montarDb({ existing: EXISTING });
+  const ctrl = carregarCtrl('src/controllers/leadController.js', db);
+  const res = criarRes(); const un = silencia();
+  try {
+    await ctrl.capturaPassiva(criarReq({ body: { nome: 'Invasor', email: 'i@x.com', telefone: '11900001111', cpf: CPF, mac: 'AA:BB:CC:DD:EE:99', ip: '10.0.0.9', mikrotik_id: 3 }, ip: '7.7.7.7' }), res);
+  } finally { un(); }
+  assert.strictEqual(res.body.success, true, 'mesma resposta de cadastro novo (nao revela o CPF)');
+  assert.ok(!houve(db, /UPDATE leads SET/), 'nenhum UPDATE no cadastro existente');
+  assert.ok(!houve(db, /INSERT INTO leads/), 'sem duplicata');
+});
+
+test('lgpdCadastro: data divergente => 403 e o cadastro existente nao e alterado', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 1, iguais: 0 }, confirmado: true });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdCadastro(criarReq({ body: corpoLgpd({ data_nascimento: '01/01/1999' }), ip: '7.7.7.7' }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 403);
+  assert.ok(!houve(db, /UPDATE leads SET (nome|lgpd_aceite|email)/), 'nada alterado');
+});
+
+test('lgpdCadastro: CPF existente SEM data (legado, nao reivindicavel) so registra o aceite; contato intacto', async () => {
+  const db = montarDb({ existing: EXISTING, dob: { total: 0, iguais: 0 }, confirmado: true });
+  const ctrl = carregarCtrl('src/controllers/lgpdController.js', db);
+  const res = criarRes(); const un = silencia();
+  try { await ctrl.lgpdCadastro(criarReq({ body: corpoLgpd({}), ip: '7.7.7.7' }), res); } finally { un(); }
+  const upd = db.calls.find((c) => /UPDATE leads SET/.test(c.sql) && /lgpd_aceite/.test(c.sql));
+  assert.ok(upd, 'registrou o aceite');
+  assert.ok(!upd.params.includes('11999990000'), 'telefone de quem nao se provou nao entra');
+});

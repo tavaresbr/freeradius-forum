@@ -343,10 +343,17 @@ exports.lgpdCadastro = async (req, res) => {
         leadJaRegistrado = true;
         // Lead antigo sem data: so preenche se for o mesmo aparelho do cadastro anterior
         permitirDataEmExistente = mesmoDispositivo(existing, mac);
-        await atualizarLeadExistente(existing.id, empresaId, {
-          nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd,
-          ap_mac: apInfo.apMac, ssid: apInfo.ssid,
-        });
+        // Mesmo segundo fator do lgpdLogin: o CPF sozinho e' publico, entao sem a data correta (ou sem
+        // ser cadastro provisorio) o contato/MAC do cadastro existente nao e' trocado.
+        await gravarDataNascimento(cpfCheck, empresaId, data_nascimento, { permitirLeadExistente: permitirDataEmExistente });
+        const conf = await conferirDataNascimento(cpfCheck, empresaId, data_nascimento, { mac, ip: req.ip });
+        if (conf === "bloqueado") return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
+        if (conf === "divergente") {
+          return res.status(403).json({ message: "Data de nascimento não confere com o cadastro deste CPF.", requer_data_nascimento: true });
+        }
+        await atualizarLeadExistente(existing.id, empresaId, (conf === "ok" || conf === "reivindicado")
+          ? { nome, email, telefone, mac, ip, aceite: aceiteInt, termo: termoLgpd, ap_mac: apInfo.apMac, ssid: apInfo.ssid }
+          : { aceite: aceiteInt, termo: termoLgpd });
       }
     }
 
