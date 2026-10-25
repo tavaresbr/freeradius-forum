@@ -36,4 +36,9 @@ function cpfCompativel(pagador, cpf) {
   return true;
 }
 
-module.exports = { normalizarCpfPagador, extrairCpfPagador, cpfCompativel };
+// Marcador gravado em pagamentos.pagador_cpf quando o PIX foi aprovado mas o MP nao informou quem
+// pagou: nunca e' compativel com um CPF, entao o pagamento nao confirma a titularidade
+// (NULL = pagamento antigo, anterior a esta regra, segue contando).
+const PAGADOR_DESCONHECIDO = "DESCONHECIDO";
+
+module.exports = { normalizarCpfPagador, extrairCpfPagador, cpfCompativel, PAGADOR_DESCONHECIDO };
