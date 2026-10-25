@@ -408,6 +408,7 @@ exports.consultaCpf = async (req, res) => {
     console.log(`[consulta-cpf] empresa=${empresaId || "-"} resultado=${cadastro ? "achou" : "nao-achou"} ip=${req.ip}`);
 
     if (!cadastro) return res.json({ encontrado: false });
+    if (res.locals) res.locals.consultaEncontrada = true; // acertou a data: nao consome as travas por CPF/dispositivo
     if (confirmar === true) {
       return res.json({ encontrado: true, nome: cadastro.nome, telefone: cadastro.telefone || "", email: cadastro.email || "" });
     }

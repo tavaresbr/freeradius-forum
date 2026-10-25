@@ -73,6 +73,10 @@ const updateCheckLimiter = rateLimit({
 const macDoCorpo = (req) => String((req.body && req.body.mac) || '').toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 12);
 const cpfDoCorpo = (req) => String((req.body && req.body.cpf) || '').replace(/\D/g, '').slice(0, 11);
 const msgCpf = 'Muitas tentativas de busca. Tente novamente mais tarde.';
+// So as buscas que NAO acharam (palpites de data) consomem as travas por dispositivo e por CPF: quem
+// acerta a data ja tem o segundo fator, e assim o titular nao se tranca sozinho ao consultar/confirmar
+// (cada busca bem-sucedida usa 2 chamadas). O controller marca res.locals.consultaEncontrada.
+const buscaAchou = (req, res) => res.locals.consultaEncontrada === true;
 
 const cpfLookupPorDispositivo = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -80,6 +84,8 @@ const cpfLookupPorDispositivo = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${macDoCorpo(req)}`,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: buscaAchou,
   handler: jsonHandler(msgCpf),
 });
 
@@ -93,6 +99,8 @@ const cpfLookupPorCpf = rateLimit({
     const cpf = cpfDoCorpo(req);
     return cpf ? 'cpf:' + crypto.createHash('sha256').update(cpf).digest('hex') : ipKeyGenerator(req.ip);
   },
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: buscaAchou,
   handler: jsonHandler(msgCpf),
 });
 
