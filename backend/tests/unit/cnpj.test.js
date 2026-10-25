@@ -79,3 +79,31 @@ test('criarEmpresa e atualizarEmpresa recusam CNPJ invalido sem gravar', async (
     }
   } finally { restaura(); }
 });
+
+test('CNPJ duplicado: criar e editar (outra empresa) recusam com 409; a propria empresa pode salvar', async () => {
+  const mk = (duplicado) => criarDb(async (sql, params) => {
+    if (/FROM empresas\s+WHERE REPLACE/.test(sql)) return [duplicado(sql, params) ? [{ id: 5 }] : []];
+    if (/INSERT INTO empresas/.test(sql)) return [{ insertId: 9 }];
+    return undefined;
+  });
+  const corpo = { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK };
+
+  let db = mk(() => true);
+  let res = criarRes();
+  await ctrlEmpresa(db).criarEmpresa(criarReq({ body: corpo }), res);
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!db.calls.some((c) => /INSERT INTO empresas/.test(c.sql)));
+
+  db = mk(() => true);
+  res = criarRes();
+  await ctrlEmpresa(db).atualizarEmpresa(criarReq({ params: { id: 7 }, body: corpo }), res);
+  assert.strictEqual(res.statusCode, 409);
+  assert.ok(!db.calls.some((c) => /UPDATE empresas/.test(c.sql)));
+
+  // editando a propria empresa: a consulta exclui o proprio id (id <> ?) e nao acha outra
+  db = mk((sql, params) => /id <> \?/.test(sql) && params.includes(7) ? false : true);
+  res = criarRes();
+  await ctrlEmpresa(db).atualizarEmpresa(criarReq({ params: { id: 7 }, body: corpo }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.ok(db.calls.some((c) => /UPDATE empresas/.test(c.sql)));
+});

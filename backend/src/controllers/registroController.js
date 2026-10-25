@@ -5,7 +5,7 @@ const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil } = require("../utils/perfis");
 
-const { sanitizarEmpresa } = require("../utils/empresaCadastro");
+const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO } = require("../utils/empresaCadastro");
 function gerarSlug(nome) {
   return nome
     .toLowerCase()
@@ -28,6 +28,7 @@ exports.registrarEmpresa = async (req, res) => {
 
     const { dados: emp, erro } = sanitizarEmpresa(req.body);
     if (erro) return res.status(400).json({ message: erro });
+    if (await cnpjDuplicado(conn, emp.cnpj)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
 
     // Verificar se email já existe
     const [[existingAdmin]] = await conn.execute(

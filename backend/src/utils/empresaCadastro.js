@@ -35,4 +35,23 @@ function sanitizarEmpresa(body) {
   };
 }
 
-module.exports = { sanitizarEmpresa };
+const MSG_CNPJ_DUPLICADO = "Já existe uma empresa cadastrada com este CNPJ";
+
+/**
+ * Ja existe outra empresa com esse CNPJ? Compara so os digitos (cadastros antigos podem estar
+ * com mascara). `ignorarId` = empresa sendo editada.
+ * @param {{execute: Function}} conn - pool ou conexao
+ */
+async function cnpjDuplicado(conn, cnpj, ignorarId = null) {
+  if (!cnpj) return false;
+  const [rows] = await conn.execute(
+    `SELECT id FROM empresas
+      WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj, '.', ''), '/', ''), '-', ''), ' ', '') = ?
+        ${ignorarId ? "AND id <> ?" : ""}
+      LIMIT 1`,
+    ignorarId ? [cnpj, ignorarId] : [cnpj]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO };
