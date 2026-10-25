@@ -1,4 +1,5 @@
 const { RouterOSAPI } = require("node-routeros");
+const { HOTSPOT_PADROES } = require("../constants/hotspotDefaults");
 
 /**
  * Configura hotspot completo no MikroTik via API com streaming de steps.
@@ -186,6 +187,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         "=use-radius=yes",
         "=radius-accounting=yes",
         "=html-directory=hotspot",
+        `=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}`,
         ...(dnsName ? [`=dns-name=${dnsName}`] : []),
       ];
 
@@ -249,6 +251,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       const r = await safeWrite("/ip/hotspot/user/profile/set", [
         "=numbers=default",
         `=address-pool=${poolName}`,
+        `=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}`,
+        `=idle-timeout=${HOTSPOT_PADROES.idleTimeout}`,
       ]);
       if (r === "timeout") {
         // O set pode ter sido aplicado mesmo sem resposta: confere o valor no roteador.
@@ -281,6 +285,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         "=service=hotspot",
         "=authentication-port=1812",
         "=accounting-port=1813",
+        `=timeout=${HOTSPOT_PADROES.radiusTimeout}`,
       ];
 
       if (existing) {
@@ -482,4 +487,55 @@ async function dirPadraoPorArquivos(safePrint) {
   return "hotspot";
 }
 
-module.exports = { configurarHotspot, resolveHotspotHtmlDir };
+/**
+ * Aplica SO os padroes do hotspot (keepalive, interim-update, timeout RADIUS) em um equipamento
+ * ja configurado, sem refazer o resto. Usado por "Aplicar padroes em todos".
+ * @param {Object} mikrotik - linha de `mikrotiks`
+ * @param {Function} [criarConexao] - (opcoes) => conexao RouterOS (injetavel nos testes)
+ * @returns {Promise<{ok: boolean, mensagem: string}>}
+ */
+async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new RouterOSAPI(opcoes)) {
+  const conn = criarConexao({
+    host: mikrotik.ip,
+    user: mikrotik.usuario,
+    password: mikrotik.senha,
+    port: mikrotik.porta || 8728,
+    keepalive: false,
+    timeout: 8000,
+  });
+  const avisos = [];
+  try {
+    await conn.connect();
+
+    // Cada ajuste e' independente: um que falha nao impede os outros.
+    const aplicar = async (nome, fn) => {
+      try { await fn(); } catch (e) { if (e.errno !== "UNKNOWNREPLY") avisos.push(`${nome}: ${e.message}`); }
+    };
+
+    await aplicar("hotspot profile", () => conn.write("/ip/hotspot/profile/set", [
+      "=numbers=hsprof-hotspot",
+      `=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}`,
+    ]));
+    await aplicar("user profile", () => conn.write("/ip/hotspot/user/profile/set", [
+      "=numbers=default",
+      `=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}`,
+      `=idle-timeout=${HOTSPOT_PADROES.idleTimeout}`,
+    ]));
+    await aplicar("radius", async () => {
+      const lista = await conn.write("/radius/print").catch(() => []);
+      const cli = (Array.isArray(lista) ? lista : []).find((r) => r.service && String(r.service).includes("hotspot"));
+      if (!cli) throw new Error("cliente RADIUS do hotspot nao encontrado");
+      await conn.write("/radius/set", [`=.id=${cli[".id"]}`, `=timeout=${HOTSPOT_PADROES.radiusTimeout}`]);
+    });
+
+    return avisos.length
+      ? { ok: false, mensagem: avisos.join(" | ") }
+      : { ok: true, mensagem: "Padroes aplicados" };
+  } catch (e) {
+    return { ok: false, mensagem: `Falha ao conectar: ${e.message}` };
+  } finally {
+    try { await conn.close(); } catch { /* conexao ja caiu */ }
+  }
+}
+
+module.exports = { configurarHotspot, resolveHotspotHtmlDir, aplicarPadroesHotspot };

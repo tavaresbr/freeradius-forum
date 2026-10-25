@@ -1914,3 +1914,13 @@ Perfil = grupo de permissao (`grupos_permissao`, tabela GLOBAL sem `empresa_id`;
 ## Identidade do site (logo e nome da plataforma)
 
 Global (nao por empresa), editavel so pelo super admin em Configuracoes > "Identidade do site". Guardado em `plataforma_configs` chave `branding` (`{nome, logo_url}`; padrao "Apex Telecom" + logo SVG `LogoApex.jsx`). API: `GET /api/branding` (publica), `PUT /api/branding`, `POST/DELETE /api/branding/logo` (super_admin; JPG/PNG/WEBP 2 MB, SVG bloqueado; arquivos `site-*` em `uploads/logos`). Frontend: hook `useBranding` (cache em modulo) usado por `MarcaApex`, `Login`, `ApexHome`. Teste: `backend/tests/unit/branding.test.js`. O teste `registro publico: dono vira owner...` ja falhava na `main` antes desta mudanca.
+
+---
+
+## Padroes do hotspot (todo equipamento MikroTik)
+
+Constantes em `backend/src/constants/hotspotDefaults.js` (`HOTSPOT_PADROES`), aplicadas por `configurarHotspot` (assistente "Enviar hotspot": novos equipamentos e reenvio) e por `aplicarPadroesHotspot` (botao "Aplicar padroes em todos" na tela Equipamentos, `POST /api/mikrotiks/aplicar-padroes`, percorre os MikroTik da empresa; um offline nao impede os outros):
+- **user profile `default`: `keepalive-timeout=1h`, `idle-timeout=none`** — o padrao de fabrica (2 min) derrubava o cliente quando o celular apagava a tela (`Lost-Service` no radacct). Ressalva: aparelho que sai do alcance mantem a sessao aberta ate 1h, contando na franquia, e o `Simultaneous-Use=1` pode recusar outro aparelho nesse intervalo.
+- **hotspot profile `hsprof-hotspot`: `radius-interim-update=5m`** — com `received` o roteador so manda atualizacao se o servidor pedir; se o Accounting-Start se perder a sessao nao aparece em Sessoes Ativas. O FreeRADIUS cria a linha do radacct na primeira atualizacao.
+- **cliente RADIUS: `timeout=3s`** (era 1s100ms), mais tolerancia ao primeiro pacote pela VPN.
+Perfis de usuario customizados (grupos diferentes de `default`) nao sao alterados. Nao testado contra MikroTik real (so mocks). Teste: `backend/tests/unit/hotspotDefaults.test.js`.
