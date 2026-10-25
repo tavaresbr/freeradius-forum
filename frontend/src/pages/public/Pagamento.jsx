@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import { redirecionarHotspot, limparCpf } from "../../utils/hotspotRedirect";
+import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 
 export default function Pagamento() {
   const { id } = useParams();
@@ -41,6 +42,9 @@ export default function Pagamento() {
   // Shared state
   const [status, setStatus] = useState("idle");
   const [pagamentoAprovado, setPagamentoAprovado] = useState(false);
+  // Acesso pago ja aberto em outro aparelho: aguarda o cliente decidir antes do login final
+  const [sessaoAtiva, setSessaoAtiva] = useState(null);
+  const [sessaoCancelada, setSessaoCancelada] = useState(false);
 
   const mac = searchParams.get("mac");
   const ip = searchParams.get("ip");
@@ -184,6 +188,7 @@ export default function Pagamento() {
         const data = await res.json();
         if (data.status === "approved" && data.gateway && data.username) {
           setPagamentoAprovado(true);
+          if (data.requer_desconexao) { setSessaoAtiva(data); return; }
           // /status devolve a senha real (aleatoria, do radcheck); fallback p/ legado.
           redirecionarHotspot(data.gateway, data.username, data.password || data.username, 2000, data.gateway_info);
         }
@@ -309,6 +314,7 @@ export default function Pagamento() {
 
       if (data.status === "approved" && data.gateway && data.username) {
         setPagamentoAprovado(true);
+        if (data.requer_desconexao) { setSessaoAtiva(data); return; }
         redirecionarHotspot(data.gateway, data.username, data.password, 2000, data.gateway_info);
         return;
       }
@@ -328,6 +334,39 @@ export default function Pagamento() {
       setCartaoLoading(false);
     }
   };
+
+  if (pagamentoAprovado && sessaoAtiva) {
+    // Data de nascimento informada no cadastro (so na memoria desta aba); se faltar, o aviso pede.
+    let dataNasc = "";
+    try { dataNasc = sessionStorage.getItem(`hs_dn_${clienteId}`) || ""; } catch { /* sem storage */ }
+    return (
+      <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full space-y-4">
+          <div className="text-center">
+            <div className="text-5xl mb-2">&#10004;</div>
+            <h2 className="text-2xl font-bold text-green-700">Pagamento Aprovado!</h2>
+          </div>
+          {sessaoCancelada ? (
+            <div className="text-sm text-gray-700 space-y-3">
+              <p>Seu acesso está liberado, mas continua conectado no outro aparelho. Quando ele desconectar, você poderá conectar aqui.</p>
+              <button type="button" onClick={() => setSessaoCancelada(false)} className="px-4 py-2.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700">
+                Desconectar o outro e conectar aqui
+              </button>
+            </div>
+          ) : (
+            <SessaoAtivaAviso
+              dados={sessaoAtiva}
+              cpf={sessaoAtiva.username}
+              dataNascimento={dataNasc}
+              mac={mac}
+              mikrotikId={mikrotikId}
+              onCancelar={() => setSessaoCancelada(true)}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (pagamentoAprovado) {
     return (

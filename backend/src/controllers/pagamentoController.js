@@ -10,6 +10,7 @@ const { obterSenhaRadius } = require("../utils/radiusPassword");
 const { bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO } = require("../utils/leadUtils");
 const { extrairCpfPagador, cpfCompativel, PAGADOR_DESCONHECIDO } = require("../utils/pagadorCpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
+const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
 async function resolveEmpresaId(planoId) {
@@ -637,6 +638,8 @@ exports.gerarPagamentoCartao = async (req, res) => {
         password: senhaCartao || finalUsername,
         mp_pagamento_id: mpPagamentoId,
         gateway_info: gatewayInfo,
+        // Acesso pago ja aberto em OUTRO aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+        ...(await tratarSessaoAtiva({ username: finalUsername, mac, empresaId, manterMesmoAparelho: true })),
       });
     }
 
@@ -1097,6 +1100,10 @@ exports.verificarStatusPagamento = async (req, res) => {
       status, gateway, username: usernameResp,
       ...(status === "approved" && senhaResp ? { password: senhaResp } : {}),
       gateway_info: gatewayInfoStatus,
+      // Acesso pago ja aberto em OUTRO aparelho: o portal oferece "desconectar a anterior e conectar aqui"
+      ...(status === "approved" && senhaResp
+        ? await tratarSessaoAtiva({ username: usernameResp, mac, empresaId: pagEmpresaId, manterMesmoAparelho: true })
+        : {}),
     });
   } catch (error) {
     console.error("Erro ao verificar status:", error.message);

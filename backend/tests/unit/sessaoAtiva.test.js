@@ -4,13 +4,14 @@ const path = require('path');
 
 // ---- banco simulado ----
 const chamadas = [];
-const estado = { sessao: null, mikrotik: null, aberta: true, empresaMtk: 7, cpfConfirmado: true, planoDoAcesso: null, aparelhoJaUsou: false };
+const estado = { sessao: null, mikrotik: null, aberta: true, empresaMtk: 7, cpfConfirmado: true, planoDoAcesso: null, aparelhoJaUsou: false, pagouAgora: false };
 const fakeDb = {
   query: async (sql, params) => {
     chamadas.push({ sql, params });
     if (/FROM radacct ra/.test(sql)) return [[estado.sessao].filter(Boolean)];
     if (/SELECT acctstoptime FROM radacct/.test(sql)) return [[{ acctstoptime: estado.aberta ? null : new Date() }]];
     if (/FROM mikrotiks WHERE ip/.test(sql)) return [[estado.mikrotik].filter(Boolean)];
+    if (/FROM pagamentos/.test(sql)) return [estado.pagouAgora ? [{ 1: 1 }] : []];            // pagamento recente deste aparelho
     return [{ affectedRows: 1 }];
   },
   execute: async (sql, params) => {
@@ -58,7 +59,7 @@ const sessaoOutroAparelho = { radacctid: 11, acctsessionid: 'abc', nasipaddress:
 const reset = () => {
   chamadas.length = 0; estado.sessao = { ...sessaoOutroAparelho }; estado.mikrotik = { ip: '10.0.0.1', usuario: 'u', senha: 's', porta: 8728 };
   estado.aberta = true; estado.empresaMtk = 7; api.ativos = []; api.falhaConexao = false; api.removidos = []; confResp = 'ok'; leadResp = null;
-  estado.cpfConfirmado = true; estado.planoDoAcesso = null; estado.aparelhoJaUsou = false;
+  estado.cpfConfirmado = true; estado.planoDoAcesso = null; estado.aparelhoJaUsou = false; estado.pagouAgora = false;
   coa.desconectarSessaoCoA = async () => ({ ok: true });
 };
 const resFalso = () => { const r = { statusCode: 200, corpo: null }; r.status = (c) => { r.statusCode = c; return r; }; r.json = (o) => { r.corpo = o; return r; }; return r; };
@@ -217,4 +218,49 @@ test('endpoint: CPF sem pagamento mas aparelho que ja usou o acesso, ou acesso g
     const r = resFalso(); await desconectarAnterior({ body, ip: '1.1.1.1' }, r);
     assert.strictEqual(r.statusCode, 200, JSON.stringify(cenario));
   }
+});
+
+test('tratarSessaoAtiva: manterMesmoAparelho (pagamento) nao derruba a sessao do proprio aparelho', async () => {
+  reset();
+  let chamouDisconnect = false;
+  coa.desconectarSessaoCoA = async () => { chamouDisconnect = true; return { ok: true }; };
+  const r = await sessaoAtiva.tratarSessaoAtiva({ username: 'u', mac: '76:dc:82:a1:64:f4', empresaId: 7, manterMesmoAparelho: true });
+  assert.deepStrictEqual(r, {});
+  assert.strictEqual(chamouDisconnect, false);
+  // outro aparelho continua pedindo decisao
+  const r2 = await sessaoAtiva.tratarSessaoAtiva({ username: 'u', mac: 'AA:BB:CC:DD:EE:FF', empresaId: 7, manterMesmoAparelho: true });
+  assert.strictEqual(r2.requer_desconexao, true);
+});
+
+test('pagamentoRecenteDoAparelho: exige CPF e MAC validos e filtra empresa/CPF/MAC/janela no SQL', async () => {
+  reset();
+  assert.strictEqual(await sessaoAtiva.pagamentoRecenteDoAparelho({ cpf: '123', mac: 'AA:BB:CC:DD:EE:FF', empresaId: 7 }), false);
+  assert.strictEqual(await sessaoAtiva.pagamentoRecenteDoAparelho({ cpf: CPF, mac: '', empresaId: 7 }), false);
+  assert.strictEqual(chamadas.length, 0);
+  assert.strictEqual(await sessaoAtiva.pagamentoRecenteDoAparelho({ cpf: CPF, mac: 'AA:BB:CC:DD:EE:FF', empresaId: 7 }), false);
+  const q = chamadas.find((c) => /FROM pagamentos/.test(c.sql));
+  assert.match(q.sql, /status = 'approved'/);
+  assert.match(q.sql, /liberado_em > NOW\(\) - INTERVAL 30 MINUTE/);
+  assert.deepStrictEqual(q.params, [7, '52998224725', 'aabbccddeeff']);
+  estado.pagouAgora = true;
+  assert.strictEqual(await sessaoAtiva.pagamentoRecenteDoAparelho({ cpf: CPF, mac: 'AA:BB:CC:DD:EE:FF', empresaId: 7 }), true);
+});
+
+test('desconectarAnterior: quem acabou de pagar neste aparelho pode derrubar a sessao anterior (acesso pago, CPF nao confirmado)', async () => {
+  reset();
+  estado.cpfConfirmado = false; estado.aparelhoJaUsou = false; estado.planoDoAcesso = 'Plano Pago'; estado.pagouAgora = true;
+  coa.desconectarSessaoCoA = async () => { fechaNoStop(); return { ok: true }; };
+  const res = resFalso();
+  await desconectarAnterior({ body: { cpf: CPF, data_nascimento: '01/02/1990', username: '52998224725', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3 }, ip: '1.1.1.1' }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.corpo.desconectado, true);
+  assert.ok(!chamadas.some((c) => ESCRITA_RADIUS.test(c.sql)));
+});
+
+test('desconectarAnterior: sem pagamento recente, sem uso previo e acesso pago => 403', async () => {
+  reset();
+  estado.cpfConfirmado = false; estado.aparelhoJaUsou = false; estado.planoDoAcesso = 'Plano Pago'; estado.pagouAgora = false;
+  const res = resFalso();
+  await desconectarAnterior({ body: { cpf: CPF, data_nascimento: '01/02/1990', username: '52998224725', mac: 'AA:BB:CC:DD:EE:FF', mikrotik_id: 3 }, ip: '1.1.1.1' }, res);
+  assert.strictEqual(res.statusCode, 403);
 });
