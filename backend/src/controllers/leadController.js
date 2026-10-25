@@ -36,10 +36,11 @@ exports.capturaPassiva = async (req, res) => {
     if (cpf) {
       const existing = await verificarLeadExistente(cpf, empresaId);
       if (existing) {
+        // Rota publica e sem segundo fator: NUNCA altera um cadastro existente (nome/e-mail/telefone/MAC).
+        // Antes sobrescrevia o contato de qualquer CPF — inclusive de cliente pagante ou importado —
+        // so por digitar o CPF (grilagem + burla do MAC usado em bloqueiaPagamentoAlheio). A resposta
+        // e' a mesma de um cadastro novo, para nao revelar que o CPF ja existe.
         leadJaRegistrado = true;
-        await atualizarLeadExistente(existing.id, empresaId, {
-          nome, email, telefone, mac, ip, ap_mac: apInfo.apMac, ssid: apInfo.ssid,
-        });
       }
     }
 
