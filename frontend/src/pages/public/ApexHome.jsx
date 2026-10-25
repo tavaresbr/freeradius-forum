@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wifi, Zap, ShieldCheck, BarChart3, Check, Menu, X, MessageCircle } from "lucide-react";
 
-// Contatos de exemplo: trocar pelos reais.
-const WHATSAPP = "5500000000000";
+const WHATSAPP = "5593991935695";
+const TELEFONE = "(93) 99193-5695";
 
 // Fallback caso a API de planos esteja indisponivel (a fonte real e' /api/assinatura/planos).
 const PLANOS_FALLBACK = [
@@ -146,7 +146,7 @@ export default function ApexHome() {
 
       <footer className="bg-blue-950 text-blue-200 py-8 px-4 text-center text-sm">
         <p className="font-bold text-white">Apex Telecom</p>
-        <p className="mt-1">Atendimento: (00) 0000-0000 | contato@apextelecom.com.br</p>
+        <p className="mt-1">Atendimento: <a href={`https://wa.me/${WHATSAPP}`} className="underline hover:text-white">{TELEFONE}</a> (WhatsApp)</p>
         <p className="mt-3 text-blue-400">&copy; {new Date().getFullYear()} Apex Telecom. Todos os direitos reservados.</p>
       </footer>
 
