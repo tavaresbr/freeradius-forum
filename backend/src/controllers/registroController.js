@@ -5,6 +5,7 @@ const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil } = require("../utils/perfis");
 
+const { sanitizarEmpresa } = require("../utils/empresaCadastro");
 function gerarSlug(nome) {
   return nome
     .toLowerCase()
@@ -24,6 +25,9 @@ exports.registrarEmpresa = async (req, res) => {
     if (!nome || !email || !senha) {
       return res.status(400).json({ message: "Nome, email e senha são obrigatórios" });
     }
+
+    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    if (erro) return res.status(400).json({ message: erro });
 
     // Verificar se email já existe
     const [[existingAdmin]] = await conn.execute(
@@ -48,8 +52,9 @@ exports.registrarEmpresa = async (req, res) => {
 
     // Criar empresa
     const [empresaResult] = await conn.execute(
-      `INSERT INTO empresas (nome, slug, cnpj, email, telefone) VALUES (?, ?, ?, ?, ?)`,
-      [nome, slug, cnpj || null, email, telefone || null]
+      `INSERT INTO empresas (nome, slug, cnpj, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nome, slug, emp.cnpj, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
     );
     const empresaId = empresaResult.insertId;
 
@@ -107,7 +112,7 @@ exports.registrarEmpresa = async (req, res) => {
         id: empresaId,
         nome,
         slug,
-        cnpj: cnpj || null,
+        cnpj: emp.cnpj,
         email,
         telefone: telefone || null,
       },

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj } from "../../components/CamposEmpresa";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -9,7 +10,7 @@ export default function Empresas() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ nome: "", cnpj: "", email: "", telefone: "" });
+  const [form, setForm] = useState({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
 
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
@@ -42,7 +43,7 @@ export default function Empresas() {
       if (res.ok) {
         setShowModal(false);
         setEditId(null);
-        setForm({ nome: "", cnpj: "", email: "", telefone: "" });
+        setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
         fetchEmpresas();
       }
     } catch (err) {
@@ -52,7 +53,10 @@ export default function Empresas() {
 
   const handleEdit = (empresa) => {
     setEditId(empresa.id);
-    setForm({ nome: empresa.nome, cnpj: empresa.cnpj || "", email: empresa.email, telefone: empresa.telefone || "" });
+    setForm({
+      nome: empresa.nome, cnpj: mascaraCnpj(empresa.cnpj || ""), email: empresa.email, telefone: empresa.telefone || "",
+      ...Object.fromEntries(Object.keys(CAMPOS_EMPRESA_VAZIOS).map((k) => [k, empresa[k] || ""])),
+    });
     setShowModal(true);
   };
 
@@ -77,7 +81,7 @@ export default function Empresas() {
             <h1 className="text-2xl font-bold text-white">Gerenciar Empresas</h1>
           </div>
           <button
-            onClick={() => { setEditId(null); setForm({ nome: "", cnpj: "", email: "", telefone: "" }); setShowModal(true); }}
+            onClick={() => { setEditId(null); setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS }); setShowModal(true); }}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 text-sm"
           >
             Nova Empresa
@@ -127,12 +131,18 @@ export default function Empresas() {
         {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <form onSubmit={handleSubmit} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md">
+            <form onSubmit={handleSubmit} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg font-bold text-white mb-4">
                 {editId ? "Editar Empresa" : "Nova Empresa"}
               </h2>
 
               <div className="space-y-3">
+                <CamposEmpresa
+                  form={form}
+                  setForm={setForm}
+                  labelClass="block text-sm text-gray-400 mb-1"
+                  inputClass="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm"
+                />
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Nome</label>
                   <input
@@ -146,14 +156,6 @@ export default function Empresas() {
                   <input
                     type="email" required
                     value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">CNPJ</label>
-                  <input
-                    type="text"
-                    value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm"
                   />
                 </div>

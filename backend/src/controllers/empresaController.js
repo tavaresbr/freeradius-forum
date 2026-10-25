@@ -2,6 +2,7 @@ const db = require("../../db");
 const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil, perfilDoAdmin } = require("../utils/perfis");
+const { sanitizarEmpresa } = require("../utils/empresaCadastro");
 
 function gerarSlug(nome) {
   return nome
@@ -39,6 +40,9 @@ exports.criarEmpresa = async (req, res) => {
       return res.status(400).json({ message: "Nome e email são obrigatórios" });
     }
 
+    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    if (erro) return res.status(400).json({ message: erro });
+
     let slug = gerarSlug(nome);
 
     // Garantir slug único
@@ -48,8 +52,9 @@ exports.criarEmpresa = async (req, res) => {
     }
 
     const [result] = await db.execute(
-      `INSERT INTO empresas (nome, slug, cnpj, email, telefone) VALUES (?, ?, ?, ?, ?)`,
-      [nome, slug, cnpj || null, email, telefone || null]
+      `INSERT INTO empresas (nome, slug, cnpj, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nome, slug, emp.cnpj, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
     );
 
     const empresaId = result.insertId;
@@ -69,11 +74,16 @@ exports.criarEmpresa = async (req, res) => {
 exports.atualizarEmpresa = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, cnpj, email, telefone, logo_url, ativo } = req.body;
+    const { nome, email, logo_url, ativo } = req.body;
+    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    if (erro) return res.status(400).json({ message: erro });
 
     await db.execute(
-      `UPDATE empresas SET nome = ?, cnpj = ?, email = ?, telefone = ?, logo_url = ?, ativo = ? WHERE id = ?`,
-      [nome, cnpj || null, email, telefone || null, logo_url || null, ativo !== undefined ? ativo : 1, id]
+      `UPDATE empresas SET nome = ?, cnpj = ?, email = ?, telefone = ?, logo_url = ?, ativo = ?,
+         razao_social = ?, nome_fantasia = ?, cep = ?, logradouro = ?, numero = ?, complemento = ?, bairro = ?, cidade = ?, uf = ?
+       WHERE id = ?`,
+      [nome, emp.cnpj, email, emp.telefone, logo_url || null, ativo !== undefined ? ativo : 1,
+       emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf, id]
     );
 
     res.json({ message: "Empresa atualizada" });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import SiteHeader from "../../components/public/SiteHeader";
+import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS } from "../../components/CamposEmpresa";
 
 export default function Registro() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function Registro() {
     telefone: "",
     senha: "",
     confirmarSenha: "",
+    ...CAMPOS_EMPRESA_VAZIOS,
   });
   const [erro, setErro] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,7 @@ export default function Registro() {
           cnpj: form.cnpj,
           email: form.email,
           telefone: form.telefone,
+          ...Object.fromEntries(Object.keys(CAMPOS_EMPRESA_VAZIOS).map((k) => [k, form[k]])),
           senha: form.senha,
           plano_id: planoId || undefined,
         }),
@@ -84,6 +87,15 @@ export default function Registro() {
           <p className="text-red-400 text-sm mb-4 text-center">{erro}</p>
         )}
 
+        <div className="space-y-4 mb-4">
+          <CamposEmpresa
+            form={form}
+            setForm={setForm}
+            labelClass="block text-gray-400 mb-2 text-sm"
+            inputClass="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
         <div className="mb-4">
           <label className="block text-gray-400 mb-2 text-sm">
             Nome da Empresa
@@ -95,18 +107,6 @@ export default function Registro() {
             onChange={handleChange}
             className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
             required
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm">CNPJ</label>
-          <input
-            type="text"
-            name="cnpj"
-            value={form.cnpj}
-            onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-            placeholder="00.000.000/0000-00"
           />
         </div>
 
