@@ -23,6 +23,7 @@ process.on('uncaughtException', (err) => {
 // Middlewares
 const auth = require('./src/middleware/auth')
 const tenant = require('./src/middleware/tenant')
+const exigeAssinatura = require('./src/middleware/assinatura')
 
 // Rotas
 const authRoutes = require('./src/routes/authRoutes')
@@ -55,6 +56,7 @@ const empresaRoutes = require("./src/routes/empresaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
 const registroRoutes = require("./src/routes/registroRoutes");
 const siteRoutes = require("./src/routes/siteRoutes");
+const assinaturaRoutes = require("./src/routes/assinaturaRoutes");
 const grupoPermissaoRoutes = require("./src/routes/grupoPermissaoRoutes");
 const loginPortalRoutes = require("./src/routes/loginPortalRoutes");
 const systemBackupRoutes = require("./src/routes/systemBackupRoutes");
@@ -121,6 +123,9 @@ app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
 app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
 app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/assinatura/webhook", publicApiLimiter);
+app.use("/api/assinatura/planos", publicApiLimiter);
+app.use("/api/assinatura", assinaturaRoutes);     // SaaS: assinatura das empresas
 app.use("/api/site", siteRoutes);                // Site institucional (pedido de contratação)
 app.use("/api/registro", registroRoutes);       // Registro público de empresas
 
@@ -149,25 +154,25 @@ app.get('/api/leads/export', verifyDownloadToken, leadCtrlDl.exportarLeadsCSV);
 app.get('/api/lgpd/export', verifyDownloadToken, require('./src/controllers/lgpdController').exportarLgpdCSV);
 app.get('/api/portais/:id/preview', verifyDownloadToken, portalCtrlDl.previewPortal);
 
-app.use('/api/planos', auth, tenant, checkPermissao('planos'), planRoutes)
-app.use("/api/mikrotiks", auth, tenant, checkPermissao('mikrotiks'), mikrotikRoutes);
-app.use("/api/efi", auth, tenant, checkPermissao('configuracoes'), efiRoutes);
-app.use("/api/config-mercadopago", auth, tenant, checkPermissao('configuracoes'), mercadoPagoRoutes);
-app.use('/api/radius', auth, tenant, radiusRoutes);
-app.use("/api/dashboard", auth, tenant, checkPermissao('dashboard'), dashboardRoutes);
-app.use("/api/whatsapp", auth, tenant, checkPermissao('configuracoes'), whatsappRoutes);
-app.use("/api/limpeza", auth, tenant, checkPermissao('configuracoes'), limpezaRoutes);
-app.use("/api/radius-logs", auth, tenant, checkPermissao('sessoeslog'), radiusLogsRoutes);
-app.use("/api/admins", auth, tenant, checkPermissao('usuarios'), adminUserRoutes);
-app.use("/api/wireguard", auth, tenant, checkPermissao('vpn'), wireguardRoutes);
-app.use("/api/portais", auth, tenant, checkPermissao('portais'), portalRoutes);
-app.use("/api/campanhas", auth, tenant, checkPermissao('portais'), campanhasRoutes);
-app.use("/api/portal-templates", auth, tenant, checkPermissao('portais'), portalTemplateRoutes);
-app.use("/api/leads", auth, tenant, checkPermissao('leads'), leadRoutes);
-app.use("/api/clientes-import", auth, tenant, checkPermissao('leads'), importacaoRoutes);
-app.use("/api/integracoes", auth, tenant, checkPermissao('configuracoes'), integracaoRoutes);
-app.use("/api/compliance", auth, tenant, checkPermissao('compliance'), complianceRoutes);
-app.use("/api/empresa-config", auth, tenant, checkPermissao('configuracoes'), empresaConfigRoutes);
+app.use('/api/planos', auth, tenant, exigeAssinatura, checkPermissao('planos'), planRoutes)
+app.use("/api/mikrotiks", auth, tenant, exigeAssinatura, checkPermissao('mikrotiks'), mikrotikRoutes);
+app.use("/api/efi", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), efiRoutes);
+app.use("/api/config-mercadopago", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), mercadoPagoRoutes);
+app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
+app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
+app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), whatsappRoutes);
+app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
+app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);
+app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
+app.use("/api/wireguard", auth, tenant, exigeAssinatura, checkPermissao('vpn'), wireguardRoutes);
+app.use("/api/portais", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalRoutes);
+app.use("/api/campanhas", auth, tenant, exigeAssinatura, checkPermissao('portais'), campanhasRoutes);
+app.use("/api/portal-templates", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalTemplateRoutes);
+app.use("/api/leads", auth, tenant, exigeAssinatura, checkPermissao('leads'), leadRoutes);
+app.use("/api/clientes-import", auth, tenant, exigeAssinatura, checkPermissao('leads'), importacaoRoutes);
+app.use("/api/integracoes", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), integracaoRoutes);
+app.use("/api/compliance", auth, tenant, exigeAssinatura, checkPermissao('compliance'), complianceRoutes);
+app.use("/api/empresa-config", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), empresaConfigRoutes);
 
 // Rota pública: config visual do portal (sem auth)
 const portalCtrl = require("./src/controllers/portalController");
@@ -564,6 +569,12 @@ cron.schedule('*/5 * * * *', () => {
 // Polling de sessoes UniFi -> connection_logs (Marco Civil). O accounting RADIUS
 // do UniFi nao e' confiavel; sem este job, gateways UniFi ficam sem compliance e
 // o UnifiDriver calcula saldo errado. No-op barato quando nao ha gateway unifi.
+const verificaAssinaturas = require('./src/jobs/verificaAssinaturas');
+// Assinaturas SaaS: marca vencidas e avisa por WhatsApp (D-3 / vencimento)
+cron.schedule('0 * * * *', () => {
+  verificaAssinaturas().catch(err => console.error('[CRON] Erro verificaAssinaturas:', err));
+});
+
 const syncUnifiSessions = require('./src/jobs/syncUnifiSessions');
 cron.schedule('*/5 * * * *', () => {
   syncUnifiSessions().catch(err => console.error('[CRON] Erro syncUnifiSessions:', err));

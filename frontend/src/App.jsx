@@ -21,6 +21,8 @@ import Integracoes from "./pages/admin/Integracoes";
 import IntegracaoSgp from "./pages/admin/IntegracaoSgp";
 import Compliance from "./pages/admin/Compliance";
 import EmpresasAdmin from "./pages/admin/EmpresasAdmin";
+import Assinatura from "./pages/admin/Assinatura";
+import PlanosSaas from "./pages/admin/PlanosSaas";
 import GruposPermissao from "./pages/admin/GruposPermissao";
 import WhatsApp from "./pages/admin/WhatsApp";
 import Campanhas from "./pages/admin/Campanhas";
@@ -85,6 +87,8 @@ function App() {
       {/* Admin (protegidas com empresa slug) */}
       <Route path="/admin/:empresaSlug" element={<RotaPrivada><Dashboard /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/empresas" element={<RotaPrivada><EmpresasAdmin /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/assinatura" element={<RotaPrivada><Assinatura /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/planos-saas" element={<RotaPrivada><PlanosSaas /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/mikrotiks" element={<RotaPrivada><Mikrotiks /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vpn" element={<RotaPrivada><Wireguard /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-omada" element={<RotaPrivada><TutorialOmada /></RotaPrivada>} />

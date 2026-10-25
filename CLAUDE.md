@@ -190,6 +190,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 026 | `026_leads_data_nascimento` | `leads.data_nascimento` (DATE) |
 | 029 | `029_leads_cadastro_completo` | `leads`: tipo_pessoa, rg, cnpj, razao_social, endereco (cep..uf), `id_externo`, `sistema_origem`, `importado_em`; `origem` vira VARCHAR(30); indices `(empresa_id,cpf)` e `(empresa_id,sistema_origem,id_externo)`; `empresa_configs.config_type` ganha 'sgp' |
 | 030 | `030_pagamentos_pagador_cpf` | `pagamentos.pagador_cpf` VARCHAR(20) NULL (CPF de quem pagou; usado por `cpfConfirmado`) |
+| 031 | `031_assinaturas` | SaaS: `saas_planos`, `assinaturas` (1/empresa), `assinatura_cobrancas`, `plataforma_configs`; seeds: 3 planos exemplo + assinatura de cortesia (ativa, +1 ano) p/ empresas existentes |
 
 ---
 
@@ -1845,6 +1846,22 @@ Tela `Clientes` (`frontend/src/pages/admin/Leads.jsx`, rota `/admin/:slug/leads`
 ## Site institucional Apex Telecom (pagina inicial)
 
 - `/` agora e a landing page `frontend/src/pages/public/ApexHome.jsx` (planos de EXEMPLO na constante `PLANOS`, WhatsApp/contatos placeholders); o login admin passou para `/login`. Todo redirect de "nao autenticado" aponta para `/login`.
-- Pedido de contratacao: `POST /api/site/pedido` (`siteController.criarPedido`, limiter `sitePedidoLimiter` 10/h por IP, honeypot `website`). Grava em `leads` com `origem='site'`, endereco (migration 029), `lgpd_termo` via `resolverTextoLgpd` e plano em `observacoes`.
+- (Legado) Pedido de contratacao: `POST /api/site/pedido` (`siteController.criarPedido`, limiter `sitePedidoLimiter` 10/h por IP, honeypot `website`). Grava em `leads` com `origem='site'`, endereco (migration 029), `lgpd_termo` via `resolverTextoLgpd` e plano em `observacoes`.
 - `empresa_id` vem de `SITE_EMPRESA_ID` no `.env` (default 1), NUNCA do body. CPF ja existente so recebe nova linha em `observacoes` (nao sobrescreve cadastro de hotspot).
 - Teste: `backend/tests/unit/siteController.test.js`.
+
+
+---
+
+## SaaS: assinatura por empresa
+
+Planos do SaaS (`saas_planos`) sao os de USO DO SISTEMA — nao confundir com `planos` (hotspot). Toda empresa tem 1 linha em `assinaturas` (`trial` 7 dias na criacao via `/api/registro` ou `criarEmpresa`; `ativa` apos pagar; `vencida`; `cancelada`).
+
+- **Bloqueio:** `middleware/assinatura.js` (`exigeAssinatura`, depois de `tenant`) responde **402** `{code:'ASSINATURA_VENCIDA'}` so no painel admin, quando vencida ALEM da carencia (`carencia_dias`, default 3). `super_admin` nunca e' bloqueado. Rotas publicas do captive portal, login, `/api/assinatura/*` e o webhook de hotspot ficam fora; o Wi-Fi dos clientes finais continua (quem decide e' o FreeRADIUS). Novas rotas admin em `server.js` TEM que incluir `exigeAssinatura`. Erro de infra/tabela ausente nao derruba o painel.
+- **Estado:** `utils/assinatura.js` (`calcularEstado` puro, `obterStatus` com cache de 60s, `criarTrial`, `checarLimite`). Frontend: `AdminLayout` busca `/api/assinatura/status`, mostra banner e redireciona para `/admin/:slug/assinatura` quando bloqueada.
+- **Limites por plano** (`max_equipamentos`, `max_admins`, NULL = ilimitado): checados em `POST /api/mikrotiks` e `adminController.criarAdmin` (403).
+- **Cobranca (PIX Mercado Pago da PLATAFORMA):** credenciais em `plataforma_configs` (tela `/admin/:slug/planos-saas`, super admin). `POST /api/assinatura/cobranca` cria `assinatura_cobrancas` + pagamento MP com `external_reference=ass_{id}_emp_{empresa}` e `notification_url=/api/assinatura/webhook`. O webhook NAO confia no corpo: busca o pagamento no MP, confere referencia e valor, e so a transicao `aguardando->aprovada` estende `vence_em` (idempotente). O polling do front (`GET /cobranca/:id`) tambem confirma no MP se o webhook se perder. Nao reutilizar `/api/pagamentos/notificacao`. Cartao nao implementado (so PIX).
+- **Super admin:** `Empresas` mostra status/vencimento e botao "Assinatura" (plano, status, estender dias); `/admin/:slug/planos-saas` = CRUD de planos + config MP.
+- **Job** `src/jobs/verificaAssinaturas.js` (cron horario): marca vencidas e avisa por WhatsApp (D-3 e vencimento) usando a instancia da empresa `SITE_EMPRESA_ID`.
+- Landing `/` lista os planos de `GET /api/assinatura/planos` e leva a `/registro?plano=<id>`.
+- Testes: `backend/tests/unit/assinatura.test.js`. Nao testado contra MySQL nem MP reais.

@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function Registro() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const [searchParams] = useSearchParams();
+  const planoId = searchParams.get("plano");
   const [form, setForm] = useState({
     nome: "",
     cnpj: "",
@@ -46,6 +48,7 @@ export default function Registro() {
           email: form.email,
           telefone: form.telefone,
           senha: form.senha,
+          plano_id: planoId || undefined,
         }),
       });
 
@@ -73,6 +76,7 @@ export default function Registro() {
         <h2 className="text-2xl font-bold mb-6 text-center text-white">
           Cadastre sua Empresa
         </h2>
+        <p className="text-sm text-center text-gray-400 -mt-4 mb-6">Teste grátis por 7 dias, sem cartão.</p>
 
         {erro && (
           <p className="text-red-400 text-sm mb-4 text-center">{erro}</p>
