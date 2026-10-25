@@ -538,8 +538,16 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
   });
 
   const sendEvent = (data) => {
+    if (res.writableEnded || res.destroyed) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+
+  // Heartbeat: passos lentos (download do login.html) ficam minutos sem enviar
+  // nada e o proxy fecha a conexao ociosa ("network error" no navegador).
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+  }, 10000);
+  res.on("close", () => clearInterval(heartbeat));
 
   try {
     const [[mikrotik]] = await db.execute(
@@ -547,6 +555,7 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
       [id, req.empresa_id]
     );
     if (!mikrotik) {
+      clearInterval(heartbeat);
       sendEvent({ type: "error", message: "Mikrotik não encontrado" });
       res.end();
       return;
@@ -597,6 +606,7 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
     sendEvent({ type: "error", message: "Erro interno: " + err.message });
   }
 
+  clearInterval(heartbeat);
   res.end();
 });
 
