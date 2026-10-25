@@ -11,7 +11,8 @@ const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", curren
 const limite = (v) => (v == null ? "ilimitado" : v);
 
 export default function Assinatura() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
+  const podePagar = isSuperAdmin || user?.role === "owner"; // mesma regra do backend (authorize owner/super_admin)
   const [st, setSt] = useState(null);
   const [planos, setPlanos] = useState([]);
   const [cobranca, setCobranca] = useState(null);
@@ -94,7 +95,7 @@ export default function Assinatura() {
         }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.message || "Pagamento recusado.");
+      if (!res.ok) throw new Error(d.message || d.error || "Pagamento recusado.");
       setCartao({ numero: "", nome: "", validade: "", cvv: "", cpf: "" });
       if (d.status === "approved") {
         setCobranca({ pago: true, plano: escolhido.nome });
@@ -117,7 +118,7 @@ export default function Assinatura() {
     try {
       const res = await fetch("/api/assinatura/cobranca", { method: "POST", headers, body: JSON.stringify({ plano_id: plano.id }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erro ao gerar cobrança");
+      if (!res.ok) throw new Error(data.message || data.error || "Erro ao gerar cobrança");
       setCobranca({ ...data, plano: plano.nome });
       aguardarConfirmacao(data.id);
     } catch (e) {
@@ -141,6 +142,7 @@ export default function Assinatura() {
           <p className="text-sm text-gray-400 mt-1">Plano de uso do sistema desta empresa.</p>
         </div>
 
+        {!podePagar && <p className="text-sm text-yellow-400 bg-yellow-900/20 p-3 rounded-lg">Somente o proprietário (owner) da conta pode pagar ou renovar a assinatura. Peça a ele ou ao suporte.</p>}
         {isSuperAdmin && <p className="text-sm text-yellow-400 bg-yellow-900/20 p-3 rounded-lg">Super admin: o status abaixo é só informativo; você nunca é bloqueado.</p>}
 
         {st?.bloqueada && (
@@ -229,7 +231,7 @@ export default function Assinatura() {
                   <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
                   <li>✓ {limite(p.max_admins)} administradores</li>
                 </ul>
-                <button onClick={() => { setEscolhido(p); setMetodo("pix"); setErro(""); }} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg text-sm font-medium">
+                <button disabled={!podePagar} onClick={() => { setEscolhido(p); setMetodo("pix"); setErro(""); }} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium">
                   {p.id === st?.plano_id && st?.status === "ativa" ? "Renovar" : "Assinar"}
                 </button>
               </div>
