@@ -183,7 +183,23 @@ const listarSessoesAtivas = async (req, res) => {
         ra.acctstarttime,
         ra.acctsessiontime AS segundos,
         ra.acctinputoctets AS bytes_entrada,
-        ra.acctoutputoctets AS bytes_saida
+        ra.acctoutputoctets AS bytes_saida,
+        -- Tempo que falta para encerrar: Max-All-Session menos o usado desde a ultima liberacao
+        -- (mesma conta do sqlcounter 'totalcounter'). NULL = sem limite gravado.
+        (SELECT GREATEST(CAST(rc.value AS SIGNED) - (
+            SELECT COALESCE(SUM(IF(r2.acctstoptime IS NULL,
+                     UNIX_TIMESTAMP() - UNIX_TIMESTAMP(r2.acctstarttime), r2.acctsessiontime)), 0)
+              FROM radacct r2
+             WHERE r2.username COLLATE utf8mb4_unicode_ci = ra.username COLLATE utf8mb4_unicode_ci
+               AND r2.acctstarttime >= COALESCE(
+                     (SELECT MAX(ru2.liberado_em) FROM radius_users ru2
+                       WHERE ru2.username COLLATE utf8mb4_unicode_ci = ra.username COLLATE utf8mb4_unicode_ci),
+                     '1970-01-01 00:00:00')
+          ), 0)
+           FROM radcheck rc
+          WHERE rc.username COLLATE utf8mb4_unicode_ci = ra.username COLLATE utf8mb4_unicode_ci
+            AND rc.attribute = 'Max-All-Session'
+          LIMIT 1) AS restante_segundos
       FROM radacct ra
       -- Resolucao vendor-neutra da empresa: MikroTik casa pelo IP do NAS
       -- (nasipaddress = mikrotiks.ip); Omada/UniFi reportam o IP LAN do

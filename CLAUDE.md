@@ -559,7 +559,7 @@ WHERE ra.acctstoptime IS NULL
   AND COALESCE(m.empresa_id, ru.empresa_id) = ?
 ORDER BY ra.acctstarttime DESC
 ```
-(Fonte: `radiusController.listarSessoesAtivas`; os JOINs usam `COLLATE utf8mb4_unicode_ci`. CPF vem de `leads`, nao de `lgpd_logins`.)
+A resposta tambem traz `restante_segundos` (Max-All-Session do radcheck menos o usado desde `liberado_em`, mesma conta do sqlcounter; NULL = sem limite); a tela `Sessoes.jsx` mostra "Tempo restante" com contagem regressiva e recarrega a cada 30 s. Nao testado contra MySQL real. (Fonte: `radiusController.listarSessoesAtivas`; os JOINs usam `COLLATE utf8mb4_unicode_ci`. CPF vem de `leads`, nao de `lgpd_logins`.)
 
 ### Logs de Accounting (radacct)
 

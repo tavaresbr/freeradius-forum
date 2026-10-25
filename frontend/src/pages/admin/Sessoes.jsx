@@ -24,9 +24,29 @@ export default function Sessoes() {
     }
   };
 
+  const [agora, setAgora] = useState(Date.now());
+  const [carregadoEm, setCarregadoEm] = useState(Date.now());
+
   useEffect(() => {
-    carregarSessoes();
+    carregarSessoes().then(() => setCarregadoEm(Date.now()));
+    const recarrega = setInterval(async () => {
+      await carregarSessoes();
+      setCarregadoEm(Date.now());
+    }, 30000);
+    const relogio = setInterval(() => setAgora(Date.now()), 1000);
+    return () => { clearInterval(recarrega); clearInterval(relogio); };
   }, []);
+
+  // Contagem regressiva a partir do valor do servidor (restante_segundos) no momento do carregamento
+  const formatarRestante = (s) => {
+    if (s.restante_segundos == null) return "Sem limite";
+    const seg = Math.max(0, Number(s.restante_segundos) - Math.floor((agora - carregadoEm) / 1000));
+    if (seg === 0) return "Encerrando...";
+    const h = Math.floor(seg / 3600);
+    const m = Math.floor((seg % 3600) / 60);
+    const ss = seg % 60;
+    return h > 0 ? `${h}h ${String(m).padStart(2, "0")}min` : `${m}min ${String(ss).padStart(2, "0")}s`;
+  };
 
   return (
     <AdminLayout>
@@ -42,6 +62,7 @@ export default function Sessoes() {
                 <th className="p-3 text-left">IP</th>
                 <th className="p-3 text-left">NAS (Mikrotik)</th>
                 <th className="p-3 text-left">Início da Sessão</th>
+                <th className="p-3 text-left">Tempo restante</th>
               </tr>
             </thead>
             <tbody>
@@ -53,11 +74,12 @@ export default function Sessoes() {
                   <td className="p-3">{s.ip || "-"}</td>
                   <td className="p-3">{s.gateway || "-"}</td>
                   <td className="p-3">{new Date(s.acctstarttime).toLocaleString("pt-BR")}</td>
+                  <td className="p-3 font-medium">{formatarRestante(s)}</td>
                 </tr>
               ))}
               {sessoes.length === 0 && !loading && (
                 <tr>
-                  <td colSpan="6" className="p-3 text-center text-gray-500">
+                  <td colSpan="7" className="p-3 text-center text-gray-500">
                     Nenhuma sessão ativa no momento.
                   </td>
                 </tr>
