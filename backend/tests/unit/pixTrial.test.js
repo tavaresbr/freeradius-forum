@@ -10,12 +10,12 @@ const silencia = () => { const l = console.log, w = console.warn, e = console.er
 const PAG = { id: 4, mac: 'aa:bb:cc:dd:ee:ff', ip: '10.0.0.5', cpf: '529.982.247-25', cliente_id: 77, portal_id: 2, plano_id: 9, empresa_id: 5, status: 'aguardando', trial_liberado_em: null,
   mikrotik_id: 3, plano_nome: 'Plano 1h', portal_config: JSON.stringify({ pix_trial_enabled: true, pix_trial_duracao_minutos: 5 }) };
 
-function montar({ sessaoResp = {} } = {}) {
+function montar({ sessaoResp = {}, pagExtra = {} } = {}) {
   const estado = { acesso: 0, tratar: [] };
   const db = criarDb(async (sql, p) => {
     if (/FROM pagamentos p LEFT JOIN planos/.test(sql)) {
       // so devolve o registro se a prova de posse bater (id + mp_pagamento_id + mac)
-      return [[(p[0] === 4 && p[1] === '999' && String(p[2]).toLowerCase() === PAG.mac) ? PAG : undefined]];
+      return [[(p[0] === 4 && p[1] === '999' && String(p[2]).toLowerCase() === PAG.mac) ? { ...PAG, ...pagExtra } : undefined]];
     }
     if (/trial_liberado_em IS NOT NULL/.test(sql)) return [[]];
     return undefined;
@@ -72,4 +72,33 @@ test('pix-trial: CPF conectado em OUTRO aparelho => requer_desconexao, sem tocar
   assert.ok(!res.body.password, 'nenhuma senha antes de o titular decidir');
   assert.strictEqual(estado.acesso, 0);
   assert.ok(!gravouTrial(db));
+});
+
+test('pix-trial: 1 vez por pagamento — trial_liberado_em preenchido => 409 ja_liberado e o RADIUS NAO e tocado', async () => {
+  const { mod, db, estado } = montar({ pagExtra: { trial_liberado_em: new Date() } });
+  const res = await chamar(mod, BOM);
+  assert.strictEqual(res.statusCode, 409);
+  assert.strictEqual(res.body.ja_liberado, true);
+  assert.strictEqual(estado.acesso, 0);
+  assert.ok(!gravouTrial(db));
+});
+
+test('pix-trial: pagamento ja aprovado ou expirado => 409 sem tocar no RADIUS', async () => {
+  for (const status of ['approved', 'expirado']) {
+    const { mod, estado } = montar({ pagExtra: { status } });
+    const res = await chamar(mod, BOM);
+    assert.strictEqual(res.statusCode, 409);
+    assert.ok(!res.body.ja_liberado);
+    assert.strictEqual(estado.acesso, 0);
+  }
+});
+
+test('pix-trial: a 2a chamada do MESMO pagamento (depois de liberado) nao regrava credenciais', async () => {
+  const { mod, estado } = montar();
+  assert.strictEqual((await chamar(mod, BOM)).statusCode, 200);
+  assert.strictEqual(estado.acesso, 1);
+  // o banco real passaria a ter trial_liberado_em; simulado com um 2o modulo ja marcado
+  const { mod: mod2, estado: estado2 } = montar({ pagExtra: { trial_liberado_em: new Date() } });
+  assert.strictEqual((await chamar(mod2, BOM)).statusCode, 409);
+  assert.strictEqual(estado2.acesso, 0);
 });

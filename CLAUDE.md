@@ -1443,6 +1443,11 @@ Config do portal (em `portais.configuracoes` JSON):
 - `frontend/src/pages/admin/PortalEditor.jsx` - sub-secao "Acesso gratis ao copiar PIX"
 - `frontend/src/pages/public/Pagamento.jsx` - info box + handler do trial
 
+### Gatilho e limite (atual)
+
+- **Gatilho:** o trial dispara SOZINHO assim que o PIX e' gerado (`Pagamento.jsx`, `autoTrialTentado`); o botao "Copiar codigo Pix" e' so plano B. O login final e' uma navegacao, entao o front manda `voltarPara` (`redirecionarHotspot(..., { voltarPara })` -> `&dst=` no MikroTik) e guarda o PIX em `sessionStorage` (`hs_pix_<planoId>_<clienteId>`): ao voltar para a pagina ela RETOMA o mesmo PIX (nao chama `/gerar` de novo) e nao repete o trial. Outros vendors voltam pelo `redirect_url`; se voltarem sem a retomada gera-se outro PIX (o limite abaixo segura abuso). `dst`/volta nao testados em MikroTik real.
+- **1 vez por pagamento:** `liberarPixTrial` responde 409 `{ ja_liberado:true }` se `pagamentos.trial_liberado_em` ja esta preenchido (sem tocar no RADIUS) e 409 se o pagamento ja esta `approved`/`expirado`. Alem disso vale o maximo de 2 trials por CPF em 24h.
+
 ### Prova de posse (obrigatoria)
 
 `POST /api/pagamentos/pix-trial` exige `{ pagamento_id, mp_pagamento_id, mac }` do MESMO registro (como o `/status`): o `pagamento_id` e' sequencial, e so ele permitia a qualquer um trocar a senha do CPF de outro pagamento e receber CPF + senha. Divergencia = 404; campo faltando = 400.
