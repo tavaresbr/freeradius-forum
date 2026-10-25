@@ -597,3 +597,23 @@ test('podeReceberCredenciais: CPF confirmado basta (nem consulta o radacct); sen
   const m2 = carregar('src/utils/leadUtils.js', { db: db2 });
   assert.strictEqual(await m2.podeReceberCredenciais({ cpf: CPF, username: '52998224725', mac: 'aa:bb:cc:dd:ee:01', empresaId: 5 }), false);
 });
+
+// ---------- CPF invalido (digitos verificadores) barrado no servidor em todo cadastro publico ----------
+test('cadastros publicos: CPF com digito verificador errado => 400 e nada gravado', async () => {
+  const CPF_RUIM = '529.982.247-26';
+  const casos = [
+    ['src/controllers/lgpdController.js', 'lgpdLogin', { cpf: CPF_RUIM, aceite: true, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3 }],
+    ['src/controllers/lgpdController.js', 'lgpdCadastro', { cpf: CPF_RUIM, aceite: true, mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3 }],
+    ['src/controllers/leadController.js', 'leadLogin', { cpf: CPF_RUIM, telefone: '11999990000', mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3 }],
+    ['src/controllers/leadController.js', 'capturaPassiva', { cpf: CPF_RUIM, telefone: '11999990000', mac: 'AA:BB:CC:DD:EE:01', ip: '10.0.0.5', mikrotik_id: 3 }],
+    ['src/controllers/leadController.js', 'cadastroCliente', corpoCliente({ cpf: CPF_RUIM })],
+  ];
+  for (const [arq, fn, body] of casos) {
+    const db = montarDb();
+    const ctrl = carregarCtrl(arq, db);
+    const res = criarRes(); const un = silencia();
+    try { await ctrl[fn](criarReq({ body, ip: '7.7.7.7' }), res); } finally { un(); }
+    assert.strictEqual(res.statusCode, 400, `${fn} deve recusar`);
+    assert.ok(!houve(db, /INSERT INTO (leads|radcheck)|UPDATE leads/), `${fn} nao grava nada`);
+  }
+});
