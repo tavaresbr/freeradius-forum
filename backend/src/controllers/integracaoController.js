@@ -1,5 +1,6 @@
 const { sugerirMapeamento, processarImportacao, CAMPOS } = require("../utils/importCadastros");
 const sgp = require("../utils/sgpClient");
+const db = require("../../db");
 
 // Mensagens do sgpClient sao seguras (sem app/token); qualquer outro erro vira texto generico
 const msgSegura = (err) => (err instanceof sgp.SgpError ? err.message : "Falha ao consultar o SGP");
@@ -27,11 +28,29 @@ async function configValida(req, res) {
   return cfg;
 }
 
+// So informa se ha access_token salvo; o segredo nunca sai daqui
+async function mercadoPagoConfigurado(empresaId) {
+  try {
+    const [[row]] = await db.execute(
+      "SELECT config_json FROM empresa_configs WHERE empresa_id = ? AND config_type = 'mercadopago'",
+      [empresaId]
+    );
+    if (!row) return false;
+    const cfg = typeof row.config_json === "string" ? JSON.parse(row.config_json) : row.config_json;
+    return !!(cfg && cfg.access_token);
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/integracoes  — resumo das integracoes da empresa (token nunca sai)
 exports.listar = async (req, res) => {
   try {
     const cfg = sgp.publica(await sgp.carregarConfig(req.empresa_id));
-    res.json([{ chave: "sgp", nome: "SGP", configurado: cfg.configurado }]);
+    res.json([
+      { chave: "sgp", nome: "SGP", configurado: cfg.configurado },
+      { chave: "mercadopago", nome: "Mercado Pago", configurado: await mercadoPagoConfigurado(req.empresa_id) },
+    ]);
   } catch (err) {
     console.error("Erro ao listar integrações:", err.message);
     res.status(500).json({ message: "Erro ao listar integrações" });
