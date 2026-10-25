@@ -12,6 +12,12 @@ const CATALOGO = [
     descricao: "Importe os clientes do seu SGP (sistema de gestão de provedores) para o cadastro de Clientes.",
     caminho: "sgp",
   },
+  {
+    chave: "mercadopago",
+    nome: "Mercado Pago",
+    descricao: "Receba pagamentos por PIX e cartão dos planos pagos do portal.",
+    caminho: "mercado-pago",
+  },
 ];
 
 export default function Integracoes() {
