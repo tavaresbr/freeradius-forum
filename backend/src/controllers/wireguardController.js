@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const db = require('../../db');
+const { ssidDoPeer } = require('../utils/ssid');
 
 const WG_URL = `http://127.0.0.1:${process.env.WG_PANEL_PORT || '51821'}`;
 const WG_PASS = process.env.WG_PASS || '';
@@ -235,7 +236,8 @@ exports.getClientConfig = async (req, res) => {
     // wizard de Hotspot do painel. Cada linha e independente e idempotente (checa
     // antes de criar), entao tambem pode ser colado de novo sem erro.
     const WAN = "ether1";
-    const SSID = "Hotspot-WiFi";
+    // Nome da rede Wi-Fi = nome do peer (padrao "Hotspot-WiFi" se vazio)
+    const SSID = ssidDoPeer(peer.nome);
     const VPN_SERVER = "10.8.0.1";
 
     // Cria so se nao existir nenhum item com esse comment.
