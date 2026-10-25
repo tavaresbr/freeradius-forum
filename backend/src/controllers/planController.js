@@ -36,7 +36,7 @@ async function listarPlanos(req, res) {
     const [rows] = await db.execute(`
       SELECT planos.*, mikrotiks.nome AS mikrotik_nome
       FROM planos
-      JOIN mikrotiks ON mikrotiks.id = planos.mikrotik_id
+      LEFT JOIN mikrotiks ON mikrotiks.id = planos.mikrotik_id
       WHERE planos.empresa_id = ?
       ORDER BY planos.id DESC
     `, [req.empresa_id]);

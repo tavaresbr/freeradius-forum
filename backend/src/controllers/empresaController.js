@@ -1,5 +1,5 @@
 const db = require("../../db");
-const { criarPortaisPadrao } = require("../utils/empresaSetup");
+const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
 
 function gerarSlug(nome) {
@@ -55,6 +55,7 @@ exports.criarEmpresa = async (req, res) => {
 
     // Auto-criar os 5 portais padrao (helper compartilhado com /api/registro).
     await criarPortaisPadrao(db, empresaId);
+    await criarPlanosPadrao(db, empresaId);
     await criarTrial(db, empresaId, plano_id);
 
     res.status(201).json({ id: empresaId, nome, slug, email });
