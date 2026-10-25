@@ -1,6 +1,7 @@
 const db = require("../../db");
 const { criarPortaisPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
+const { atribuirPerfil, perfilDoAdmin } = require("../utils/perfis");
 
 function gerarSlug(nome) {
   return nome
@@ -138,11 +139,21 @@ exports.vincularAdmin = async (req, res) => {
 
     if (!admin_id) return res.status(400).json({ message: "admin_id obrigatório" });
 
+    // Primeiro admin vinculado a empresa nasce Administrador (se ainda nao tem perfil).
+    const [[{ outros }]] = await db.execute(
+      'SELECT COUNT(*) AS outros FROM admin_empresas WHERE empresa_id = ? AND admin_id <> ?',
+      [id, admin_id]
+    );
+
     await db.execute(
       `INSERT INTO admin_empresas (admin_id, empresa_id, role) VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE role = VALUES(role)`,
       [admin_id, id, role || 'operator']
     );
+
+    if (Number(outros) === 0 && !(await perfilDoAdmin(db, admin_id))) {
+      await atribuirPerfil(db, admin_id, 'administrador');
+    }
 
     res.json({ message: "Admin vinculado com sucesso" });
   } catch (err) {

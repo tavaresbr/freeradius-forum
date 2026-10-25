@@ -15,16 +15,36 @@ const findByEmail = async (email) => {
 // cross-tenant). Somente super_admin pode listar sem escopo, e apenas passando
 // { includeAll: true } explicitamente.
 const findAll = async (empresa_id, { includeAll = false } = {}) => {
+  let rows;
   if (!empresa_id) {
     if (!includeAll) return [];
-    const [rows] = await db.execute('SELECT id, email, nome, role, empresa_id, created_at FROM admins ORDER BY id DESC');
-    return rows;
+    [rows] = await db.execute('SELECT id, email, nome, role, empresa_id, created_at FROM admins ORDER BY id DESC');
+  } else {
+    [rows] = await db.execute(
+      'SELECT id, email, nome, role, empresa_id, created_at FROM admins WHERE empresa_id = ? ORDER BY id DESC',
+      [empresa_id]
+    );
   }
-  const [rows] = await db.execute(
-    'SELECT id, email, nome, role, empresa_id, created_at FROM admins WHERE empresa_id = ? ORDER BY id DESC',
-    [empresa_id]
+  return comPerfil(rows);
+};
+
+// Anexa `perfil` ('administrador' | 'padrao' | null) a cada admin, lendo os 2 grupos do sistema.
+const comPerfil = async (rows) => {
+  if (rows.length === 0) return rows;
+  const { PERFIS } = require('../utils/perfis');
+  const ids = rows.map((r) => r.id);
+  const [vinc] = await db.query(
+    `SELECT ag.admin_id, g.nome FROM admin_grupos ag JOIN grupos_permissao g ON g.id = ag.grupo_id
+      WHERE ag.admin_id IN (?) AND g.nome IN (?)`,
+    [ids, [PERFIS.administrador.nome, PERFIS.padrao.nome]]
   );
-  return rows;
+  const porAdmin = new Map();
+  for (const v of vinc) {
+    const atual = porAdmin.get(v.admin_id);
+    if (v.nome === PERFIS.administrador.nome) porAdmin.set(v.admin_id, 'administrador');
+    else if (!atual) porAdmin.set(v.admin_id, 'padrao');
+  }
+  return rows.map((r) => ({ ...r, perfil: porAdmin.get(r.id) || null }));
 };
 
 const findById = async (id) => {
@@ -75,6 +95,15 @@ const updatePassword = async (id, passwordHash, empresaId = null) => {
   return result;
 };
 
+// empresaId: mesmo escopo do update (null so para super_admin).
+const updateRole = async (id, role, empresaId = null) => {
+  if (empresaId == null) {
+    await db.execute('UPDATE admins SET role = ? WHERE id = ?', [role, id]);
+    return;
+  }
+  await db.execute('UPDATE admins SET role = ? WHERE id = ? AND empresa_id = ?', [role, id, empresaId]);
+};
+
 const remove = async (id, empresaId = null) => {
   if (empresaId == null) {
     const [result] = await db.execute('DELETE FROM admins WHERE id = ?', [id]);
@@ -115,4 +144,6 @@ module.exports = {
   remove,
   updatePassword,
   getEmpresas,
+  updateRole,
+  comPerfil,
 };
