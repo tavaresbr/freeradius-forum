@@ -4,6 +4,7 @@ import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import { dataNascimentoValida } from "../../utils/dataUtils";
 import BuscaCpf from "../../components/public/BuscaCpf";
+import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 
 export default function CadastroCliente() {
   const [searchParams] = useSearchParams();
@@ -23,6 +24,8 @@ export default function CadastroCliente() {
   const [cfg, setCfg] = useState({});
   // Passo 1: so CPF + data de nascimento; o restante aparece depois da busca do cadastro
   const [mostrarResto, setMostrarResto] = useState(false);
+  // Resposta do cadastro quando o acesso ja esta conectado em outro aparelho (aguarda a decisao do cliente)
+  const [sessaoAtiva, setSessaoAtiva] = useState(null);
   // Dados de contato trazidos de um cadastro existente: se CPF ou data mudarem, somem (nao vazam para outro CPF)
   const preenchidoAuto = useRef(false);
   const limparPreenchido = () => {
@@ -84,6 +87,11 @@ export default function CadastroCliente() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro ao cadastrar");
+
+      if (data.requer_desconexao) {
+        setSessaoAtiva(data);
+        return;
+      }
 
       // Plano ativo — auto-login no MikroTik
       if (data.planoAtivo && data.gateway) {
@@ -147,6 +155,19 @@ export default function CadastroCliente() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {erro}
+            </div>
+          )}
+
+          {sessaoAtiva && (
+            <div className="mb-6">
+              <SessaoAtivaAviso
+                dados={sessaoAtiva}
+                cpf={form.cpf}
+                dataNascimento={form.data_nascimento}
+                mac={mac}
+                mikrotikId={mikrotikId}
+                onCancelar={() => setSessaoAtiva(null)}
+              />
             </div>
           )}
 
