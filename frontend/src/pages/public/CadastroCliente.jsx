@@ -88,6 +88,9 @@ export default function CadastroCliente() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro ao cadastrar");
 
+      // Guarda a data so nesta aba: o pagamento (outra pagina) precisa dela se pedir para desconectar a sessao anterior
+      try { if (data.id) sessionStorage.setItem(`hs_dn_${data.id}`, form.data_nascimento); } catch { /* sem storage */ }
+
       if (data.requer_desconexao) {
         setSessaoAtiva(data);
         return;

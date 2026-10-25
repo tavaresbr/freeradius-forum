@@ -99,12 +99,15 @@ async function desconectarSessao({ sessao, username, empresaId }) {
  * Chamado antes de mandar o cliente ao login final. Devolve campos para mesclar na resposta:
  *  - nada ({}) se nao ha sessao aberta, ou se era o MESMO aparelho (sessao velha: derrubada sozinha);
  *  - { requer_desconexao:true, sessao_ativa:{desde, aparelho} } se ha sessao em OUTRO aparelho.
+ * Com manterMesmoAparelho (fluxos de pagamento) a sessao do MESMO aparelho tambem devolve {} sem ser derrubada.
  */
-async function tratarSessaoAtiva({ username, mac, empresaId }) {
+async function tratarSessaoAtiva({ username, mac, empresaId, manterMesmoAparelho = false }) {
   try {
     const sessao = await buscarSessaoAtiva(username, empresaId);
     if (!sessao) return {};
     if (mesmoMac(sessao.callingstationid, mac)) {
+      // Pagamento: a sessao do proprio aparelho (ex.: trial) ja recebeu o upgrade por CoA; derrubar causaria queda
+      if (manterMesmoAparelho) return {};
       const r = await desconectarSessao({ sessao, username, empresaId });
       if (r.ok) return {};
     }
@@ -123,4 +126,24 @@ async function tratarSessaoAtiva({ username, mac, empresaId }) {
   }
 }
 
-module.exports = { buscarSessaoAtiva, desconectarSessao, tratarSessaoAtiva, mesmoMac, normMac, _cfg: cfg };
+/**
+ * Prova de que ESTE aparelho acabou de pagar com o CPF: pagamento aprovado da empresa, mesmo CPF e MAC,
+ * liberado ha menos de 30 min. (O acesso pago nao e' "gratis" e o aparelho novo nunca usou o username.)
+ */
+async function pagamentoRecenteDoAparelho({ cpf, mac, empresaId }) {
+  const cpfLimpo = String(cpf || "").replace(/\D/g, "");
+  const macN = normMac(mac);
+  if (cpfLimpo.length !== 11 || macN.length !== 12 || !empresaId) return false;
+  const [rows] = await db.query(
+    `SELECT 1 FROM pagamentos
+      WHERE empresa_id = ? AND status = 'approved'
+        AND REPLACE(REPLACE(REPLACE(cpf,'.',''),'-',''),' ','') = ?
+        AND LOWER(REPLACE(REPLACE(mac,':',''),'-','')) = ?
+        AND liberado_em > NOW() - INTERVAL 30 MINUTE
+      LIMIT 1`,
+    [empresaId, cpfLimpo, macN]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { pagamentoRecenteDoAparelho, buscarSessaoAtiva, desconectarSessao, tratarSessaoAtiva, mesmoMac, normMac, _cfg: cfg };

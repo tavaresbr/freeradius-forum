@@ -2,7 +2,7 @@ const db = require("../../db");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
 const { conferirDataNascimento, verificarLeadExistente, usernamePertenceAoLead, podeReceberCredenciais, acessoEhGratis } = require("../utils/leadUtils");
-const { buscarSessaoAtiva, desconectarSessao } = require("../utils/sessaoAtiva");
+const { buscarSessaoAtiva, desconectarSessao, pagamentoRecenteDoAparelho } = require("../utils/sessaoAtiva");
 
 /**
  * POST /api/sessao/desconectar-anterior (publico, com os mesmos limitadores do consulta-cpf)
@@ -45,7 +45,9 @@ exports.desconectarAnterior = async (req, res) => {
 
     // Em CPF sem pagamento a data nao prova nada (quem reivindica a grava e volta com ela): derrubar
     // um acesso que nao e' o plano gratis dos portais exige que o aparelho ja o tenha usado.
-    if (!(await podeReceberCredenciais({ cpf: cpfLimpo, username, mac, empresaId })) && !(await acessoEhGratis(username))) {
+    // Quem acabou de pagar (PIX/cartao) tambem pode: o acesso e' pago e o aparelho novo nunca usou o username.
+    if (!(await podeReceberCredenciais({ cpf: cpfLimpo, username, mac, empresaId })) && !(await acessoEhGratis(username))
+        && !(await pagamentoRecenteDoAparelho({ cpf: cpfLimpo, mac, empresaId }))) {
       return res.status(403).json({ message: "Não foi possível confirmar que este aparelho é o do titular." });
     }
 
