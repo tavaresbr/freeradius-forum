@@ -142,7 +142,7 @@ export default function IntegracaoSgp() {
               <label className="block text-xs text-gray-400 mb-1">
                 Token {tokenDefinido && <span className="text-green-400">(já salvo — deixe em branco para manter)</span>}
               </label>
-              <input type="password" autoComplete="new-password" className={inputCls} value={cfg.token} onChange={(e) => setCfg({ ...cfg, token: e.target.value })} />
+              <input type="password" autoComplete="new-password" className={inputCls} placeholder={tokenDefinido ? "••••••••••••" : ""} value={cfg.token} onChange={(e) => setCfg({ ...cfg, token: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-400 mb-1">Endpoint de clientes</label>
