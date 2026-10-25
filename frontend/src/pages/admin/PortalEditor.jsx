@@ -221,6 +221,33 @@ export default function PortalEditor() {
       <span className="ml-2 text-xs text-gray-500">{rotulo}</span>
     </label>
   );
+  // Passo 1 dos portais de cadastro (igual ao BuscaCpf das paginas reais): CPF + data de nascimento + Continuar
+  const renderPassoCpf = (icone = "🪪") => (
+    <>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
+        <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
+          <span className="text-gray-400 mr-2">{icone}</span>
+          <span className="text-gray-400 text-sm">000.000.000-00</span>
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento *</label>
+        <div className="flex gap-2">
+          <div className="flex-1 border border-gray-300 rounded-lg px-3 py-3 bg-gray-50 text-gray-400 text-sm">DD/MM/AAAA</div>
+          <div className="px-4 py-3 rounded-lg text-sm font-semibold border border-gray-300 text-gray-400 bg-gray-50 opacity-60">Continuar</div>
+        </div>
+        <p className="text-gray-500 text-xs mt-1">Informe seu CPF e sua data de nascimento para começar.</p>
+      </div>
+    </>
+  );
+  const renderSeparadorPasso = () => (
+    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+      <div className="flex-1 border-t border-dashed border-gray-300" />
+      <span>Depois de clicar em Continuar</span>
+      <div className="flex-1 border-t border-dashed border-gray-300" />
+    </div>
+  );
   const renderCampoLgpd = (chave, rotulo, icone, exemplo) => {
     const c = camposLgpd[chave];
     return (
@@ -473,13 +500,8 @@ export default function PortalEditor() {
               <div className="space-y-5">
                 {portal.tipo === "lgpd" && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
-                      <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
-                        <span className="text-gray-400 mr-2">🆔</span>
-                        <span className="text-gray-400 text-sm">000.000.000-00</span>
-                      </div>
-                    </div>
+                    {renderPassoCpf("🆔")}
+                    {renderSeparadorPasso()}
                     {renderCampoLgpd("nome", "Nome Completo", "👤", "Seu nome completo")}
                     {renderCampoLgpd("email", "E-mail", "✉️", "seu@email.com")}
                     {renderCampoLgpd("telefone", "Telefone", "📞", "(00) 00000-0000")}
@@ -488,13 +510,6 @@ export default function PortalEditor() {
                 )}
                 {(portal.tipo === "lead" || portal.tipo === "lead_passivo") && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
-                      <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
-                        <span className="text-gray-400 mr-2">👤</span>
-                        <span className="text-gray-400 text-sm">Seu nome</span>
-                      </div>
-                    </div>
                     {/* CPF Toggle + Preview */}
                     <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg">
                       <div className="flex items-center gap-2">
@@ -512,7 +527,20 @@ export default function PortalEditor() {
                         <span className="ml-2 text-xs text-gray-500">{config.exibir_cpf !== false ? "Visível" : "Oculto"}</span>
                       </label>
                     </div>
-                    {config.exibir_cpf !== false && (
+                    {portal.tipo === "lead" && config.exibir_cpf !== false && (
+                      <>
+                        {renderPassoCpf()}
+                        {renderSeparadorPasso()}
+                      </>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+                      <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
+                        <span className="text-gray-400 mr-2">👤</span>
+                        <span className="text-gray-400 text-sm">Seu nome</span>
+                      </div>
+                    </div>
+                    {portal.tipo === "lead_passivo" && config.exibir_cpf !== false && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
                         <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
@@ -543,18 +571,13 @@ export default function PortalEditor() {
                     <div className="mb-4">
                       <p className="text-xs text-gray-400 font-semibold mb-3 uppercase tracking-wide text-center">Etapa 1: Cadastro do Cliente</p>
                       <div className="space-y-3">
+                        {renderPassoCpf()}
+                        {renderSeparadorPasso()}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>
                           <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
                             <span className="text-gray-400 mr-2">👤</span>
                             <span className="text-gray-400 text-sm">Seu nome completo</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
-                          <div className="flex items-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
-                            <span className="text-gray-400 mr-2">🪪</span>
-                            <span className="text-gray-400 text-sm">000.000.000-00</span>
                           </div>
                         </div>
                         <div>
