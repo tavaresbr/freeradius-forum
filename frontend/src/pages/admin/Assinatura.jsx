@@ -18,6 +18,11 @@ export default function Assinatura() {
   const [gerando, setGerando] = useState(null);
   const [erro, setErro] = useState("");
   const [copiado, setCopiado] = useState(false);
+  const [escolhido, setEscolhido] = useState(null); // plano selecionado para pagar
+  const [metodo, setMetodo] = useState("pix");
+  const [fp, setFp] = useState("loading"); // fingerprint MP: loading | ready | error
+  const [cartao, setCartao] = useState({ numero: "", nome: "", validade: "", cvv: "", cpf: "" });
+  const [pagandoCartao, setPagandoCartao] = useState(false);
   const timer = useRef(null);
 
   const token = localStorage.getItem("admin_token");
@@ -34,6 +39,79 @@ export default function Assinatura() {
 
   useEffect(() => { carregar().catch(() => {}); return () => clearInterval(timer.current); }, [carregar]);
 
+  // Antifraude do MP: sem window.MP_DEVICE_SESSION_ID o cartao cai em cc_rejected_high_risk.
+  useEffect(() => {
+    if (!escolhido || metodo !== "cartao") return;
+    if (window.MP_DEVICE_SESSION_ID) { setFp("ready"); return; }
+    setFp("loading");
+    if (!document.getElementById("mp-security-js")) {
+      const sc = document.createElement("script");
+      sc.id = "mp-security-js"; sc.src = "/mp-security.js"; sc.async = true;
+      sc.setAttribute("view", "checkout");
+      sc.onerror = () => setFp("error");
+      document.body.appendChild(sc);
+    }
+    const ini = Date.now();
+    const iv = setInterval(() => {
+      if (window.MP_DEVICE_SESSION_ID) { setFp("ready"); clearInterval(iv); }
+      else if (Date.now() - ini > 15000) { setFp("error"); clearInterval(iv); }
+    }, 300);
+    return () => clearInterval(iv);
+  }, [escolhido, metodo]);
+
+  const aguardarConfirmacao = (id) => {
+    clearInterval(timer.current);
+    timer.current = setInterval(async () => {
+      const r = await fetch(`/api/assinatura/cobranca/${id}`, { headers });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.status === "aprovada") {
+        clearInterval(timer.current);
+        setCobranca((c) => ({ ...(c || {}), pago: true, plano: c?.plano || escolhido?.nome }));
+        setEscolhido(null);
+        carregar();
+      } else if (d.status === "recusada") {
+        clearInterval(timer.current);
+        setCobranca(null);
+        setErro("Pagamento recusado. Tente novamente.");
+      }
+    }, 4000);
+  };
+
+  const pagarCartao = async (e) => {
+    e.preventDefault();
+    setErro("");
+    const [mm, aa] = cartao.validade.split("/");
+    if (!mm || !aa) return setErro("Informe a validade no formato MM/AA.");
+    setPagandoCartao(true);
+    try {
+      const res = await fetch("/api/assinatura/cartao", {
+        method: "POST", headers,
+        body: JSON.stringify({
+          plano_id: escolhido.id, card_number: cartao.numero, cardholder_name: cartao.nome,
+          expiration_month: mm, expiration_year: aa, security_code: cartao.cvv,
+          identification_number: cartao.cpf, device_session_id: window.MP_DEVICE_SESSION_ID,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || "Pagamento recusado.");
+      setCartao({ numero: "", nome: "", validade: "", cvv: "", cpf: "" });
+      if (d.status === "approved") {
+        setCobranca({ pago: true, plano: escolhido.nome });
+        setEscolhido(null);
+        carregar();
+      } else {
+        setCobranca({ aguardandoCartao: true, plano: escolhido.nome });
+        setEscolhido(null);
+        aguardarConfirmacao(d.id);
+      }
+    } catch (err) {
+      setErro(err.message);
+    } finally {
+      setPagandoCartao(false);
+    }
+  };
+
   const pagar = async (plano) => {
     setErro(""); setGerando(plano.id);
     try {
@@ -41,21 +119,7 @@ export default function Assinatura() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro ao gerar cobrança");
       setCobranca({ ...data, plano: plano.nome });
-      clearInterval(timer.current);
-      timer.current = setInterval(async () => {
-        const r = await fetch(`/api/assinatura/cobranca/${data.id}`, { headers });
-        if (!r.ok) return;
-        const d = await r.json();
-        if (d.status === "aprovada") {
-          clearInterval(timer.current);
-          setCobranca((c) => ({ ...c, pago: true }));
-          carregar();
-        } else if (d.status === "recusada") {
-          clearInterval(timer.current);
-          setCobranca(null);
-          setErro("Pagamento recusado. Tente novamente.");
-        }
-      }, 4000);
+      aguardarConfirmacao(data.id);
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -81,7 +145,7 @@ export default function Assinatura() {
 
         {st?.bloqueada && (
           <div className="bg-red-900/20 border border-red-700/40 text-red-200 rounded-xl p-4 text-sm">
-            Sua assinatura está vencida e o painel foi bloqueado. Escolha um plano abaixo e pague via PIX para liberar o acesso na hora.
+            Sua assinatura está vencida e o painel foi bloqueado. Escolha um plano abaixo e pague por PIX ou cartão para liberar o acesso na hora.
             Os clientes do seu Wi-Fi continuam conectando normalmente.
           </div>
         )}
@@ -101,9 +165,41 @@ export default function Assinatura() {
 
         {erro && <p className="text-red-400 text-sm bg-red-900/20 p-3 rounded-lg" role="alert">{erro}</p>}
 
-        {cobranca ? (
+        {escolhido && !cobranca ? (
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 max-w-lg">
+            <h2 className="text-lg font-bold text-white">{escolhido.nome} – {brl(escolhido.valor)}</h2>
+            <div className="flex gap-2 mt-4">
+              {[["pix", "PIX"], ["cartao", "Cartão de crédito"]].map(([k, r]) => (
+                <button key={k} onClick={() => { setMetodo(k); setErro(""); }} className={`px-4 py-2 rounded-lg text-sm ${metodo === k ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-300"}`}>{r}</button>
+              ))}
+            </div>
+            {metodo === "pix" ? (
+              <button disabled={gerando === escolhido.id} onClick={() => pagar(escolhido)} className="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">
+                {gerando === escolhido.id ? "Gerando PIX..." : "Gerar QR Code PIX"}
+              </button>
+            ) : fp === "loading" ? (
+              <p className="mt-4 text-sm text-gray-400">Preparando ambiente seguro...</p>
+            ) : fp === "error" ? (
+              <p className="mt-4 text-sm text-red-400">Não foi possível carregar a verificação de segurança. Recarregue a página ou use PIX.</p>
+            ) : (
+              <form onSubmit={pagarCartao} className="mt-4 space-y-3" autoComplete="off">
+                <input required inputMode="numeric" placeholder="Número do cartão" maxLength={23} value={cartao.numero} onChange={(e) => setCartao({ ...cartao, numero: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                <input required placeholder="Nome impresso no cartão" value={cartao.nome} onChange={(e) => setCartao({ ...cartao, nome: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                <div className="grid grid-cols-2 gap-3">
+                  <input required placeholder="Validade MM/AA" maxLength={5} value={cartao.validade} onChange={(e) => { let v = e.target.value.replace(/[^\d/]/g, ""); if (v.length === 2 && !v.includes("/") && e.nativeEvent.inputType !== "deleteContentBackward") v += "/"; setCartao({ ...cartao, validade: v }); }} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                  <input required inputMode="numeric" placeholder="CVV" maxLength={4} value={cartao.cvv} onChange={(e) => setCartao({ ...cartao, cvv: e.target.value })} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <input required inputMode="numeric" placeholder="CPF do titular" maxLength={14} value={cartao.cpf} onChange={(e) => setCartao({ ...cartao, cpf: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                <button disabled={pagandoCartao} className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">{pagandoCartao ? "Processando..." : `Pagar ${brl(escolhido.valor)}`}</button>
+              </form>
+            )}
+            <button onClick={() => { setEscolhido(null); setErro(""); }} className="mt-3 text-sm text-gray-400 underline">Escolher outro plano</button>
+          </div>
+        ) : cobranca ? (
           <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 text-center">
-            {cobranca.pago ? (
+            {cobranca.aguardandoCartao ? (
+              <p className="text-gray-300">Pagamento do plano {cobranca.plano} em análise... a tela atualiza sozinha.</p>
+            ) : cobranca.pago ? (
               <>
                 <p className="text-2xl text-green-400 font-bold">Pagamento confirmado!</p>
                 <p className="text-gray-400 mt-2">Assinatura {cobranca.plano} ativada.</p>
@@ -133,8 +229,8 @@ export default function Assinatura() {
                   <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
                   <li>✓ {limite(p.max_admins)} administradores</li>
                 </ul>
-                <button disabled={gerando === p.id} onClick={() => pagar(p)} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">
-                  {gerando === p.id ? "Gerando PIX..." : p.id === st?.plano_id && st?.status === "ativa" ? "Renovar com PIX" : "Pagar com PIX"}
+                <button onClick={() => { setEscolhido(p); setMetodo("pix"); setErro(""); }} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg text-sm font-medium">
+                  {p.id === st?.plano_id && st?.status === "ativa" ? "Renovar" : "Assinar"}
                 </button>
               </div>
             ))}
