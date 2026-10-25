@@ -6,8 +6,14 @@ import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 // Retomada do PIX (sem gerar outro pagamento) quando o acesso gratis manda o cliente ao login do hotspot e
 // ele volta para esta mesma pagina. Fica so na aba (sessionStorage); tudo em try/catch.
 const chavePix = (planoId, clienteId) => `hs_pix_${planoId}_${clienteId || "-"}`;
+// So vale por 30 min: depois disso um PIX salvo e' velho e a pagina volta a mostrar a escolha PIX/cartao.
+const VALIDADE_PIX_SALVO_MS = 30 * 60 * 1000;
 const lerPixSalvo = (planoId, clienteId) => {
-  try { return JSON.parse(sessionStorage.getItem(chavePix(planoId, clienteId)) || "null"); } catch { return null; }
+  try {
+    const salvo = JSON.parse(sessionStorage.getItem(chavePix(planoId, clienteId)) || "null");
+    if (!salvo || !salvo.em || Date.now() - salvo.em > VALIDADE_PIX_SALVO_MS) return null;
+    return salvo;
+  } catch { return null; }
 };
 const salvarPix = (planoId, clienteId, dados) => {
   try { sessionStorage.setItem(chavePix(planoId, clienteId), JSON.stringify(dados)); } catch { /* sem storage */ }
@@ -200,10 +206,6 @@ export default function Pagamento() {
         setMpPagamentoId(data.mp_pagamento_id);
         setPagamentoId(data.pagamento_id || null);
         setStatus("gerado");
-        salvarPix(id, clienteId, {
-          mpPagamentoId: data.mp_pagamento_id, pagamentoId: data.pagamento_id || null,
-          qrCode: data.qr_code_base64, copiaCola: data.copia_cola, trialLiberado: false,
-        });
       })
       .catch(() => setStatus("erro"));
   }, [metodo, plano]);
@@ -287,7 +289,7 @@ export default function Pagamento() {
         // Auto-redireciona pro hotspot login com as creds temporarias
         // para o cliente ter internet e conseguir abrir o app do banco.
         salvarPix(id, clienteId, {
-          mpPagamentoId, pagamentoId, qrCode, copiaCola, trialLiberado: true,
+          mpPagamentoId, pagamentoId, qrCode, copiaCola, trialLiberado: true, em: Date.now(),
         });
         if (data.gateway && data.username) {
           setTimeout(() => {
