@@ -196,6 +196,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 033 | `033_perfis_usuario` | garante os perfis do sistema (Acesso Completo / Usuário Padrão) e promove a Administrador o primeiro admin de cada empresa sem grupo |
 | 034 | `034_planos_padrao_60min` | atualiza os planos gratis LGPD (5 min) e Lead (1 min) com 2/2 Mbps para 60 min, 100M down / 50M up; so toca quem ainda esta no padrao antigo (nao sobrescreve plano personalizado); idempotente |
 | 035 | `035_planos_padrao_20_10` | planos gratis LGPD/Lead de 100/50 para 20M down / 10M up (60 min mantidos); so toca quem ainda esta em 60 min + 100/50 (nao sobrescreve personalizado); idempotente |
+| 036 | `036_planos_default_dedup` | empresa `default`: deixa UM plano LGPD e UM Lead (o mais referenciado), reaponta `plano_id` de todas as tabelas + `radusergroup` e apaga os duplicados; o que fica vira 60 min / 20M down / 10M up. So age com duplicados (nao repete); `--dry` so mostra |
 
 ---
 
