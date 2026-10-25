@@ -33,10 +33,20 @@ const findById = async (id) => {
 };
 
 const create = async (email, passwordHash, empresa_id, role = 'operator', nome = null) => {
-  await db.execute(
+  const [result] = await db.execute(
     'INSERT INTO admins (empresa_id, email, password, nome, role) VALUES (?, ?, ?, ?, ?)',
     [empresa_id, email, passwordHash, nome, role]
   );
+  // O login so aceita admins vinculados a uma empresa em admin_empresas (getEmpresas);
+  // sem este vinculo o admin criado pela tela Usuarios nunca conseguia entrar.
+  if (empresa_id) {
+    await db.execute(
+      `INSERT INTO admin_empresas (admin_id, empresa_id, role) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE role = VALUES(role)`,
+      [result.insertId, empresa_id, role]
+    );
+  }
+  return result.insertId;
 };
 
 // empresaId: quando fornecido, escopa a operacao a uma empresa (isolamento
