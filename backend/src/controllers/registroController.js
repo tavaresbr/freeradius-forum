@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
+const { atribuirPerfil } = require("../utils/perfis");
 
 function gerarSlug(nome) {
   return nome
@@ -59,6 +60,14 @@ exports.registrarEmpresa = async (req, res) => {
       [empresaId, email, nome, hashedPassword]
     );
     const adminId = adminResult.insertId;
+
+    // O login so aceita admins vinculados a empresa em admin_empresas, e sem grupo o
+    // checkPermissao nega tudo: o dono da empresa nasce Administrador (Acesso Completo).
+    await conn.execute(
+      "INSERT INTO admin_empresas (admin_id, empresa_id, role) VALUES (?, ?, 'owner') ON DUPLICATE KEY UPDATE role = VALUES(role)",
+      [adminId, empresaId]
+    );
+    await atribuirPerfil(conn, adminId, "administrador");
 
     // Portais padrao: sem eles os fluxos publicos (LGPD/lead/planos/login)
     // falham em silencio — resolucao por tipo nao encontra nada.

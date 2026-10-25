@@ -192,6 +192,8 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 030 | `030_pagamentos_pagador_cpf` | `pagamentos.pagador_cpf` VARCHAR(20) NULL (CPF de quem pagou; usado por `cpfConfirmado`) |
 | 032 | `032_planos_padrao` | `planos.mikrotik_id` NULLABLE + backfill dos planos gratis "LGPD" (5 min) e "Lead" (1 min) em todas as empresas; novas empresas ganham via `empresaSetup.criarPlanosPadrao` (nascem sem equipamento; o 1o equipamento cadastrado em `mikrotikRoutes.js` os assume). Nao duplicar o INSERT |
 | 031 | `031_assinaturas` | SaaS: `saas_planos`, `assinaturas` (1/empresa), `assinatura_cobrancas`, `plataforma_configs`; seeds: 3 planos exemplo + assinatura de cortesia (ativa, +1 ano) p/ empresas existentes |
+| 032 | `032_admin_empresas_backfill` | vincula em `admin_empresas` os admins sem vinculo (criados pela tela Usuarios antes da correcao); idempotente |
+| 033 | `033_perfis_usuario` | garante os perfis do sistema (Acesso Completo / Usuário Padrão) e promove a Administrador o primeiro admin de cada empresa sem grupo |
 
 ---
 
@@ -1876,3 +1878,16 @@ Planos do SaaS (`saas_planos`) sao os de USO DO SISTEMA — nao confundir com `p
 - **Job** `src/jobs/verificaAssinaturas.js` (cron horario): marca vencidas e avisa por WhatsApp (D-3 e vencimento) usando a instancia da empresa `SITE_EMPRESA_ID`.
 - Landing `/` lista os planos de `GET /api/assinatura/planos` e leva a `/registro?plano=<id>`.
 - Testes: `backend/tests/unit/assinatura.test.js`. Nao testado contra MySQL nem MP reais.
+
+---
+
+## Perfis de usuario (Administrador / Usuário Padrão)
+
+Perfil = grupo de permissao (`grupos_permissao`, tabela GLOBAL sem `empresa_id`; so o super admin gere grupos customizados em `/api/grupos-permissao`). Donos de empresa escolhem apenas entre os 2 perfis do sistema, definidos em `backend/src/utils/perfis.js`:
+
+- **Administrador** = grupo `Acesso Completo` (migration 018): todos os modulos, inclusive Usuarios e Configuracoes. Role padrao `owner`.
+- **Usuário Padrão**: operacional — Dashboard (ver) e Clientes/Leads/Radius/Pagamentos/Sessoes/Logs de sessoes (ver/criar/editar, sem excluir); sem Equipamentos, VPN, Portais, Planos, Compliance, Configuracoes e Usuarios. Role padrao `operator`.
+- `checkPermissao` e' deny-by-default: **todo caminho que cria admin TEM que chamar `atribuirPerfil`** (e vincular em `admin_empresas`, que o login exige). Feito em `adminController.criarAdmin`, `registroController.registrarEmpresa` e `empresaController.vincularAdmin` (primeiro admin da empresa). Sem isso o admin loga mas toma 403 em tudo.
+- **Primeiro usuario da empresa e' SEMPRE Administrador/owner** (`criarAdmin` forca, mesmo pedindo `padrao`). `perfil` Administrador so e' concedido por owner/super_admin. A empresa nunca fica sem Administrador (nao rebaixa nem remove o ultimo).
+- API: `GET /api/admins/perfis` (so os 2 perfis), `perfil` no `POST/PUT /api/admins`, `GET /api/admins` devolve `perfil` por admin. Tela: `Usuarios.jsx` (Nome + Perfil).
+- `garantirPerfil` nunca sobrescreve permissao ja ajustada pelo super admin; `atribuirPerfil` so troca entre os 2 grupos do sistema (grupos customizados ficam). Testes: `backend/tests/unit/perfisUsuario.test.js`. Nao testado contra MySQL real.
