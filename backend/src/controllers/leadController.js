@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -442,10 +442,10 @@ exports.criarLead = async (req, res) => {
       return res.status(409).json({ message: "Já existe um cadastro com este CPF" });
     }
 
-    const mac = body.mac ? String(body.mac).slice(0, 50) : null;
-    const ip = body.ip ? String(body.ip).slice(0, 50) : null;
-    const colunas = ["empresa_id", "mac", "ip", "origem", "sistema_origem", "lgpd_aceite"];
-    const valores = [req.empresa_id, mac, ip, body.origem ? String(body.origem).slice(0, 30) : "manual", "manual", body.lgpd_aceite ? 1 : 0];
+    // Cadastro manual NUNCA grava mac/ip/lgpd_aceite/origem vindos do corpo: o MAC do lead e' a ancora de
+    // confianca de bloqueiaPagamentoAlheio e o aceite LGPD so existe quando o titular aceita no portal.
+    const colunas = ["empresa_id", "origem", "sistema_origem", "lgpd_aceite"];
+    const valores = [req.empresa_id, "manual", "manual", 0];
     for (const [k, v] of Object.entries(dados)) { colunas.push(k); valores.push(v); }
     if (!dados.status) { colunas.push("status"); valores.push("novo"); }
 
@@ -475,12 +475,22 @@ exports.atualizarLead = async (req, res) => {
     // Edicao do cadastro (nao so troca de status/observacoes): o resultado final precisa ter os obrigatorios
     if (chaves.some((k) => k !== "status" && k !== "observacoes")) {
       const [[atual]] = await db.execute(
-        "SELECT nome, cpf, cnpj, tipo_pessoa, email, telefone, data_nascimento FROM leads WHERE id = ? AND empresa_id = ?",
+        "SELECT nome, cpf, cnpj, tipo_pessoa, email, telefone, data_nascimento, mac, lgpd_aceite, importado_em FROM leads WHERE id = ? AND empresa_id = ?",
         [id, req.empresa_id]
       );
       if (!atual) return res.status(404).json({ message: "Lead não encontrado" });
       const faltando = camposFaltando({ ...atual, ...dados });
       if (faltando.length) return res.status(400).json({ message: mensagemFaltando(faltando), campos: faltando });
+
+      // Trocar o CPF de um cadastro que ja tem dono (MAC/aceite do portal, importado ou CPF confirmado por
+      // pagamento) transplanta o MAC e o aceite para outro CPF e burla bloqueiaPagamentoAlheio.
+      const cpfAtual = String(atual.cpf || "").replace(/\D/g, "");
+      if (dados.cpf && cpfAtual && dados.cpf !== cpfAtual) {
+        const comDono = atual.mac || atual.lgpd_aceite || atual.importado_em || await cpfConfirmado(cpfAtual, req.empresa_id);
+        if (comDono) {
+          return res.status(409).json({ message: "O CPF deste cadastro não pode ser alterado (veio do portal, de importação ou tem pagamento). Crie um novo cadastro." });
+        }
+      }
     }
 
     if (dados.cpf) {
