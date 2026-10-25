@@ -7,6 +7,7 @@ const { obterInformacoes } = require("../controllers/mikrotikAPIController");
 const { exec } = require("child_process");
 const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
 const { peersLivres } = require("../utils/vpnPeers");
+const { credenciaisRoteador } = require("../utils/roteadorAdmin");
 const { checarLimiteSeguro } = require("../utils/assinatura");
 
 // FreeRADIUS só lê NAS clients na inicialização, precisamos recarregar após mudanças
@@ -193,7 +194,8 @@ router.get("/vpn-disponiveis", async (req, res) => {
       console.error("Erro ao listar peers VPN:", err.message);
       return res.json({ peers: [], aviso: "Não foi possível consultar a VPN agora." });
     }
-    res.json({ peers: peersLivres(peers, usados.map((r) => r.ip)), total: peers.length });
+    const cred = credenciaisRoteador();
+    res.json({ peers: peersLivres(peers, usados.map((r) => r.ip)), total: peers.length, ...(cred.senha ? { credenciais_padrao: cred } : {}) });
   } catch (err) {
     console.error("Erro em /vpn-disponiveis:", err.message);
     res.status(500).json({ message: "Erro ao buscar peers da VPN." });

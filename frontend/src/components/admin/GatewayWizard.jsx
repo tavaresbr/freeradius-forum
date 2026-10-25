@@ -63,6 +63,8 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
   const [salvando, setSalvando] = useState(false);
   // Peers VPN ainda sem equipamento: { carregando, peers, aviso }
   const [vpn, setVpn] = useState({ carregando: false, peers: [], total: 0, aviso: "" });
+  // Usuario/senha padrao do roteador (ROUTER_ADMIN_* no .env do servidor), se configurados
+  const [credPadrao, setCredPadrao] = useState(null);
 
   // Só no cadastro novo: busca os peers da VPN que ainda não viraram equipamento.
   useEffect(() => {
@@ -71,7 +73,13 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
     setVpn({ carregando: true, peers: [], total: 0, aviso: "" });
     fetch("/api/mikrotiks/vpn-disponiveis", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
-      .then((d) => { if (!cancelado) setVpn({ carregando: false, peers: d.peers || [], total: d.total || 0, aviso: d.aviso || "" }); })
+      .then((d) => {
+        if (cancelado) return;
+        setVpn({ carregando: false, peers: d.peers || [], total: d.total || 0, aviso: d.aviso || "" });
+        setCredPadrao(d.credenciais_padrao || null);
+        // Pre-preenche usuario/senha da API so se o formulario ainda esta vazio
+        if (d.credenciais_padrao) setForm((f) => ({ ...f, usuario: f.usuario || d.credenciais_padrao.usuario, senha: f.senha || d.credenciais_padrao.senha }));
+      })
       .catch(() => { if (!cancelado) setVpn({ carregando: false, peers: [], total: 0, aviso: "Não foi possível consultar a VPN agora." }); });
     return () => { cancelado = true; };
   }, [open, editando, token]);
@@ -89,7 +97,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
       });
       setStep(1);
     } else {
-      setForm(FORM_INICIAL);
+      setForm(credPadrao ? { ...FORM_INICIAL, usuario: credPadrao.usuario, senha: credPadrao.senha } : FORM_INICIAL);
       setStep(0);
     }
   }, [open, editando]);

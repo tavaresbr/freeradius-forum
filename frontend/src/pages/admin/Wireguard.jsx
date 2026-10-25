@@ -386,7 +386,7 @@ export default function Wireguard() {
             </div>
 
             <p className="text-yellow-400 text-xs mb-3">
-              Depois de colar: defina a senha do admin (<code>/user set admin password=...</code>) e use a mesma ao cadastrar o equipamento. Pode colar de novo sem erro.
+              Depois de colar: se o servidor tiver a senha padrão configurada, ela já vai no script; senão defina a senha do admin (<code>/user set admin password=...</code>). Use a mesma ao cadastrar o equipamento. Pode colar de novo sem erro.
             </p>
 
             <div className="bg-[#0d1117] rounded-lg border border-gray-800 overflow-auto min-h-0 flex-1 max-h-[50vh]">

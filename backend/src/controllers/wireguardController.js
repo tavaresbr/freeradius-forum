@@ -5,6 +5,7 @@ const { execSync } = require('child_process');
 const db = require('../../db');
 const { ssidDoPeer } = require('../utils/ssid');
 const { linhasWifi } = require('../utils/wifiScript');
+const { credenciaisRoteador, emStringRouterOS } = require('../utils/roteadorAdmin');
 
 const WG_URL = `http://127.0.0.1:${process.env.WG_PANEL_PORT || '51821'}`;
 const WG_PASS = process.env.WG_PASS || '';
@@ -240,6 +241,7 @@ exports.getClientConfig = async (req, res) => {
     // Nome da rede Wi-Fi = nome do peer (padrao "Hotspot-WiFi" se vazio)
     const SSID = ssidDoPeer(peer.nome);
     const VPN_SERVER = "10.8.0.1";
+    const { usuario: adminUsuario, senha: adminSenha } = credenciaisRoteador();
 
     // Cria so se nao existir nenhum item com esse comment.
     const unicoPorComment = (menu, comment, cmdAdd) =>
@@ -292,8 +294,16 @@ exports.getClientConfig = async (req, res) => {
       `# --- Wi-Fi aberto, com clientes isolados entre si (o portal cativo controla o acesso) ---`,
       ...linhasWifi(SSID),
 
-      `# --- Falta so: senha do admin e o wizard de Hotspot no painel ---`,
-      `:put "ATENCAO: defina a senha do admin com: /user set admin password=SUA_SENHA (use a mesma no cadastro do equipamento no painel)"`,
+      ...(adminSenha
+        ? [
+            `# --- Usuario e senha do roteador (mesmos do cadastro do equipamento no painel) ---`,
+            `/user set [find name="${emStringRouterOS(adminUsuario)}"] password="${emStringRouterOS(adminSenha)}"`,
+            `# --- Falta so: o wizard de Hotspot no painel ---`,
+          ]
+        : [
+            `# --- Falta so: senha do admin e o wizard de Hotspot no painel ---`,
+            `:put "ATENCAO: defina a senha do admin com: /user set admin password=SUA_SENHA (use a mesma no cadastro do equipamento no painel)"`,
+          ]),
     ].join("\n");
 
     res.json({ conf, routerOsScript });
