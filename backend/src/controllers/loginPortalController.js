@@ -1,5 +1,11 @@
 const db = require("../../db");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
+const loginTentativas = require("../utils/loginTentativas");
+const { ehSenhaLegada } = require("../utils/radiusPassword");
+const { dispositivoJaUsouAcesso } = require("../utils/leadUtils");
+
+// Mesma resposta para usuario inexistente e senha errada: nao deixa enumerar CPFs/telefones com acesso.
+const MSG_CREDENCIAIS = "Usuário ou senha inválidos";
 
 exports.login = async (req, res) => {
   const { username: usernameRaw, password: passwordRaw, mikrotik_id } = req.body;
@@ -17,6 +23,15 @@ exports.login = async (req, res) => {
   const candidatos = [usernameTrim];
   if (userDigits.length === 11 && userDigits !== usernameTrim) candidatos.push(userDigits);
 
+  const ctxTent = { username: userDigits.length === 11 ? userDigits : usernameTrim, ip: req.ip };
+  if (loginTentativas.bloqueado(ctxTent)) {
+    return res.status(429).json({ message: "Muitas tentativas. Tente novamente mais tarde." });
+  }
+  const negar = () => {
+    loginTentativas.registrarFalha(ctxTent);
+    return res.status(401).json({ message: MSG_CREDENCIAIS });
+  };
+
   try {
     // Busca a senha do usuário na tabela radcheck (aceita CPF formatado ou limpo)
     let user = null;
@@ -29,15 +44,19 @@ exports.login = async (req, res) => {
       if (row) { user = row; username = cand; break; }
     }
 
-    if (!user) {
-      return res.status(401).json({ message: "Usuário não encontrado" });
-    }
+    if (!user) return negar();
 
     const senhaConfere =
       user.value === passwordTrim ||
       (passDigits.length === 11 && user.value === passDigits);
-    if (!senhaConfere) {
-      return res.status(401).json({ message: "Senha incorreta" });
+    if (!senhaConfere) return negar();
+
+    // Senha legada (== username, ex.: CPF/CPF): qualquer um que saiba o CPF de outra pessoa entraria
+    // com o acesso dela. So vale no aparelho que ja usou esse acesso; em outro aparelho o cliente
+    // refaz o cadastro no portal (data de nascimento), que grava uma senha aleatoria.
+    if (ehSenhaLegada(username, user.value) && !(await dispositivoJaUsouAcesso(username, req.body.mac))) {
+      console.warn(`[login-portal] senha legada recusada em aparelho desconhecido (ip=${req.ip})`); // nunca loga o usuario
+      return negar();
     }
 
     // Nao limpar radacct aqui: o FreeRADIUS ja tem delete_stale_sessions=yes,
@@ -47,7 +66,7 @@ exports.login = async (req, res) => {
 
     // Pega o dominio do gateway (MikroTik) para redirecionamento
     const [[mk]] = await db.query(
-      "SELECT ip, end_hotspot FROM mikrotiks WHERE id = ?",
+      "SELECT ip, end_hotspot, empresa_id FROM mikrotiks WHERE id = ?",
       [mikrotik_id]
     );
 
@@ -55,12 +74,18 @@ exports.login = async (req, res) => {
       return res.status(404).json({ message: "Gateway não encontrado" });
     }
 
+    // Multi-tenant: o acesso pertence a uma empresa (radius_users); nao autentica no gateway de outra.
+    const [[dono]] = await db.query("SELECT empresa_id FROM radius_users WHERE username = ? LIMIT 1", [username]);
+    if (dono && mk.empresa_id && Number(dono.empresa_id) !== Number(mk.empresa_id)) return negar();
+
     const gateway = mk.end_hotspot || mk.ip;
 
     // mac vem do body quando o portal login foi aberto via captive redirect
     const gatewayInfo = await montarGatewayInfo({
       mikrotik_id: parseInt(mikrotik_id, 10), mac: req.body.mac || null, username,
     });
+
+    loginTentativas.limparUsuario(ctxTent);
 
     // password canonico do radcheck: o digitado pode estar formatado (CPF com
     // pontos/traco) e o MikroTik/RADIUS compara com o valor limpo do banco.
