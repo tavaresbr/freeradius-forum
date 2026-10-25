@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj } from "../../components/CamposEmpresa";
 import AdminLayout from "../../components/admin/AdminLayout";
 
 const API = import.meta.env.VITE_API_URL || "";
@@ -8,7 +9,7 @@ export default function EmpresasAdmin() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ nome: "", cnpj: "", email: "", telefone: "" });
+  const [form, setForm] = useState({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
   const [erro, setErro] = useState(null);
   
   // Vinculação de admins
@@ -69,7 +70,7 @@ export default function EmpresasAdmin() {
       if (res.ok) {
         setShowModal(false);
         setEditId(null);
-        setForm({ nome: "", cnpj: "", email: "", telefone: "" });
+        setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
         fetchEmpresas();
       } else {
         const data = await res.json();
@@ -82,7 +83,10 @@ export default function EmpresasAdmin() {
 
   const handleEdit = (empresa) => {
     setEditId(empresa.id);
-    setForm({ nome: empresa.nome, cnpj: empresa.cnpj || "", email: empresa.email, telefone: empresa.telefone || "" });
+    setForm({
+      nome: empresa.nome, cnpj: mascaraCnpj(empresa.cnpj || ""), email: empresa.email, telefone: empresa.telefone || "",
+      ...Object.fromEntries(Object.keys(CAMPOS_EMPRESA_VAZIOS).map((k) => [k, empresa[k] || ""])),
+    });
     setShowModal(true);
   };
 
@@ -163,7 +167,7 @@ export default function EmpresasAdmin() {
             <p className="text-sm text-gray-400 mt-1">{empresas.length} empresa(s) cadastrada(s)</p>
           </div>
           <button
-            onClick={() => { setEditId(null); setForm({ nome: "", cnpj: "", email: "", telefone: "" }); setErro(null); setShowModal(true); }}
+            onClick={() => { setEditId(null); setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS }); setErro(null); setShowModal(true); }}
             className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-500 text-sm font-medium flex items-center gap-2 transition-all"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,12 +260,18 @@ export default function EmpresasAdmin() {
         {/* Modal Criar/Editar Empresa */}
         {showModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <form onSubmit={handleSubmit} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md">
+            <form onSubmit={handleSubmit} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg font-bold text-white mb-4">
                 {editId ? "Editar Empresa" : "Nova Empresa"}
               </h2>
               {erro && <p className="text-red-400 text-sm mb-3 bg-red-900/20 p-2 rounded">{erro}</p>}
               <div className="space-y-3">
+                <CamposEmpresa
+                  form={form}
+                  setForm={setForm}
+                  labelClass="block text-sm text-gray-400 mb-1"
+                  inputClass="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                />
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Nome *</label>
                   <input type="text" required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })}
@@ -270,11 +280,6 @@ export default function EmpresasAdmin() {
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Email *</label>
                   <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">CNPJ</label>
-                  <input type="text" value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
