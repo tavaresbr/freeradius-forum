@@ -190,7 +190,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 026 | `026_leads_data_nascimento` | `leads.data_nascimento` (DATE) |
 | 029 | `029_leads_cadastro_completo` | `leads`: tipo_pessoa, rg, cnpj, razao_social, endereco (cep..uf), `id_externo`, `sistema_origem`, `importado_em`; `origem` vira VARCHAR(30); indices `(empresa_id,cpf)` e `(empresa_id,sistema_origem,id_externo)`; `empresa_configs.config_type` ganha 'sgp' |
 | 030 | `030_pagamentos_pagador_cpf` | `pagamentos.pagador_cpf` VARCHAR(20) NULL (CPF de quem pagou; usado por `cpfConfirmado`) |
-| 032 | `032_planos_padrao` | `planos.mikrotik_id` NULLABLE + backfill dos planos gratis "LGPD" (5 min) e "Lead" (1 min) em todas as empresas; novas empresas ganham via `empresaSetup.criarPlanosPadrao` (nascem sem equipamento; o 1o equipamento cadastrado em `mikrotikRoutes.js` os assume). Nao duplicar o INSERT |
+| 032 | `032_planos_padrao` | `planos.mikrotik_id` NULLABLE + backfill dos planos gratis "LGPD" e "Lead" (60 min, 100M down / 50M up) em todas as empresas; novas empresas ganham via `empresaSetup.criarPlanosPadrao` (nascem sem equipamento; o 1o equipamento cadastrado em `mikrotikRoutes.js` os assume). Nao duplicar o INSERT |
 | 031 | `031_assinaturas` | SaaS: `saas_planos`, `assinaturas` (1/empresa), `assinatura_cobrancas`, `plataforma_configs`; seeds: 3 planos exemplo + assinatura de cortesia (ativa, +1 ano) p/ empresas existentes |
 | 032 | `032_admin_empresas_backfill` | vincula em `admin_empresas` os admins sem vinculo (criados pela tela Usuarios antes da correcao); idempotente |
 | 033 | `033_perfis_usuario` | garante os perfis do sistema (Acesso Completo / Usuário Padrão) e promove a Administrador o primeiro admin de cada empresa sem grupo |

@@ -15,8 +15,9 @@ test('criarPlanosPadrao cria LGPD e Lead da empresa, sem equipamento', async () 
   assert.deepStrictEqual(nomes, ['LGPD', 'Lead']);
   for (const c of ex.chamadas) {
     assert.strictEqual(c.params[0], 9);
-    assert.strictEqual(c.params[4], null); // mikrotik_id
-    assert.strictEqual(c.params[5], 9);
+    assert.strictEqual(c.params[6], null); // mikrotik_id
+    assert.strictEqual(c.params[7], 9);
+    assert.deepStrictEqual(c.params.slice(3, 6), [60, 100, 50]); // minutos, down, up
   }
 });
 
@@ -25,6 +26,6 @@ test('criarPlanosPadrao e idempotente (NOT EXISTS por empresa+nome) e aceita mik
   await criarPlanosPadrao(ex, 3, 42);
   for (const c of ex.chamadas) {
     assert.match(c.sql, /WHERE NOT EXISTS/);
-    assert.strictEqual(c.params[4], 42);
+    assert.strictEqual(c.params[6], 42);
   }
 });
