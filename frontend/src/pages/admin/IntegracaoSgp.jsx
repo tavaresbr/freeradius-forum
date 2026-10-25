@@ -200,7 +200,7 @@ export default function IntegracaoSgp() {
           )}
 
           {amostra && (
-            <div className="text-xs text-gray-400 overflow-x-auto">
+            <div className="text-xs text-gray-400 overflow-x-auto max-h-96 overflow-y-auto">
               <p className="mb-2">Amostra com dados pessoais mascarados ({amostra.length} registro(s)):</p>
               {amostra.map((r, i) => (
                 <pre key={i} className="bg-[#0f111a] border border-gray-800 rounded-lg p-3 mb-2 whitespace-pre-wrap break-words">{JSON.stringify(r, null, 2)}</pre>
