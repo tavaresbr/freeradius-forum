@@ -199,7 +199,8 @@ exports.leadLogin = async (req, res) => {
             existente: true,
             tempoRestante: saldo.tempoRestante,
             // Sessao aberta em outro aparelho: o portal oferece "desconectar a anterior e conectar aqui"
-            ...(await tratarSessaoAtiva({ username, mac, empresaId })),
+            // (titular verificado: a sessao velha do MESMO aparelho e' derrubada sozinha)
+            ...(await tratarSessaoAtiva({ username, mac, empresaId, autorizado: true })),
             gateway_info: await montarGatewayInfo({
               mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username,
             }),
@@ -651,7 +652,7 @@ exports.cadastroCliente = async (req, res) => {
             gateway, username: cpfLimpo, password: saldo.password,
             tempoRestante: saldo.tempoRestante,
             // Sessao aberta em outro aparelho: o portal oferece "desconectar a anterior e conectar aqui"
-            ...(await tratarSessaoAtiva({ username: cpfLimpo, mac, empresaId })),
+            ...(await tratarSessaoAtiva({ username: cpfLimpo, mac, empresaId, autorizado: true })),
             gateway_info: await montarGatewayInfo({
               mikrotik_id: mkId, empresa_id: empresaId, mac, username: cpfLimpo,
             }),

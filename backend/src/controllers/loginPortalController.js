@@ -92,7 +92,8 @@ exports.login = async (req, res) => {
     // pontos/traco) e o MikroTik/RADIUS compara com o valor limpo do banco.
     // Acesso ja aberto em OUTRO aparelho: o portal oferece "desconectar a anterior e conectar aqui"
     // (mesmo aparelho = sessao velha, derrubada sozinha).
-    const sessao = await tratarSessaoAtiva({ username, mac: req.body.mac, empresaId: mk.empresa_id });
+    // Senha conferida acima = titular provado, entao o mesmo aparelho pode ter a sessao velha derrubada sozinho (`autorizado`).
+    const sessao = await tratarSessaoAtiva({ username, mac: req.body.mac, empresaId: mk.empresa_id, autorizado: true });
 
     res.json({ message: "Autenticado com sucesso", gateway, username, password: user.value, gateway_info: gatewayInfo, ...sessao });
 

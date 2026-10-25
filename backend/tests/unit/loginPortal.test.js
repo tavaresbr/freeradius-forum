@@ -77,7 +77,7 @@ test('login-portal: acesso aberto em OUTRO aparelho => requer_desconexao junto c
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.requer_desconexao, true);
   assert.strictEqual(res.body.password, 'abc23456');
-  assert.deepStrictEqual(sessaoResp.chamado, { username: '52998224725', mac: 'AA:BB:CC:DD:EE:01', empresaId: 5 });
+  assert.deepStrictEqual(sessaoResp.chamado, { username: '52998224725', mac: 'AA:BB:CC:DD:EE:01', empresaId: 5, autorizado: true });
 });
 
 test('login-portal: sem sessao aberta => resposta igual a de antes', async () => {

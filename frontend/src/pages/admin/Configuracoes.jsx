@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
-import ConfiguracaoMercadoPago from "../../components/admin/ConfiguracaoMercadoPago";
 
 const acoes = [
   {
@@ -26,7 +25,6 @@ const acoes = [
 const PALAVRA_CONFIRMACAO = "LIMPAR";
 
 export default function Configuracoes() {
-  const [aba, setAba] = useState("limpeza");
   const [modal, setModal] = useState(null);
   const [confirmacao, setConfirmacao] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,41 +64,22 @@ export default function Configuracoes() {
     <AdminLayout>
       <h1 className="text-2xl font-semibold mb-6">Configurações</h1>
 
-      <div className="flex border-b mb-4">
-        <button
-          onClick={() => setAba("limpeza")}
-          className={`px-4 py-2 border-b-2 ${aba === "limpeza" ? "border-blue-500 font-semibold" : "border-transparent"}`}
-        >
-          Limpeza Avançada
-        </button>
-        <button
-          onClick={() => setAba("mercado")}
-          className={`px-4 py-2 border-b-2 ${aba === "mercado" ? "border-blue-500 font-semibold" : "border-transparent"}`}
-        >
-          Mercado Pago
-        </button>
-      </div>
-
-      {aba === "limpeza" && (
-        <div className="space-y-4">
-          {acoes.map((acao) => (
-            <div key={acao.chave} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-semibold">{acao.titulo}</h2>
-                <p className="text-sm text-gray-500">Esta ação é irreversível. Use com cautela.</p>
-              </div>
-              <button
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                onClick={() => { setConfirmacao(""); setModal(acao); }}
-              >
-                Executar
-              </button>
+      <div className="space-y-4">
+        {acoes.map((acao) => (
+          <div key={acao.chave} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-semibold">{acao.titulo}</h2>
+              <p className="text-sm text-gray-500">Esta ação é irreversível. Use com cautela.</p>
             </div>
-          ))}
-        </div>
-      )}
-
-      {aba === "mercado" && <ConfiguracaoMercadoPago />}
+            <button
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+              onClick={() => { setConfirmacao(""); setModal(acao); }}
+            >
+              Executar
+            </button>
+          </div>
+        ))}
+      </div>
 
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

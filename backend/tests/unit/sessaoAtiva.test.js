@@ -94,11 +94,20 @@ test('tratarSessaoAtiva: sem sessao -> {}; outro aparelho -> pede decisao e masc
   assert.ok(!chamadas.some((c) => /UPDATE radacct|DELETE/.test(c.sql)));   // nada foi derrubado sem confirmacao
 });
 
-test('tratarSessaoAtiva: mesmo aparelho -> derruba a sessao velha sozinho e segue', async () => {
+test('tratarSessaoAtiva: mesmo MAC SEM titular verificado NAO derruba (o MAC do corpo nao prova nada)', async () => {
+  reset();
+  let chamou = false;
+  coa.desconectarSessaoCoA = async () => { chamou = true; fechaNoStop(); return { ok: true }; };
+  const r = await sessaoAtiva.tratarSessaoAtiva({ username: 'u', mac: '76:dc:82:a1:64:f4', empresaId: 7 });
+  assert.strictEqual(chamou, false, 'nenhum Disconnect-Request');
+  assert.strictEqual(r.requer_desconexao, true, 'so avisa; a derrubada passa por desconectar-anterior (CPF + data)');
+});
+
+test('tratarSessaoAtiva: mesmo aparelho + titular verificado (autorizado) -> derruba a sessao velha sozinho e segue', async () => {
   reset();
   let pedido = null;
   coa.desconectarSessaoCoA = async (p) => { pedido = p; fechaNoStop(); return { ok: true }; };
-  const r = await sessaoAtiva.tratarSessaoAtiva({ username: 'u', mac: '76:dc:82:a1:64:f4', empresaId: 7 });
+  const r = await sessaoAtiva.tratarSessaoAtiva({ username: 'u', mac: '76:dc:82:a1:64:f4', empresaId: 7, autorizado: true });
   assert.deepStrictEqual(r, {});
   assert.strictEqual(pedido.username, 'u');
   assert.strictEqual(pedido.sessao.acctsessionid, 'abc');
