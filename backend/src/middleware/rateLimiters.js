@@ -36,6 +36,15 @@ const sitePedidoLimiter = rateLimit({
   handler: jsonHandler('Muitos pedidos enviados. Tente novamente mais tarde.'),
 });
 
+// Cartao da assinatura SaaS: limita tentativas (card testing) por IP.
+const cartaoAssinaturaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas tentativas de pagamento com cartão. Tente novamente mais tarde.'),
+});
+
 // Endpoints publicos do captive portal (pagamentos, acesso temporario, etc).
 // Limite mais folgado por causa de polling de status, mas ainda limita abuso/enumeracao.
 const publicApiLimiter = rateLimit({
@@ -97,4 +106,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, sitePedidoLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, registroLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };

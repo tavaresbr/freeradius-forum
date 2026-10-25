@@ -140,3 +140,53 @@ test('webhook: valor divergente nao ativa', async () => {
   axios.get = origGet;
   assert.ok(!chamadas.some((c) => /INSERT INTO assinaturas|SET status = 'aprovada'/.test(c.sql)));
 });
+
+test('cartao: aprovado ativa 1x; recusado marca recusada; sem fingerprint e 400', async () => {
+  const axios = require('axios');
+  const pagCtrl = require('../../src/controllers/pagamentoController');
+  const ctrl = require('../../src/controllers/assinaturaController');
+  const origGet = axios.get; const origPost = axios.post;
+  const resp = () => { const r = { code: 200 }; r.status = (c) => { r.code = c; return r; }; r.json = (b) => { r.body = b; return r; }; return r; };
+  const corpo = { plano_id: 2, card_number: '5031433215406351', cardholder_name: 'MARIA', expiration_month: 11, expiration_year: 2030,
+                  security_code: '123', identification_number: '52998224725', device_session_id: 'armor.x' };
+  const req = (b) => ({ body: b, empresa_id: 3, headers: { host: 'x.com' } });
+
+  const semFp = resp();
+  await ctrl.pagarCartao(req({ ...corpo, device_session_id: '' }), semFp);
+  assert.strictEqual(semFp.code, 400);
+
+  const base = [
+    { re: /FROM saas_planos WHERE id = \? AND ativo/, out: [[{ id: 2, nome: 'Pro', valor: 99.9 }]] },
+    { re: /FROM plataforma_configs/, out: [[{ config_json: JSON.stringify({ access_token: 'T', public_key: 'PK' }) }]] },
+    { re: /SELECT email FROM empresas/, out: [[{ email: 'a@b.com' }]] },
+    { re: /INSERT INTO assinatura_cobrancas/, out: [{ insertId: 9 }] },
+    { re: /SELECT \* FROM assinatura_cobrancas WHERE id/, out: [[{ id: 9, empresa_id: 3, plano_id: 2, valor: 99.9, status: 'aguardando', mp_pagamento_id: '55' }]] },
+    { re: /SELECT ciclo_dias/, out: [[{ ciclo_dias: 30 }]] },
+  ];
+  // BIN lookup usa axios.get (installments); pagamento/tokens usam axios.post
+  axios.get = async (url) => (/installments/.test(url)
+    ? { data: [{ payment_method_id: 'master', payment_type_id: 'credit_card', issuer: { id: '24' } }] }
+    : { data: { id: 55, status: 'approved', transaction_amount: 99.9, external_reference: 'ass_9_emp_3' } });
+  axios.post = async (url) => (/card_tokens/.test(url) ? { data: { id: 'tok' } } : { data: { id: 55, status: 'approved' } });
+
+  chamadas.length = 0;
+  respostas = [...base, { re: /SET status = 'aprovada'/, out: [{ affectedRows: 1 }] }];
+  const ok = resp();
+  await ctrl.pagarCartao(req(corpo), ok);
+  assert.strictEqual(ok.body.status, 'approved');
+  assert.ok(chamadas.some((c) => /INSERT INTO assinaturas/.test(c.sql)));
+  assert.ok(!JSON.stringify(chamadas).includes('5031433215406351'), 'numero do cartao nao pode ir ao banco');
+
+  axios.post = async (url) => (/card_tokens/.test(url) ? { data: { id: 'tok' } } : { data: { id: 56, status: 'rejected', status_detail: 'cc_rejected_insufficient_amount' } });
+  chamadas.length = 0;
+  respostas = [...base];
+  const rec = resp();
+  await ctrl.pagarCartao(req(corpo), rec);
+  assert.strictEqual(rec.code, 400);
+  assert.match(rec.body.message, /Saldo insuficiente/);
+  assert.ok(chamadas.some((c) => /SET status = 'recusada'/.test(c.sql)));
+  assert.ok(!chamadas.some((c) => /INSERT INTO assinaturas/.test(c.sql)));
+
+  axios.get = origGet; axios.post = origPost;
+  void pagCtrl;
+});

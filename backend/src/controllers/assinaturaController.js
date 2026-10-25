@@ -61,6 +61,109 @@ async function sincronizarCobranca(cobranca, cfg) {
   return cobranca.status;
 }
 
+// Cartao: server-side, mesmo pipeline do hotspot (BIN lookup -> card_token -> /v1/payments),
+// com as mesmas regras de payload (ver docs/CHECKOUT-CARTAO-MP.md). Dados do cartao nunca sao gravados nem logados.
+exports.pagarCartao = async (req, res) => {
+  const { lookupBin, MP_ERROR_MESSAGES, MP_ERROR_FALLBACK } = require("./pagamentoController").helpersMp;
+  const b = req.body || {};
+  const cardDigits = String(b.card_number || "").replace(/\D/g, "");
+  const cvv = String(b.security_code || "").trim();
+  const nome = String(b.cardholder_name || "").trim();
+  const cpf = String(b.identification_number || "").replace(/\D/g, "");
+  const mes = parseInt(b.expiration_month, 10);
+  const anoRaw = parseInt(b.expiration_year, 10);
+  const ano = anoRaw < 100 ? 2000 + anoRaw : anoRaw;
+  const planoId = parseInt(b.plano_id, 10);
+
+  if (cardDigits.length < 13 || cardDigits.length > 19) return res.status(400).json({ message: "Número do cartão inválido." });
+  if (cvv.length < 3 || cvv.length > 4) return res.status(400).json({ message: "CVV inválido." });
+  if (nome.length < 2) return res.status(400).json({ message: "Nome no cartão obrigatório." });
+  if (cpf.length !== 11) return res.status(400).json({ message: "CPF do titular inválido." });
+  if (!mes || mes < 1 || mes > 12) return res.status(400).json({ message: "Mês de validade inválido." });
+  if (!ano || ano < new Date().getFullYear() || ano > 2099) return res.status(400).json({ message: "Ano de validade inválido." });
+  if (!b.device_session_id) return res.status(400).json({ message: "Ambiente seguro não carregado. Recarregue a página." });
+
+  let cobrancaId = null;
+  try {
+    const [[plano]] = await db.execute("SELECT id, nome, valor FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
+    if (!plano) return res.status(404).json({ message: "Plano não encontrado." });
+
+    const cfg = await getPlataformaMp();
+    if (!cfg?.access_token || !cfg?.public_key) return res.status(503).json({ message: "Pagamento indisponível no momento. Fale com o suporte." });
+
+    const empresaId = req.empresa_id;
+    const [[empresa]] = await db.execute("SELECT email FROM empresas WHERE id = ?", [empresaId]);
+    const valor = Number(plano.valor);
+
+    const [ins] = await db.execute(
+      "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status) VALUES (?, ?, ?, 'cartao', 'aguardando')",
+      [empresaId, plano.id, plano.valor]
+    );
+    cobrancaId = ins.insertId;
+
+    let bin;
+    try { bin = await lookupBin(cardDigits.slice(0, 6), valor, cfg.public_key); }
+    catch (e) {
+      await db.execute("UPDATE assinatura_cobrancas SET status = 'recusada' WHERE id = ?", [cobrancaId]);
+      return res.status(400).json({ message: e.message });
+    }
+
+    const tokenResp = await axios.post(
+      `https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cfg.public_key)}`,
+      { card_number: cardDigits, security_code: cvv, expiration_month: mes, expiration_year: ano,
+        cardholder: { name: nome, identification: { type: "CPF", number: cpf } } },
+      { headers: { "Content-Type": "application/json" }, timeout: 15000 }
+    );
+    const token = tokenResp.data?.id;
+    if (!token) {
+      await db.execute("UPDATE assinatura_cobrancas SET status = 'recusada' WHERE id = ?", [cobrancaId]);
+      return res.status(400).json({ message: "Erro ao validar dados do cartão." });
+    }
+
+    const proto = req.headers["x-forwarded-proto"] || "https";
+    const host = req.headers["x-forwarded-host"] || req.headers.host;
+    const { data } = await axios.post(
+      "https://api.mercadopago.com/v1/payments",
+      {
+        transaction_amount: valor,
+        token,
+        description: `Assinatura ${plano.nome}`,
+        installments: 1,
+        payment_method_id: bin.payment_method_id,
+        issuer_id: bin.issuer_id || undefined,
+        statement_descriptor: "APEXTELECOM",
+        external_reference: `ass_${cobrancaId}_emp_${empresaId}`,
+        notification_url: `${proto}://${host}/api/assinatura/webhook`,
+        capture: true,
+        binary_mode: false,
+        metadata: { device_session_id: b.device_session_id },
+        payer: { email: (empresa?.email || cfg.email_pagador || "").trim() },
+        additional_info: { items: [{ id: String(plano.id), title: `Assinatura ${plano.nome}`, category_id: "services", quantity: 1, unit_price: valor }] },
+      },
+      { headers: { Authorization: `Bearer ${cfg.access_token}`, "Content-Type": "application/json", "X-Idempotency-Key": uuidv4(), "X-meli-session-id": b.device_session_id }, timeout: 30000 }
+    );
+
+    await db.execute("UPDATE assinatura_cobrancas SET mp_pagamento_id = ? WHERE id = ?", [String(data.id), cobrancaId]);
+
+    if (data.status === "rejected") {
+      await db.execute("UPDATE assinatura_cobrancas SET status = 'recusada' WHERE id = ?", [cobrancaId]);
+      return res.status(400).json({ status: "rejected", message: MP_ERROR_MESSAGES[data.status_detail] || MP_ERROR_FALLBACK });
+    }
+
+    // approved/pending: confirma no MP (valor e referencia) e ativa; pending segue por polling/webhook
+    const [[c]] = await db.execute("SELECT * FROM assinatura_cobrancas WHERE id = ?", [cobrancaId]);
+    const status = await sincronizarCobranca(c, cfg);
+    res.json({ id: cobrancaId, status: status === "aprovada" ? "approved" : "pending" });
+  } catch (err) {
+    const mpError = err.response?.data;
+    console.error("[assinatura] erro no cartão:", err.message, mpError ? JSON.stringify(mpError).slice(0, 400) : "");
+    if (cobrancaId) await db.execute("UPDATE assinatura_cobrancas SET status = 'recusada' WHERE id = ? AND status = 'aguardando'", [cobrancaId]).catch(() => {});
+    if (mpError?.cause?.[0]?.description) return res.status(400).json({ message: mpError.cause[0].description });
+    if (mpError?.message) return res.status(400).json({ message: mpError.message });
+    res.status(500).json({ message: "Erro ao processar pagamento com cartão." });
+  }
+};
+
 // ---------- empresa ----------
 
 exports.planosPublicos = async (req, res) => {

@@ -1236,3 +1236,6 @@ exports.liberarPixTrial = async (req, res) => {
     res.status(500).json({ message: "Erro ao liberar acesso free" });
   }
 };
+
+// Helpers do fluxo de cartao reaproveitados pela cobranca de assinatura SaaS (assinaturaController).
+exports.helpersMp = { lookupBin, splitNome, MP_ERROR_MESSAGES, MP_ERROR_FALLBACK };

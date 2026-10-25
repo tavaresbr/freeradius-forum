@@ -12,6 +12,7 @@ router.post("/webhook", c.webhook);
 // Empresa (isento do bloqueio por assinatura: e' por aqui que ela renova)
 router.get("/status", auth, tenant, c.status);
 router.post("/cobranca", auth, tenant, authorize("owner", "super_admin"), c.criarCobranca);
+router.post("/cartao", auth, tenant, authorize("owner", "super_admin"), c.pagarCartao);
 router.get("/cobranca/:id", auth, tenant, authorize("owner", "super_admin"), c.consultarCobranca);
 
 // Super admin

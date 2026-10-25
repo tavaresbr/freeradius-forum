@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, registroLimiter, sitePedidoLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, registroLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -123,6 +123,7 @@ app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
 app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
 app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
 app.use("/api/assinatura", assinaturaRoutes);     // SaaS: assinatura das empresas
