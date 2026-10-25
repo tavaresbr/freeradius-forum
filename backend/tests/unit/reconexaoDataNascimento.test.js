@@ -617,3 +617,41 @@ test('cadastros publicos: CPF com digito verificador errado => 400 e nada gravad
     assert.ok(!houve(db, /INSERT INTO (leads|radcheck)|UPDATE leads/), `${fn} nao grava nada`);
   }
 });
+
+// ---------- cadastro importado (SGP/planilha) nao e' provisorio ----------
+function dbImportacao({ importado }) {
+  return criarDb(async (sql) => {
+    if (/FROM pagamentos/.test(sql)) return [[]]; // nunca pagou
+    if (/FROM leads l\s+WHERE/.test(sql)) return [importado ? [{ 1: 1 }] : []];
+    if (/COUNT\(\*\) AS total/.test(sql)) return [[{ total: 1, iguais: 0 }]]; // ha data gravada e nao bate
+    return undefined;
+  });
+}
+
+test('cpfConfirmado: cadastro criado por importacao (importado_em) confirma o CPF sem pagamento', async () => {
+  limparCache();
+  const db = dbImportacao({ importado: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  assert.strictEqual(await m.cpfConfirmado('52998224725', 5), true);
+  const q = db.calls.find((c) => /FROM leads l\s+WHERE/.test(c.sql));
+  assert.match(q.sql, /importado_em IS NOT NULL/);
+  assert.match(q.sql, /empresa_id = \?/);
+  limparCache();
+  const m2 = carregar('src/utils/leadUtils.js', { db: dbImportacao({ importado: false }) });
+  assert.strictEqual(await m2.cpfConfirmado('52998224725', 5), false);
+});
+
+test('conferirDataNascimento: cliente importado + outra data => divergente (403), NAO reivindicado', async () => {
+  limparCache();
+  require('../../src/utils/dobTentativas')._resetar();
+  const db = dbImportacao({ importado: true });
+  const m = carregar('src/utils/leadUtils.js', { db });
+  assert.strictEqual(await m.conferirDataNascimento('52998224725', 5, '01/01/1999', { mac: 'AA', ip: '1.1.1.1' }), 'divergente');
+  assert.ok(!houve(db, /UPDATE leads SET data_nascimento/), 'a data importada nao e sobrescrita');
+  limparCache();
+  require('../../src/utils/dobTentativas')._resetar();
+  const db2 = dbImportacao({ importado: false });
+  const m2 = carregar('src/utils/leadUtils.js', { db: db2 });
+  assert.strictEqual(await m2.conferirDataNascimento('52998224725', 5, '01/01/1999', { mac: 'AA', ip: '1.1.1.1' }), 'reivindicado');
+  limparCache();
+});

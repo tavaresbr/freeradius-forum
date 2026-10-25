@@ -97,7 +97,8 @@ async function gravarDataNascimento(cpf, empresaId, data, { permitirLeadExistent
  * CPF na empresa **cujo pagador e' o dono do CPF** — `pagamentos.pagador_cpf` (CPF de quem
  * pagou: do banco no PIX, do titular informado no cartao) e' NULL (desconhecido, conta como
  * antes) ou compativel com o CPF (pode vir mascarado do MP). Quem paga com o proprio banco o CPF
- * de outra pessoa NAO confirma esse CPF (grilagem por pagamento). Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
+ * de outra pessoa NAO confirma esse CPF (grilagem por pagamento). Cadastro criado por importacao
+ * (`leads.importado_em`) tambem conta como confirmado (fonte confiavel). Sem isso o cadastro e' provisorio — qualquer um pode digitar o CPF de outra
  * pessoa antes dela (grilagem), entao a data de nascimento gravada nao prova titularidade e nao
  * pode trancar o dono de verdade para fora. Na duvida (erro de banco) considera confirmado:
  * a trava rigida e' o lado seguro.
@@ -116,7 +117,18 @@ async function cpfConfirmado(cpfLimpo, empresaId) {
         LIMIT 1`,
       empresaId ? [cpfLimpo, cpfLimpo, empresaId] : [cpfLimpo, cpfLimpo]
     );
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    // Cadastro vindo de IMPORTACAO (SGP/planilha do proprio provedor): fonte confiavel, nao e'
+    // provisorio. So conta a linha criada pela importacao (importado_em; a mescla em lead
+    // existente nao grava importado_em), entao quem digitou o CPF antes no portal nao herda a
+    // confianca. Sem isso um terceiro "reivindicaria" o cliente importado com outra data.
+    const [imp] = await db.execute(
+      `SELECT 1 FROM leads l
+        WHERE REPLACE(REPLACE(l.cpf, '.', ''), '-', '') = ? AND l.importado_em IS NOT NULL${empresaId ? " AND l.empresa_id = ?" : ""}
+        LIMIT 1`,
+      empresaId ? [cpfLimpo, empresaId] : [cpfLimpo]
+    );
+    return imp.length > 0;
   } catch (err) {
     console.warn("[cpfConfirmado] indisponivel:", err.message);
     return true;
