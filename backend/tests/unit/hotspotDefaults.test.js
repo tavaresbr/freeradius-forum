@@ -22,8 +22,8 @@ function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = 
 }
 const MK = { ip: '10.8.0.3', usuario: 'admin', senha: 'x', porta: 8728 };
 
-test('padroes: valores combinados (keepalive 1h, interim 5m, timeout RADIUS 3s)', () => {
-  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '1h', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s' });
+test('padroes: valores combinados (keepalive 30m, interim 5m, timeout RADIUS 3s)', () => {
+  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '30m', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s' });
 });
 
 test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e cliente RADIUS', async () => {
@@ -33,7 +33,7 @@ test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e clien
   const por = Object.fromEntries(conn.chamadas.map((c) => [c.caminho, c.args]));
   assert.ok(por['/ip/hotspot/profile/set'].includes('=radius-interim-update=5m'));
   assert.ok(por['/ip/hotspot/profile/set'].includes('=numbers=hsprof-hotspot'));
-  assert.ok(por['/ip/hotspot/user/profile/set'].includes('=keepalive-timeout=1h'));
+  assert.ok(por['/ip/hotspot/user/profile/set'].includes('=keepalive-timeout=30m'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=idle-timeout=none'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=numbers=default'));
   assert.deepStrictEqual(por['/radius/set'], ['=.id=*1', '=timeout=3s']);

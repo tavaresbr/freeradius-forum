@@ -324,9 +324,9 @@ const carregarMikrotiks = async () => {
     }
   };
 
-  // Aplica os padroes do hotspot (keepalive 1h, interim-update 5m, timeout RADIUS 3s) em todos os MikroTik
+  // Aplica os padroes do hotspot (keepalive 30 min, interim-update 5m, timeout RADIUS 3s) em todos os MikroTik
   const aplicarPadroesEmTodos = async () => {
-    if (!confirm("Aplicar os padrões do hotspot (keepalive 1h, atualização RADIUS a cada 5 min, timeout RADIUS 3s) em TODOS os equipamentos MikroTik desta empresa?")) return;
+    if (!confirm("Aplicar os padrões do hotspot (keepalive 30 min, atualização RADIUS a cada 5 min, timeout RADIUS 3s) em TODOS os equipamentos MikroTik desta empresa?")) return;
     setAplicandoPadroes(true);
     setResultadoPadroes(null);
     try {
@@ -358,7 +358,7 @@ const carregarMikrotiks = async () => {
             onClick={aplicarPadroesEmTodos}
             disabled={aplicandoPadroes}
             className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow disabled:opacity-50"
-            title="Keepalive 1h, atualização RADIUS a cada 5 min e timeout RADIUS 3s em todos os MikroTik"
+            title="Keepalive 30 min, atualização RADIUS a cada 5 min e timeout RADIUS 3s em todos os MikroTik"
           >
             {aplicandoPadroes ? "Aplicando..." : "Aplicar padrões em todos"}
           </button>
