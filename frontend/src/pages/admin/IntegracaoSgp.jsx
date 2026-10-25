@@ -38,7 +38,8 @@ function Resumo({ r }) {
 
 export default function IntegracaoSgp() {
   const { empresaSlug } = useParams();
-  const [cfg, setCfg] = useState({ url: "", app: "", endpoint: "/api/ura/clientes/", token: "" });
+  const [cfg, setCfg] = useState({ url: "", app: "", endpoint: "/api/ura/clientes/", token: "", sync_auto: false, sync_horas: 24 });
+  const [ultimaSync, setUltimaSync] = useState(null);
   const [tokenDefinido, setTokenDefinido] = useState(false);
   const [msg, setMsg] = useState({ tipo: "", texto: "" });
   const [busy, setBusy] = useState("");
@@ -53,7 +54,8 @@ export default function IntegracaoSgp() {
     try {
       const res = await fetch(`${API}/api/integracoes/sgp`, { headers });
       const d = await res.json();
-      setCfg((c) => ({ ...c, url: d.url || "", app: d.app || "", endpoint: d.endpoint || c.endpoint }));
+      setCfg((c) => ({ ...c, url: d.url || "", app: d.app || "", endpoint: d.endpoint || c.endpoint, sync_auto: !!d.sync_auto, sync_horas: d.sync_horas || 24 }));
+      setUltimaSync(d.ultima_sync || null);
       setTokenDefinido(!!d.token_definido);
     } catch { /* formulario segue vazio */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +85,7 @@ export default function IntegracaoSgp() {
     setMsg({ tipo: "ok", texto: data.message || "Salvo" });
     setCfg((c) => ({ ...c, token: "" }));
     setTokenDefinido(true);
+    carregar();
   };
 
   const testar = async () => {
@@ -145,6 +148,28 @@ export default function IntegracaoSgp() {
               <label className="block text-xs text-gray-400 mb-1">Endpoint de clientes</label>
               <input className={inputCls} value={cfg.endpoint} onChange={(e) => setCfg({ ...cfg, endpoint: e.target.value })} />
             </div>
+          </div>
+          <div className="border-t border-gray-800 pt-4 space-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={cfg.sync_auto} onChange={(e) => setCfg({ ...cfg, sync_auto: e.target.checked })} />
+              Importar clientes do SGP automaticamente
+            </label>
+            {cfg.sync_auto && (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                A cada
+                <select className={`${inputCls} !w-auto`} value={cfg.sync_horas} onChange={(e) => setCfg({ ...cfg, sync_horas: Number(e.target.value) })}>
+                  {[1, 6, 12, 24, 48, 168].map((h) => <option key={h} value={h}>{h === 168 ? "7 dias" : h === 48 ? "2 dias" : `${h} hora${h > 1 ? "s" : ""}`}</option>)}
+                </select>
+              </div>
+            )}
+            {ultimaSync && (
+              <p className={`text-xs ${ultimaSync.ok ? "text-gray-500" : "text-red-400"}`}>
+                Última sincronização: {new Date(ultimaSync.em).toLocaleString("pt-BR")} —{" "}
+                {ultimaSync.ok
+                  ? `${ultimaSync.total} lido(s), ${ultimaSync.criados} criado(s), ${ultimaSync.atualizados} completado(s), ${ultimaSync.erros} com erro`
+                  : `falhou: ${ultimaSync.erro}`}
+              </p>
+            )}
           </div>
           <button disabled={!!busy} onClick={salvar} className={btnPrimary}>{busy === "salvar" ? "Salvando..." : "Salvar"}</button>
         </div>

@@ -51,14 +51,14 @@ exports.obterSgp = async (req, res) => {
 // PUT /api/integracoes/sgp
 exports.salvarSgp = async (req, res) => {
   try {
-    const { url, app, token, endpoint } = req.body || {};
+    const { url, app, token, endpoint, sync_auto, sync_horas } = req.body || {};
     const urlNorm = sgp.normalizarUrl(url);
     if (!urlNorm || !sgp.urlPermitida(urlNorm)) return res.status(400).json({ message: "URL do SGP inválida" });
     if (!String(app || "").trim()) return res.status(400).json({ message: "Informe o app do SGP" });
     const atual = await sgp.carregarConfig(req.empresa_id);
     if (!token && !(atual && atual.token)) return res.status(400).json({ message: "Informe o token do SGP" });
     if (endpoint && !String(endpoint).startsWith("/")) return res.status(400).json({ message: "O endpoint deve começar com /" });
-    await sgp.salvarConfig(req.empresa_id, { url: urlNorm, app, token, endpoint });
+    await sgp.salvarConfig(req.empresa_id, { url: urlNorm, app, token, endpoint, sync_auto, sync_horas });
     res.json({ success: true, message: "Configuração do SGP salva" });
   } catch (err) {
     console.error("Erro ao salvar config SGP:", err.message);
