@@ -10,12 +10,13 @@ const CPF = '52998224725';
 const silencia = () => { const l = console.log, w = console.warn, e = console.error; console.log = console.warn = console.error = () => {}; return () => { console.log = l; console.warn = w; console.error = e; }; };
 
 // ---------- utilitario ----------
-test('normalizarCpfPagador: so digitos e *, 11 posicoes e ao menos 4 digitos visiveis', () => {
+test('normalizarCpfPagador: so digitos e *, 11 posicoes e ao menos 6 digitos visiveis', () => {
   assert.strictEqual(normalizarCpfPagador('529.982.247-25'), '52998224725');
   assert.strictEqual(normalizarCpfPagador('***.982.247-**'), '***982247**');
   assert.strictEqual(normalizarCpfPagador('52998224725'), '52998224725');
   assert.strictEqual(normalizarCpfPagador('***.***.***-**'), null, 'tudo mascarado nao prova nada');
   assert.strictEqual(normalizarCpfPagador('***.***.247-**'), null, 'poucos digitos visiveis');
+  assert.strictEqual(normalizarCpfPagador('***.982.2**-**'), null, '5 digitos visiveis ainda casa com CPFs demais');
   assert.strictEqual(normalizarCpfPagador('1234'), null);
   assert.strictEqual(normalizarCpfPagador('abc.def.ghi-jk'), null);
   assert.strictEqual(normalizarCpfPagador(null), null);

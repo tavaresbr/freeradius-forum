@@ -1,12 +1,12 @@
 // CPF de quem PAGOU (nao o do cadastro). Ver migration 030 e leadUtils.cpfConfirmado.
 
 // Guarda so digitos e '*' (o Mercado Pago pode mascarar: "***.123.456-**"). Exige 11 posicoes e
-// ao menos 4 digitos visiveis; senao devolve null (= pagador desconhecido, nao prova nada).
+// ao menos 6 digitos visiveis (padrao do MP: "***.123.456-**"; com menos, a mascara casa com CPFs demais); senao devolve null (= pagador desconhecido, nao prova nada).
 function normalizarCpfPagador(valor) {
   if (valor == null) return null;
   const s = String(valor).replace(/[.\-\s]/g, "");
   if (!/^[0-9*]{11}$/.test(s)) return null;
-  if ((s.match(/\d/g) || []).length < 4) return null;
+  if ((s.match(/\d/g) || []).length < 6) return null;
   return s;
 }
 
