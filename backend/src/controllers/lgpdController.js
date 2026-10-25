@@ -18,6 +18,10 @@ exports.lgpdLogin = async (req, res) => {
       return res.status(400).json({ message: "Dados obrigatórios faltando" });
     }
 
+    // CPF digitado no portal e' validado no servidor (digitos verificadores): a validacao do front
+    // e' contornavel e CPF inventado vira cadastro/username RADIUS que ninguem pode reclamar.
+    if (cpf && !validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
+
     // Resolver empresa_id via mikrotik_id (endpoint público)
     let empresaId = null;
     if (mikrotik_id) {
@@ -307,6 +311,7 @@ exports.lgpdCadastro = async (req, res) => {
     if (!cpf || aceite === undefined) {
       return res.status(400).json({ message: "CPF e aceite são obrigatórios" });
     }
+    if (!validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
 
     let empresaId = null;
     if (mikrotik_id) {

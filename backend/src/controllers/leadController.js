@@ -17,6 +17,7 @@ exports.capturaPassiva = async (req, res) => {
     if (!telefone && !email) {
       return res.status(400).json({ message: "Telefone ou email são obrigatórios" });
     }
+    if (cpf && !validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
 
     let empresaId = null;
     if (mikrotik_id) {
@@ -116,6 +117,7 @@ exports.leadLogin = async (req, res) => {
     if (!mac || !ip) {
       return res.status(400).json({ message: "MAC e IP são obrigatórios" });
     }
+    if (cpf && !validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
 
     // Resolver empresa_id via mikrotik_id
     let empresaId = null;
@@ -572,6 +574,7 @@ exports.cadastroCliente = async (req, res) => {
     if (!nome || !email || !telefone || !cpf) {
       return res.status(400).json({ message: "Nome, email, telefone e CPF são obrigatórios" });
     }
+    if (!validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
 
     let empresaId = null;
     if (mikrotik_id) {
