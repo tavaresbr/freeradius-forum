@@ -2,7 +2,7 @@ const express = require("express")
 const router = express.Router()
 const db = require("../../db")
 const { getDriver } = require("../gateways");
-const { resolveHotspotHtmlDir } = require("../utils/hotspotSetup");
+const { resolveHotspotHtmlDir, aplicarPadroesHotspot } = require("../utils/hotspotSetup");
 const { obterInformacoes } = require("../controllers/mikrotikAPIController");
 const { exec } = require("child_process");
 const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
@@ -199,6 +199,26 @@ router.get("/vpn-disponiveis", async (req, res) => {
   } catch (err) {
     console.error("Erro em /vpn-disponiveis:", err.message);
     res.status(500).json({ message: "Erro ao buscar peers da VPN." });
+  }
+});
+
+// Aplica os padroes do hotspot (keepalive, interim-update, timeout RADIUS) em TODOS os MikroTik da empresa.
+// Um equipamento offline/com erro nao impede os outros.
+router.post("/aplicar-padroes", async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      "SELECT id, nome, ip, usuario, senha, porta FROM mikrotiks WHERE empresa_id = ? AND tipo = 'mikrotik' ORDER BY id",
+      [req.empresa_id]
+    );
+    const resultados = [];
+    for (const m of rows) {
+      const r = await aplicarPadroesHotspot(m);
+      resultados.push({ id: m.id, nome: m.nome, ...r });
+    }
+    res.json({ resultados });
+  } catch (err) {
+    console.error("Erro em /aplicar-padroes:", err.message);
+    res.status(500).json({ message: "Erro ao aplicar os padrões nos equipamentos." });
   }
 });
 

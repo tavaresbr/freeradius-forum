@@ -23,6 +23,8 @@ export default function Mikrotiks() {
   const [enviandoStatus, setEnviandoStatus] = useState(null);
   const [mikrotikInfo, setMikrotikInfo] = useState(null);
   const [erro, setErro] = useState("");
+  const [aplicandoPadroes, setAplicandoPadroes] = useState(false);
+  const [resultadoPadroes, setResultadoPadroes] = useState(null); // [{id, nome, ok, mensagem}]
 
   // API do controller Omada (captura de nomes de APs — o portal segue 100% RADIUS)
   const [apiGw, setApiGw] = useState(null); // gateway do modal aberto (null = fechado)
@@ -322,6 +324,26 @@ const carregarMikrotiks = async () => {
     }
   };
 
+  // Aplica os padroes do hotspot (keepalive 30 min, interim-update 5m, timeout RADIUS 3s) em todos os MikroTik
+  const aplicarPadroesEmTodos = async () => {
+    if (!confirm("Aplicar os padrões do hotspot (keepalive 30 min, atualização RADIUS a cada 5 min, timeout RADIUS 3s) em TODOS os equipamentos MikroTik desta empresa?")) return;
+    setAplicandoPadroes(true);
+    setResultadoPadroes(null);
+    try {
+      const res = await fetch("/api/mikrotiks/aplicar-padroes", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erro ao aplicar os padrões");
+      setResultadoPadroes(data.resultados || []);
+    } catch (err) {
+      setResultadoPadroes([{ id: 0, nome: "Erro", ok: false, mensagem: err.message }]);
+    } finally {
+      setAplicandoPadroes(false);
+    }
+  };
+
   useEffect(() => {
     carregarMikrotiks();
     carregarPortais();
@@ -331,13 +353,40 @@ const carregarMikrotiks = async () => {
     <AdminLayout>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-white">Equipamentos</h1>
-        <button
-          onClick={() => { setEditandoGw(null); setShowGwWizard(true); }}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded shadow"
-        >
-          + Adicionar Equipamento
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={aplicarPadroesEmTodos}
+            disabled={aplicandoPadroes}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow disabled:opacity-50"
+            title="Keepalive 30 min, atualização RADIUS a cada 5 min e timeout RADIUS 3s em todos os MikroTik"
+          >
+            {aplicandoPadroes ? "Aplicando..." : "Aplicar padrões em todos"}
+          </button>
+          <button
+            onClick={() => { setEditandoGw(null); setShowGwWizard(true); }}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded shadow"
+          >
+            + Adicionar Equipamento
+          </button>
+        </div>
       </div>
+
+      {resultadoPadroes && (
+        <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-semibold text-white">Resultado da aplicação dos padrões</h3>
+            <button onClick={() => setResultadoPadroes(null)} className="text-gray-400 hover:text-white text-sm">Fechar</button>
+          </div>
+          {resultadoPadroes.length === 0 && <p className="text-gray-400 text-sm">Nenhum equipamento MikroTik cadastrado.</p>}
+          <ul className="space-y-1 text-sm">
+            {resultadoPadroes.map((r) => (
+              <li key={`${r.id}-${r.nome}`} className={r.ok ? "text-green-400" : "text-red-400"}>
+                {r.ok ? "✔" : "✖"} {r.nome}: {r.mensagem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6">
         <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
