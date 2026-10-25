@@ -78,10 +78,11 @@ test('webhook PIX: CPF mascarado pelo MP e gravado mascarado', async () => {
   assert.deepStrictEqual(gravouPagador(db).params, ['***982247**', 999]);
 });
 
-test('webhook PIX: MP sem CPF do pagador => nada gravado (desconhecido = conta como antes)', async () => {
+test('webhook PIX: MP sem CPF do pagador => grava o marcador DESCONHECIDO (nao confirma o CPF)', async () => {
   const { db, mod } = webhook({ mp: mpAprovado() });
   const un = silencia(); try { await rodar(mod); } finally { un(); }
-  assert.ok(!gravouPagador(db));
+  assert.deepStrictEqual(gravouPagador(db).params, ['DESCONHECIDO', 999]);
+  assert.strictEqual(cpfCompativel('DESCONHECIDO', '52998224725'), false);
 });
 
 test('webhook PIX: pagador diferente do CPF do cadastro => grava e avisa no log (sem expor CPF)', async () => {

@@ -8,7 +8,7 @@ const { liberarUsuario } = require("./mikrotikAPIController");
 const { gerarAcessoTemporario } = require("./authTempController");
 const { obterSenhaRadius } = require("../utils/radiusPassword");
 const { bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO } = require("../utils/leadUtils");
-const { extrairCpfPagador, cpfCompativel } = require("../utils/pagadorCpf");
+const { extrairCpfPagador, cpfCompativel, PAGADOR_DESCONHECIDO } = require("../utils/pagadorCpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
@@ -817,14 +817,17 @@ exports.notificacaoWebhook = async (req, res) => {
         );
 
         // CPF de quem PAGOU (dado do banco no PIX): so ele pode confirmar o CPF do cadastro
-        // (leadUtils.cpfConfirmado). Nunca bloqueia a liberacao; ausente = desconhecido.
+        // (leadUtils.cpfConfirmado). Nunca bloqueia a liberacao; ausente = marcador DESCONHECIDO (nao confirma).
         try {
           const pagadorCpf = extrairCpfPagador(pagamento);
-          if (pagadorCpf) {
-            await db.query(
-              "UPDATE pagamentos SET pagador_cpf = ? WHERE mp_pagamento_id = ? AND pagador_cpf IS NULL",
-              [pagadorCpf, mpPagamentoId]
-            );
+          // Sem dado do banco o pagamento NAO confirma o CPF (marcador); so legado NULL conta.
+          await db.query(
+            "UPDATE pagamentos SET pagador_cpf = ? WHERE mp_pagamento_id = ? AND pagador_cpf IS NULL",
+            [pagadorCpf || PAGADOR_DESCONHECIDO, mpPagamentoId]
+          );
+          if (!pagadorCpf) {
+            console.warn(`[webhook MP] PIX aprovado sem CPF do pagador (mp_id=${mpPagamentoId} empresa=${empresaId || "-"}): nao confirma o CPF`);
+          } else {
             const [[reg]] = await db.query("SELECT cpf FROM pagamentos WHERE mp_pagamento_id = ? LIMIT 1", [mpPagamentoId]);
             if (reg?.cpf && !cpfCompativel(pagadorCpf, reg.cpf)) {
               console.warn(`[webhook MP] pagador diferente do CPF do cadastro (mp_id=${mpPagamentoId} empresa=${empresaId || "-"}): nao confirma o CPF`);
