@@ -39,7 +39,7 @@ export default function Login() {
       <SiteHeader />
       <form onSubmit={handleLogin} className="bg-[#1a1d27] border border-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm">
         <div className="mb-6 text-center">
-          <h2 className="text-2xl font-bold text-white">SpotControl Pro</h2>
+          <h2 className="text-2xl font-bold text-white">Apex Telecom</h2>
         </div>
         {erro && <p className="text-red-400 text-sm mb-4">{erro}</p>}
 
