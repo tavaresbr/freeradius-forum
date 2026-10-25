@@ -45,6 +45,8 @@ export default function Pagamento() {
   // Acesso pago ja aberto em outro aparelho: aguarda o cliente decidir antes do login final
   const [sessaoAtiva, setSessaoAtiva] = useState(null);
   const [sessaoCancelada, setSessaoCancelada] = useState(false);
+  // Acesso gratis (copiar PIX) com o CPF ja conectado em outro aparelho: aguarda a decisao do cliente
+  const [sessaoTrial, setSessaoTrial] = useState(null);
 
   const mac = searchParams.get("mac");
   const ip = searchParams.get("ip");
@@ -209,32 +211,42 @@ export default function Pagamento() {
 
     // 2. Se o trial esta ativo e ainda nao foi liberado, dispara agora
     if (plano?.pix_trial_enabled && !trialLiberado && !trialLoading && pagamentoId) {
-      setTrialLoading(true);
-      setTrialErro(null);
-      try {
-        const res = await fetch("/api/pagamentos/pix-trial", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pagamento_id: pagamentoId }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setTrialErro(data.message || "Nao foi possivel liberar acesso free");
-        } else {
-          setTrialLiberado(true);
-          // Auto-redireciona pro hotspot login com as creds temporarias
-          // para o cliente ter internet e conseguir abrir o app do banco.
-          if (data.gateway && data.username) {
-            setTimeout(() => {
-              redirecionarHotspot(data.gateway, data.username, data.password, 1500, data.gateway_info);
-            }, 2000); // 2s pro usuario ler a mensagem antes de redirecionar
-          }
+      await liberarTrial();
+    }
+  };
+
+  // Acesso gratis ao copiar o PIX. Prova de posse: id interno + id do Mercado Pago + MAC do MESMO pagamento.
+  // Se o CPF ja esta conectado em outro aparelho o servidor NAO grava nada e devolve requer_desconexao:
+  // o aviso aparece e, depois de desconectar o outro, esta funcao roda de novo.
+  const liberarTrial = async () => {
+    setTrialLoading(true);
+    setTrialErro(null);
+    try {
+      const res = await fetch("/api/pagamentos/pix-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pagamento_id: pagamentoId, mp_pagamento_id: mpPagamentoId, mac }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTrialErro(data.message || "Nao foi possivel liberar acesso free");
+      } else if (data.requer_desconexao) {
+        setSessaoTrial(data);
+      } else {
+        setSessaoTrial(null);
+        setTrialLiberado(true);
+        // Auto-redireciona pro hotspot login com as creds temporarias
+        // para o cliente ter internet e conseguir abrir o app do banco.
+        if (data.gateway && data.username) {
+          setTimeout(() => {
+            redirecionarHotspot(data.gateway, data.username, data.password, 1500, data.gateway_info);
+          }, 2000); // 2s pro usuario ler a mensagem antes de redirecionar
         }
-      } catch (err) {
-        setTrialErro("Erro ao liberar acesso free");
-      } finally {
-        setTrialLoading(false);
       }
+    } catch (err) {
+      setTrialErro("Erro ao liberar acesso free");
+    } finally {
+      setTrialLoading(false);
     }
   };
 
@@ -384,6 +396,20 @@ export default function Pagamento() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center px-4 py-10">
       <h1 className="text-2xl font-semibold text-gray-800 mb-4">Pagamento do Plano</h1>
+
+      {sessaoTrial && (
+        <div className="w-full max-w-md mb-4">
+          <SessaoAtivaAviso
+            dados={sessaoTrial}
+            cpf={sessaoTrial.username}
+            dataNascimento={(() => { try { return sessionStorage.getItem(`hs_dn_${clienteId}`) || ""; } catch { return ""; } })()}
+            mac={mac}
+            mikrotikId={mikrotikId}
+            aoDesconectar={liberarTrial}
+            onCancelar={() => setSessaoTrial(null)}
+          />
+        </div>
+      )}
 
       {mac && (
         <p className="mb-2 text-sm text-gray-500">

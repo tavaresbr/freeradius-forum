@@ -8,9 +8,10 @@ import { mascaraData, dataNascimentoValida } from "../../utils/dataUtils";
  * ja informados) e, em caso de sucesso, faz o login final com as credenciais ja recebidas.
  * Props: dados (resposta do login: sessao_ativa, gateway, username, password, gateway_info),
  * cpf, dataNascimento, mac, mikrotikId, onCancelar(). Com modoSenha (tela de login usuario+senha) a prova e' a senha
- * recebida no login (sem CPF/data). Sem dataNascimento (ex.: veio de outra pagina), pede a data aqui.
+ * recebida no login (sem CPF/data). Com aoDesconectar() (ainda nao ha credenciais, ex.: acesso gratis ao copiar PIX) o
+ * login final nao e' feito aqui: depois de desconectar o outro, chama o callback. Sem dataNascimento (ex.: veio de outra pagina), pede a data aqui.
  */
-export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikrotikId, onCancelar, modoSenha = false }) {
+export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikrotikId, onCancelar, modoSenha = false, aoDesconectar }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
   const [dataInformada, setDataInformada] = useState("");
@@ -35,6 +36,7 @@ export default function SessaoAtivaAviso({ dados, cpf, dataNascimento, mac, mikr
       });
       const r = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(r.message || "Não foi possível desconectar o outro aparelho.");
+      if (aoDesconectar) { await aoDesconectar(); setEnviando(false); return; }
       redirecionarHotspot(dados.gateway, dados.username, dados.password, 800, dados.gateway_info);
     } catch (e) {
       setErro(e.message);

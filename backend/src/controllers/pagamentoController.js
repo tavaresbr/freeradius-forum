@@ -1125,9 +1125,11 @@ exports.verificarStatusPagamento = async (req, res) => {
 
 exports.liberarPixTrial = async (req, res) => {
   try {
-    const { pagamento_id } = req.body;
-    if (!pagamento_id) {
-      return res.status(400).json({ message: "pagamento_id obrigatorio" });
+    // Prova de posse (como o /status): o id interno e' sequencial, entao so ele nao basta — sem
+    // mp_pagamento_id + mac do MESMO registro qualquer um trocaria a senha do CPF de outro pagamento.
+    const { pagamento_id, mp_pagamento_id, mac: macReq } = req.body || {};
+    if (!pagamento_id || !mp_pagamento_id || !macReq) {
+      return res.status(400).json({ message: "pagamento_id, mp_pagamento_id e mac obrigatorios" });
     }
 
     // Buscar pagamento com dados do plano e portal
@@ -1139,8 +1141,8 @@ exports.liberarPixTrial = async (req, res) => {
          FROM pagamentos p
          LEFT JOIN planos pl ON pl.id = p.plano_id
          LEFT JOIN portais po ON po.id = p.portal_id AND po.empresa_id = p.empresa_id
-        WHERE p.id = ? LIMIT 1`,
-      [pagamento_id]
+        WHERE p.id = ? AND p.mp_pagamento_id = ? AND LOWER(p.mac) = LOWER(?) LIMIT 1`,
+      [pagamento_id, String(mp_pagamento_id), String(macReq)]
     );
 
     if (!pag) return res.status(404).json({ message: "Pagamento nao encontrado" });
@@ -1201,6 +1203,17 @@ exports.liberarPixTrial = async (req, res) => {
         message: "Voce ja usou o acesso free 2 vezes. Realize o pagamento para continuar navegando.",
         retry_after: proximoPermitido.toISOString(),
       });
+    }
+
+    // 3.1 Acesso do CPF ja aberto em OUTRO aparelho: gerarAcessoTemporario regravaria as credenciais
+    //     do acesso que esta no ar e o login daqui seria recusado (Simultaneous-Use=1). Antes de tocar
+    //     no RADIUS, devolve o aviso; o cliente decide e o front repete o pedido depois de desconectar.
+    //     Nada e' gravado (nem trial_liberado_em), entao nao consome o limite de trials.
+    const sessaoAberta = await tratarSessaoAtiva({
+      username: cpfCliente, mac: pag.mac, empresaId: pag.empresa_id, manterMesmoAparelho: true,
+    });
+    if (sessaoAberta.requer_desconexao) {
+      return res.json({ ok: false, username: cpfCliente, ...sessaoAberta });
     }
 
     // 4. Criar usuario RADIUS ja com o CPF (usuario definitivo). Assim, quando o
