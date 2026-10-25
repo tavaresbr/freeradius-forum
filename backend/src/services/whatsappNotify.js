@@ -131,7 +131,7 @@ async function resolvePortalByMikrotik(mikrotikId, empresaId) {
  * @param {string} [ctx.telefone] - se ja tiver em maos, passa direto
  * @param {number} [ctx.cliente_id] - id do lead (fonte mais confiavel do telefone)
  * @param {string} [ctx.cpf] - fallback: busca lead por CPF
- * @param {string} [ctx.mac] - fallback final: lgpd_logins por mac
+ * @param {string} [ctx.mac] - (nao usado para resolver telefone: vem do cliente)
  * @param {string} ctx.contexto_tipo - 'pagamento_aprovado'|'lgpd'|'manual'|'acesso_temporario'
  * @param {number} [ctx.referencia_id] - id do pagamento/lead/etc
  * @param {object} ctx.vars - variaveis para o template: { nome, username, password, plano, duracao, ... }
@@ -187,20 +187,36 @@ async function notificarLiberacao(ctx) {
       return { ok: false, skipped: "sem_template" };
     }
 
-    // 3. Resolver telefone e nome (cliente_id > telefone explicito > cpf > mac)
+    // 3. Resolver telefone e nome (telefone explicito > cliente_id > cpf).
+    // Regra anti-vazamento: um cadastro so empresta o NOME se o telefone da mensagem e' o proprio
+    // telefone desse cadastro (ou se a mensagem ainda nao tem telefone e herda o dele). Sem isso, quem
+    // digita o CPF de outra pessoa com o PROPRIO telefone e sem nome receberia no WhatsApp "Ola <nome
+    // do titular do CPF>" (CPF -> nome). Nao ha busca por MAC: ele vem do cliente e apontaria a
+    // credencial para o telefone de um terceiro.
     let telefone = telefoneInput || null;
     let nomeCliente = vars.nome || null;
+    const digitos = (v) => String(v || "").replace(/\D/g, "");
+    const mesmoFone = (a, b) => {
+      const x = digitos(a), y = digitos(b);
+      return x.length >= 10 && y.length >= 10 && x.slice(-10) === y.slice(-10);
+    };
+    const aproveitar = (lead) => {
+      if (!lead) return;
+      if (!telefone) {
+        telefone = lead.telefone || null;
+        nomeCliente = nomeCliente || lead.nome || null;
+      } else if (!nomeCliente && mesmoFone(telefone, lead.telefone)) {
+        nomeCliente = lead.nome || null;
+      }
+    };
 
     if ((!telefone || !nomeCliente) && cliente_id) {
       try {
-        const [[lead]] = await db.query(
-          "SELECT nome, telefone FROM leads WHERE id = ? LIMIT 1",
-          [cliente_id]
-        );
-        if (lead) {
-          telefone = telefone || lead.telefone || null;
-          nomeCliente = nomeCliente || lead.nome || null;
-        }
+        const params = [cliente_id];
+        let sql = "SELECT nome, telefone FROM leads WHERE id = ?";
+        if (empresa_id) { sql += " AND empresa_id = ?"; params.push(empresa_id); }
+        const [[lead]] = await db.query(sql + " LIMIT 1", params);
+        aproveitar(lead);
       } catch (e) { /* silencioso */ }
     }
 
@@ -218,30 +234,7 @@ async function notificarLiberacao(ctx) {
           }
           sql += " ORDER BY criado_em DESC, id DESC LIMIT 1";
           const [[lead]] = await db.query(sql, params);
-          if (lead) {
-            telefone = telefone || lead.telefone || null;
-            nomeCliente = nomeCliente || lead.nome || null;
-          }
-        }
-      } catch (e) { /* silencioso */ }
-    }
-
-    if (!telefone && mac) {
-      try {
-        // A tabela lgpd_logins nao existe: o consentimento LGPD e' gravado em
-        // leads com origem='lgpd'. Busca por MAC (escopo de empresa quando houver).
-        const paramsMac = [mac];
-        let sqlMac = `SELECT nome, telefone FROM leads
-                      WHERE mac = ? AND origem = 'lgpd' AND telefone IS NOT NULL`;
-        if (empresa_id) {
-          sqlMac += " AND empresa_id = ?";
-          paramsMac.push(empresa_id);
-        }
-        sqlMac += " ORDER BY criado_em DESC, id DESC LIMIT 1";
-        const [[lgpd]] = await db.query(sqlMac, paramsMac);
-        if (lgpd) {
-          telefone = lgpd.telefone || null;
-          nomeCliente = nomeCliente || lgpd.nome || null;
+          aproveitar(lead);
         }
       } catch (e) { /* silencioso */ }
     }

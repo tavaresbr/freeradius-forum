@@ -1308,7 +1308,7 @@ mikrotikAPIController      │
 3. O service:
    - Busca `whatsapp_enabled` e `whatsapp_template` do portal (resolve `portal_id` via `mikrotiks.portal_id` se nao informado)
    - Se desligado ou sem template → grava `skipped` no log e retorna
-   - Resolve telefone na ordem: `telefone` explicito → `cliente_id` (leads) → `cpf` (leads) → `mac` (leads com origem='lgpd')
+   - Resolve telefone na ordem: `telefone` explicito → `cliente_id` (leads) → `cpf` (leads); sem busca por MAC
    - Normaliza telefone para 13 digitos (`55 + DDD 2 + numero 9`) por **comprimento**, NAO por prefixo `startsWith("55")` (DDD 55 do RS confundia)
    - Renderiza template com variaveis (`nome`, `username`, `password`, `plano`, `duracao`, `velocidade`, `login_url`, `valor`, `empresa`, `expira_em`, `cpf`)
    - Envia via `enviarMensagemDireta` (que aplica `formatarNumeroComNonoDigito` pro DDD ≤ 30 adicionar 9)
@@ -1331,6 +1331,8 @@ mikrotikAPIController      │
 | `{{expira_em}}` | `pagamentos.expira_em` | vazio |
 
 Variaveis nao-resolvidas viram string vazia (nunca aparece `{{foo}}` no resultado).
+
+**Anti-vazamento (grilagem por WhatsApp):** o telefone sai de `telefone` explicito > `cliente_id` > `cpf`; **nao ha busca por MAC** (vem do cliente: apontaria a credencial para o telefone de um terceiro). Um cadastro so empresta o **nome** se o telefone da mensagem e' o dele (comparacao pelos 10 ultimos digitos) ou se a mensagem herda o telefone dele; senao `{{nome}}` vira "Cliente". Sem isso, digitar o CPF de outra pessoa com o proprio telefone e sem nome fazia o WhatsApp dizer "Ola <nome do titular>" (CPF -> nome). Teste: `backend/tests/unit/whatsappNotify.test.js`.
 
 ### Endpoints
 
