@@ -152,9 +152,9 @@ export default function Wireguard() {
           </h1>
           <button 
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold shadow-lg shadow-green-900/40 hover:bg-green-500 transition-colors"
           >
-            <span className="text-lg">+</span> Adicionar Peer
+            <span className="text-lg leading-none">+</span> Adicionar Peer
           </button>
           <button 
             onClick={() => setShowSettings(!showSettings)}
