@@ -14,8 +14,8 @@ export default function SiteHeader() {
 
   return (
     <header className="tema-site fixed top-0 inset-x-0 z-40 bg-white/95 backdrop-blur text-apex-900 border-b border-apex-100">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <Link to="/"><MarcaApex /></Link>
+      <div className="max-w-6xl mx-auto px-4 min-h-16 py-2 flex items-center justify-between">
+        <Link to="/"><MarcaApex local="site" /></Link>
         <nav className="hidden md:flex items-center gap-6 text-sm">
           {LINKS.map(([h, t]) => <Link key={h} to={h} className="hover:text-apex-500">{t}</Link>)}
           <Link to="/login" className={ativo("/login")}>Entrar</Link>

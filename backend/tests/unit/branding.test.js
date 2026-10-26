@@ -25,7 +25,7 @@ test('sem configuracao devolve o padrao Apex Telecom', async () => {
   reset();
   const res = resMock();
   await c.obter({}, res);
-  assert.deepStrictEqual(res.body, { nome: 'Apex Telecom', logo_url: null });
+  assert.deepStrictEqual(res.body, { nome: 'Apex Telecom', logo_url: null, tamanhos: { site: 'm', login: 'g', painel: 'm' } });
 });
 
 test('validarNome: obrigatorio, limite e caracteres proibidos', () => {
@@ -40,7 +40,7 @@ test('atualizarNome grava e preserva a logo; nome invalido nao grava', async () 
   linhaBranding = JSON.stringify({ nome: 'Antigo', logo_url: '/uploads/logos/site-1.png' });
   const res = resMock();
   await c.atualizarNome({ body: { nome: 'Nova Marca' } }, res);
-  assert.deepStrictEqual(res.body, { nome: 'Nova Marca', logo_url: '/uploads/logos/site-1.png' });
+  assert.deepStrictEqual(res.body, { nome: 'Nova Marca', logo_url: '/uploads/logos/site-1.png', tamanhos: { site: 'm', login: 'g', painel: 'm' } });
 
   chamadas.length = 0;
   const ruim = resMock();
@@ -75,4 +75,29 @@ test('enviarLogo sem arquivo responde 400', async () => {
   const res = resMock();
   await c.enviarLogo({}, res);
   assert.strictEqual(res.code, 400);
+});
+
+test('atualizar tamanhos: valida presets, preserva nome/logo e completa o que faltou', async () => {
+  reset();
+  linhaBranding = JSON.stringify({ nome: 'Marca', logo_url: '/uploads/logos/site-1.png' });
+  const ok = resMock();
+  await c.atualizar({ body: { tamanhos: { login: 'xg' } } }, ok);
+  assert.strictEqual(ok.code, 200);
+  assert.deepStrictEqual(ok.body, { nome: 'Marca', logo_url: '/uploads/logos/site-1.png', tamanhos: { site: 'm', login: 'xg', painel: 'm' } });
+
+  chamadas.length = 0;
+  for (const ruim of [{ tamanhos: { site: 'gigante' } }, { tamanhos: { rodape: 'm' } }, { tamanhos: 'x' }, {}]) {
+    const r = resMock();
+    await c.atualizar({ body: ruim }, r);
+    assert.strictEqual(r.code, 400);
+  }
+  assert.ok(!chamadas.some((x) => /INSERT/.test(x.sql)));
+});
+
+test('enviarLogo e removerLogo preservam os tamanhos salvos', async () => {
+  reset();
+  linhaBranding = JSON.stringify({ nome: 'Marca', logo_url: null, tamanhos: { site: 'p', login: 'm', painel: 'g' } });
+  const r = resMock();
+  await c.removerLogo({}, r);
+  assert.deepStrictEqual(r.body.tamanhos, { site: 'p', login: 'm', painel: 'g' });
 });

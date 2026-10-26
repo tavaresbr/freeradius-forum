@@ -1,22 +1,27 @@
 import { useEffect, useState } from "react";
-import useBranding from "../../hooks/useBranding";
+import useBranding, { ALTURAS } from "../../hooks/useBranding";
+
+const LOCAIS = [["site", "Cabeçalho do site"], ["login", "Tela de login"], ["painel", "Barra lateral do painel"]];
+const PRESETS = [["p", "P"], ["m", "M"], ["g", "G"], ["xg", "XG"]];
 
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("admin_token")}` });
 
 export default function IdentidadeSite() {
-  const { nome, logoUrl, recarregar } = useBranding();
+  const { nome, logoUrl, tamanhos, recarregar } = useBranding();
+  const [tam, setTam] = useState(tamanhos);
   const [campo, setCampo] = useState(nome);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { setCampo(nome); }, [nome]);
+  useEffect(() => { setTam(tamanhos); }, [tamanhos]);
 
   async function chamar(url, opts, ok) {
     setBusy(true); setMsg(null);
     try {
       const r = await fetch(url, opts);
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || "Erro ao salvar");
+      if (!r.ok) throw new Error(d.message || d.error || "Erro ao salvar");
       await recarregar();
       setMsg({ ok: true, texto: ok });
     } catch (e) {
@@ -29,6 +34,12 @@ export default function IdentidadeSite() {
     headers: { ...auth(), "Content-Type": "application/json" },
     body: JSON.stringify({ nome: campo }),
   }, "Nome atualizado.");
+
+  const salvarTamanhos = () => chamar("/api/branding", {
+    method: "PUT",
+    headers: { ...auth(), "Content-Type": "application/json" },
+    body: JSON.stringify({ tamanhos: tam }),
+  }, "Tamanhos atualizados.");
 
   const enviarLogo = (e) => {
     const f = e.target.files?.[0];
@@ -63,6 +74,31 @@ export default function IdentidadeSite() {
         </label>
         {logoUrl && <button disabled={busy} onClick={removerLogo} className="text-red-400 hover:text-red-300 text-sm">Remover logo</button>}
       </div>
+      {logoUrl ? (
+        <div className="mt-5">
+          <label className="block text-sm text-gray-400 mb-2">Tamanho da logo em cada lugar</label>
+          <div className="space-y-3">
+            {LOCAIS.map(([local, rotulo]) => (
+              <div key={local} className="flex flex-wrap items-center gap-3">
+                <span className="w-44 text-sm text-gray-300">{rotulo}</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
+                  {PRESETS.map(([k, t]) => (
+                    <button key={k} type="button" onClick={() => setTam({ ...tam, [local]: k })}
+                      className={`px-3 py-1.5 text-sm cursor-pointer ${tam?.[local] === k ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>{t}</button>
+                  ))}
+                </div>
+                <div className="bg-blue-950 rounded p-2 flex items-center">
+                  <img src={logoUrl} alt="" style={{ height: ALTURAS[tam?.[local]] || ALTURAS.m }} className="w-auto max-w-[240px] object-contain" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button disabled={busy} onClick={salvarTamanhos}
+            className="mt-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded">Salvar tamanhos</button>
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-gray-500">Envie uma logo para escolher o tamanho em cada lugar (a logo padrão já tem tamanho fixo).</p>
+      )}
       {msg && <p className={`mt-3 text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.texto}</p>}
     </div>
   );

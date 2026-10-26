@@ -1,14 +1,16 @@
 import LogoApex from "./LogoApex";
-import useBranding from "../../hooks/useBranding";
+import useBranding, { ALTURAS } from "../../hooks/useBranding";
 
 // Marca da plataforma: logo enviada em Configuracoes ou a logo SVG padrao.
 // tema="escuro" (padrao) = texto escuro para fundo claro; "claro" = texto branco para fundo escuro.
-export default function MarcaApex({ className = "text-xl", tema = "escuro" }) {
-  const { nome, logoUrl } = useBranding();
+// local ("site" | "login" | "painel") escolhe o tamanho configurado para a logo enviada.
+export default function MarcaApex({ className = "text-xl", tema = "escuro", local = "site" }) {
+  const { nome, logoUrl, tamanhos } = useBranding();
   if (logoUrl) {
+    const altura = ALTURAS[tamanhos?.[local]] || ALTURAS.m;
     return (
-      <span className={`inline-flex items-center gap-2 font-bold ${className}`}>
-        <img src={logoUrl} alt={nome} className="h-8 w-auto max-w-[160px] object-contain" />
+      <span className={`inline-flex items-center gap-2 font-bold max-w-full ${className}`}>
+        <img src={logoUrl} alt={nome} style={{ height: altura }} className="w-auto max-w-full object-contain" />
       </span>
     );
   }
