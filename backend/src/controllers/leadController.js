@@ -387,6 +387,12 @@ function sanitizarCadastro(body) {
     if (k !== "cnpj" && tem(k)) d[k] = txt(body[k], max);
   }
   if (tem("observacoes")) d.observacoes = txt(body.observacoes, 5000);
+  // Opt-out de promocoes por WhatsApp (o admin marca quando o cliente responde SAIR)
+  if (tem("whatsapp_optout")) {
+    const sair = body.whatsapp_optout === true || body.whatsapp_optout === 1 || body.whatsapp_optout === "1";
+    d.whatsapp_optout = sair ? 1 : 0;
+    d.whatsapp_optout_em = sair ? new Date() : null;
+  }
   if (tem("status")) {
     if (!STATUS_VALIDOS.includes(body.status)) return { erro: "Status inválido" };
     d.status = body.status;
@@ -473,7 +479,7 @@ exports.atualizarLead = async (req, res) => {
     }
 
     // Edicao do cadastro (nao so troca de status/observacoes): o resultado final precisa ter os obrigatorios
-    if (chaves.some((k) => k !== "status" && k !== "observacoes")) {
+    if (chaves.some((k) => !["status", "observacoes", "whatsapp_optout", "whatsapp_optout_em"].includes(k))) {
       const [[atual]] = await db.execute(
         "SELECT nome, cpf, cnpj, tipo_pessoa, email, telefone, data_nascimento, mac, lgpd_aceite, importado_em FROM leads WHERE id = ? AND empresa_id = ?",
         [id, req.empresa_id]
