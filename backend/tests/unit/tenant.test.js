@@ -19,14 +19,31 @@ test('tenant: sem req.user -> 401', async () => {
 });
 
 test('tenant: usuario comum usa empresa_id do JWT e ignora header/query', async () => {
-  const { tenant, db } = mw();
+  const { tenant, db } = mw(async () => [[{ 1: 1 }]]);
   const r = await rodar(tenant, criarReq({
-    user: { role: 'owner', empresa_id: 5 },
+    user: { id: 11, role: 'owner', empresa_id: 5 },
     headers: { 'x-empresa-id': '99' }, query: { empresa_id: '77' },
   }));
   assert.strictEqual(r.next, true);
   assert.strictEqual(r.req.empresa_id, 5);
-  assert.strictEqual(db.calls.length, 0);
+  // so confere o vinculo do admin com a empresa do JWT (nunca a do header/query)
+  assert.deepStrictEqual(db.calls[0].params, [11, 5]);
+});
+
+test('tenant: admin desvinculado ou empresa desativada -> 401', async () => {
+  const { limparCacheSessaoAdmin } = require('../../src/utils/sessaoAdmin');
+  const { tenant } = mw(async () => [[]]);
+  limparCacheSessaoAdmin();
+  const r = await rodar(tenant, criarReq({ user: { id: 12, role: 'owner', empresa_id: 5 } }));
+  assert.strictEqual(r.res.statusCode, 401); assert.strictEqual(r.next, false);
+});
+
+test('tenant: erro de banco ao validar a sessao falha fechado (503)', async () => {
+  const { limparCacheSessaoAdmin } = require('../../src/utils/sessaoAdmin');
+  const { tenant } = mw(async () => { throw new Error('db caiu'); });
+  limparCacheSessaoAdmin();
+  const r = await rodar(tenant, criarReq({ user: { id: 13, role: 'owner', empresa_id: 5 } }));
+  assert.strictEqual(r.res.statusCode, 503); assert.strictEqual(r.next, false);
 });
 
 for (const role of ['manager', 'operator']) {

@@ -1,4 +1,5 @@
 const db = require('../../db');
+const { adminAtivoNaEmpresa } = require('../utils/sessaoAdmin');
 
 module.exports = async (req, res, next) => {
   const user = req.user;
@@ -33,6 +34,18 @@ module.exports = async (req, res, next) => {
 
   if (!req.empresa_id && user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Empresa não identificada' });
+  }
+
+  // Admin removido/desvinculado ou empresa desativada: o token (1 dia) nao vale mais.
+  if (user.role !== 'super_admin') {
+    try {
+      if (!(await adminAtivoNaEmpresa(user.id, req.empresa_id))) {
+        return res.status(401).json({ error: 'Sessão inválida. Faça login novamente.' });
+      }
+    } catch (err) {
+      console.error('Erro ao validar sessão do admin (tenant):', err.message);
+      return res.status(503).json({ error: 'Erro ao validar sessão' });
+    }
   }
 
   next();

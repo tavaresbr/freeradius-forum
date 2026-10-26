@@ -18,6 +18,21 @@ const loginLimiter = rateLimit({
   handler: jsonHandler('Muitas tentativas de login. Tente novamente em alguns minutos.'),
 });
 
+// Falhas de login por E-MAIL + IP (alem do teto por IP): freia a adivinhacao de senha de uma conta
+// especifica sem permitir que um terceiro tranque o dono (a chave inclui o IP de quem erra).
+const loginPorContaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    return `${ipKeyGenerator(req.ip)}|${crypto.createHash('sha256').update(email).digest('hex').slice(0, 24)}`;
+  },
+  handler: jsonHandler('Muitas tentativas de login para esta conta. Tente novamente em alguns minutos.'),
+});
+
 // Registro de empresa: evita criacao em massa.
 const registroLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -151,4 +166,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };

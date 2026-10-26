@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -112,8 +112,8 @@ app.use('/uploads/campanhas',
 );
 
 // --- Rate limiting nos endpoints publicos sensiveis (antes dos mounts) ---
-app.use('/api/admin/login', loginLimiter)         // login admin (routes/admin.js)
-app.use('/api/auth/login', loginLimiter)          // login admin (authRoutes)
+app.use('/api/admin/login', loginLimiter, loginPorContaLimiter)         // login admin (routes/admin.js)
+app.use('/api/auth/login', loginLimiter, loginPorContaLimiter)          // login admin (authRoutes)
 app.use('/api/auth/temp', publicApiLimiter)       // acesso temporario
 app.use('/api/login-portal/auth', publicApiLimiter)   // login portal wifi (muitos clientes por IP do estabelecimento)
 app.use('/api/site', sitePedidoLimiter)         // pedido de contratacao do site
