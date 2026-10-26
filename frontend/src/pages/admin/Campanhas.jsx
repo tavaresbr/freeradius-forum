@@ -10,6 +10,7 @@ export default function Campanhas() {
   const [campanhas, setCampanhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState(null); // null = nova campanha; numero = editando nome/descricao/agenda
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const token = localStorage.getItem("admin_token");
@@ -34,13 +35,26 @@ export default function Campanhas() {
     carregar();
   }, []);
 
-  const handleCriar = async (e) => {
+  const abrirNova = () => { setEditId(null); setForm(FORM_VAZIO); setShowModal(true); };
+  const abrirEdicao = (c) => {
+    setEditId(c.id);
+    setForm({
+      nome: c.nome || "",
+      descricao: c.descricao || "",
+      data_inicio: c.data_inicio || "",
+      data_fim: c.data_fim || "",
+      frequencia: c.frequencia || "sempre",
+    });
+    setShowModal(true);
+  };
+
+  const handleSalvar = async (e) => {
     e.preventDefault();
     if (!form.nome.trim()) return alert("Informe o nome da campanha.");
     setSalvando(true);
     try {
-      const res = await fetch("/api/campanhas", {
-        method: "POST",
+      const res = await fetch(editId === null ? "/api/campanhas" : `/api/campanhas/${editId}`, {
+        method: editId === null ? "POST" : "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -48,8 +62,9 @@ export default function Campanhas() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao criar campanha");
+      if (!res.ok) throw new Error(data.error || (editId === null ? "Erro ao criar campanha" : "Erro ao salvar campanha"));
       setShowModal(false);
+      setEditId(null);
       setForm(FORM_VAZIO);
       carregar();
     } catch (err) {
@@ -107,10 +122,7 @@ export default function Campanhas() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-white">Campanhas</h1>
         <button
-          onClick={() => {
-            setForm(FORM_VAZIO);
-            setShowModal(true);
-          }}
+          onClick={abrirNova}
           className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-neutral-800"
         >
           + Nova Campanha
@@ -164,11 +176,19 @@ export default function Campanhas() {
                   </td>
                   <td className="p-2">
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => abrirEdicao(c)}
+                        className="border border-gray-700 text-gray-300 px-2 py-1 rounded hover:bg-[#252b3b] text-xs"
+                        title="Editar nome, descrição e agendamento"
+                      >
+                        Editar
+                      </button>
                       <Link
                         to={`/admin/${empresaSlug}/campanhas/${c.id}`}
                         className="border border-gray-700 text-gray-300 px-2 py-1 rounded hover:bg-[#252b3b] text-xs"
+                        title="Imagens, vídeos e resultados"
                       >
-                        Editar
+                        Itens
                       </Link>
                       <button
                         onClick={() => handleDeletar(c)}
@@ -189,7 +209,7 @@ export default function Campanhas() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-md p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">Nova Campanha</h3>
+              <h3 className="text-lg font-semibold text-white">{editId === null ? "Nova Campanha" : "Editar Campanha"}</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-500 hover:text-gray-300 text-xl"
@@ -197,7 +217,7 @@ export default function Campanhas() {
                 ×
               </button>
             </div>
-            <form className="space-y-4" onSubmit={handleCriar}>
+            <form className="space-y-4" onSubmit={handleSalvar}>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">
                   Nome <span className="text-red-400">*</span>
@@ -233,7 +253,7 @@ export default function Campanhas() {
                   disabled={salvando}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-neutral-800 disabled:opacity-50"
                 >
-                  {salvando ? "Criando..." : "Criar"}
+                  {salvando ? "Salvando..." : editId === null ? "Criar" : "Salvar"}
                 </button>
               </div>
             </form>
