@@ -28,7 +28,7 @@ const req = (over) => criarReq({ empresa_id: 7, ...over });
 
 test('atualizar: descricao vazia LIMPA o campo e so altera o que veio', async () => {
   const { db, ctrl } = montar((sql) => {
-    if (/^SELECT id FROM campanhas/.test(sql)) return [[{ id: 3 }]];
+    if (/^SELECT id.* FROM campanhas/.test(sql)) return [[{ id: 3 }]];
     if (/^SELECT \* FROM campanhas/.test(sql)) return [[{ id: 3, nome: 'x', descricao: null }]];
   });
   const res = criarRes();
@@ -74,7 +74,7 @@ test('atualizarItem: titulo e link vazios limpam; filtra por empresa', async () 
 
 test('deletar: campanha em uso => 409 com a lista e nada e apagado; ?forcar=1 apaga', async () => {
   const { db, ctrl } = montar((sql) => {
-    if (/^SELECT id FROM campanhas/.test(sql)) return [[{ id: 3 }]];
+    if (/^SELECT id.* FROM campanhas/.test(sql)) return [[{ id: 3 }]];
     if (/^SELECT id, nome FROM portais/.test(sql)) return [[{ id: 12, nome: 'Planos' }]];
     return [{ affectedRows: 1 }];
   });
@@ -92,7 +92,7 @@ test('deletar: campanha em uso => 409 com a lista e nada e apagado; ?forcar=1 ap
 
 test('reordenar: ids invalidos ou de outra campanha => 400 e nada e gravado', async () => {
   const { db, ctrl } = montar((sql) => {
-    if (/^SELECT id FROM campanhas/.test(sql)) return [[{ id: 3 }]];
+    if (/^SELECT id.* FROM campanhas/.test(sql)) return [[{ id: 3 }]];
     if (/^SELECT id FROM campanha_itens/.test(sql)) return [[{ id: 1 }, { id: 2 }]];
     return [{ affectedRows: 1 }];
   });

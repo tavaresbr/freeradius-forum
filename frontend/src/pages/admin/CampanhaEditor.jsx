@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import CampanhaResultados from "../../components/admin/CampanhaResultados";
+import CamposAgenda, { resumoAgenda } from "../../components/admin/CamposAgenda";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500";
 
@@ -36,7 +37,7 @@ export default function CampanhaEditor() {
   const [edicoes, setEdicoes] = useState({}); // itemId -> { titulo, duracao_segundos, link_destino } (so itens alterados)
   const [salvandoItem, setSalvandoItem] = useState(null);
   const [editandoDados, setEditandoDados] = useState(false);
-  const [dados, setDados] = useState({ nome: "", descricao: "" });
+  const [dados, setDados] = useState({ nome: "", descricao: "", data_inicio: "", data_fim: "", frequencia: "sempre" });
   const [arrastando, setArrastando] = useState(null); // indice do item sendo arrastado
   const [aba, setAba] = useState("itens"); // "itens" | "resultados"
   const fileInputRef = useRef(null);
@@ -80,7 +81,10 @@ export default function CampanhaEditor() {
   };
 
   const abrirEdicaoDados = () => {
-    setDados({ nome: campanha.nome || "", descricao: campanha.descricao || "" });
+    setDados({
+      nome: campanha.nome || "", descricao: campanha.descricao || "",
+      data_inicio: campanha.data_inicio || "", data_fim: campanha.data_fim || "", frequencia: campanha.frequencia || "sempre",
+    });
     setEditandoDados(true);
   };
 
@@ -91,7 +95,7 @@ export default function CampanhaEditor() {
       const res = await fetch(`/api/campanhas/${id}`, {
         method: "PUT",
         headers: headersJson,
-        body: JSON.stringify({ nome: dados.nome, descricao: dados.descricao }),
+        body: JSON.stringify(dados),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Erro ao salvar dados da campanha");
@@ -301,6 +305,7 @@ export default function CampanhaEditor() {
                 onChange={(e) => setDados((d) => ({ ...d, descricao: e.target.value }))}
               />
             </div>
+            <CamposAgenda valor={dados} onChange={setDados} />
             <div className="flex gap-2">
               <button type="submit" className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Salvar</button>
               <button type="button" onClick={() => setEditandoDados(false)} className="border border-gray-700 text-gray-300 px-3 py-1 rounded text-xs">
@@ -310,7 +315,10 @@ export default function CampanhaEditor() {
           </form>
         ) : (
           <div className="flex items-start gap-3">
-            <p className="text-gray-400 text-sm flex-1">{campanha.descricao || "Sem descrição."}</p>
+            <div className="flex-1">
+              <p className="text-gray-400 text-sm">{campanha.descricao || "Sem descrição."}</p>
+              {resumoAgenda(campanha) && <p className="text-blue-300 text-xs mt-1">{resumoAgenda(campanha)}</p>}
+            </div>
             <button onClick={abrirEdicaoDados} className="border border-gray-700 text-gray-300 px-3 py-1 rounded text-xs hover:bg-[#252b3b]">
               Editar dados
             </button>

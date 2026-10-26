@@ -19,6 +19,8 @@ export default function CampanhaPlayer() {
   const [loaded, setLoaded] = useState(false);
   const [ended, setEnded] = useState(false);
   const [erroPreview, setErroPreview] = useState(null);
+  // { id, frequencia } da campanha em exibicao: define o cookie que evita repeti-la ('sessao' / 'diaria')
+  const campanhaRef = useRef(null);
 
   // Id aleatorio da visita (so na aba): o servidor usa para nao contar a mesma view/clique duas vezes
   const sessaoRef = useRef(null);
@@ -53,6 +55,14 @@ export default function CampanhaPlayer() {
 
   const doRedirect = useCallback(() => {
     if (!isPreview) {
+      // O servidor (/hotspot/redirect) le o cookie cv_<id> e pula a campanha enquanto ele existir
+      const c = campanhaRef.current;
+      if (c && (c.frequencia === "sessao" || c.frequencia === "diaria")) {
+        try {
+          const validade = c.frequencia === "diaria" ? "; max-age=86400" : "";
+          document.cookie = `cv_${c.id}=1; path=/; SameSite=Lax${validade}`;
+        } catch { /* sem cookies: a campanha aparece de novo, sem prejuizo */ }
+      }
       window.location.href = buildRedirectUrl();
     } else {
       setEnded(true);
@@ -85,6 +95,7 @@ export default function CampanhaPlayer() {
         const data = res.data?.data;
         if (data && Array.isArray(data.itens) && data.itens.length > 0) {
           const sorted = [...data.itens].sort((a, b) => a.ordem - b.ordem);
+          campanhaRef.current = { id: data.id, frequencia: data.frequencia };
           setItens(sorted);
           setLoaded(true);
 
