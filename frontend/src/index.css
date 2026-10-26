@@ -1,3 +1,92 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== Tema escuro do site (landing/login/registro/sidebar): remapeia as classes claras ===== */
+[data-theme="escuro"] .tema-site.bg-white,
+[data-theme="escuro"] .tema-site .bg-white { background-color: #0f172a; }
+[data-theme="escuro"] .tema-site.bg-white\/95 { background-color: rgb(15 23 42 / 0.95); }
+[data-theme="escuro"] .tema-site .bg-apex-50,
+[data-theme="escuro"] .tema-site.bg-apex-50 { background-color: #020617; }
+[data-theme="escuro"] .tema-site .bg-apex-100 { background-color: #1e293b; }
+[data-theme="escuro"] .tema-site .from-apex-50,
+[data-theme="escuro"] .tema-site.from-apex-50 { --tw-gradient-from: #020617 var(--tw-gradient-from-position); --tw-gradient-to: rgb(2 6 23 / 0) var(--tw-gradient-to-position); }
+[data-theme="escuro"] .tema-site .via-white { --tw-gradient-stops: var(--tw-gradient-from), #0f172a var(--tw-gradient-via-position), var(--tw-gradient-to); }
+[data-theme="escuro"] .tema-site .to-apex-100,
+[data-theme="escuro"] .tema-site .to-apex-200 { --tw-gradient-to: #1e293b var(--tw-gradient-to-position); }
+[data-theme="escuro"] .tema-site .text-apex-900,
+[data-theme="escuro"] .tema-site.text-apex-900 { color: #f1f5f9; }
+[data-theme="escuro"] .tema-site .text-apex-700 { color: #7dd3fc; }
+[data-theme="escuro"] .tema-site .text-gray-900 { color: #f1f5f9; }
+[data-theme="escuro"] .tema-site .text-gray-800 { color: #e2e8f0; }
+[data-theme="escuro"] .tema-site .text-gray-600,
+[data-theme="escuro"] .tema-site .text-gray-500 { color: #94a3b8; }
+[data-theme="escuro"] .tema-site .border-apex-100,
+[data-theme="escuro"] .tema-site.border-apex-100,
+[data-theme="escuro"] .tema-site .border-gray-300 { border-color: #334155; }
+[data-theme="escuro"] .tema-site input { background-color: #0f172a; color: #f1f5f9; border-color: #334155; }
+[data-theme="escuro"] .tema-site select { background-color: #0f172a; color: #e2e8f0; border-color: #334155; }
+[data-theme="escuro"] .tema-site .hover\:bg-apex-50:hover { background-color: #1e293b; }
+[data-theme="escuro"] .tema-site .hover\:bg-apex-100:hover { background-color: #334155; }
+[data-theme="escuro"] .tema-site details { background-color: #0f172a; }
+
+/* ===== Tema claro do painel admin (conteudo): remapeia a paleta escura fixa ===== */
+[data-theme="claro"] .painel { color: #1f2937; background-color: #f0f9ff; }
+[data-theme="claro"] .painel .bg-\[\#0f111a\],
+[data-theme="claro"] .painel .bg-\[\#0f1117\] { background-color: #f0f9ff; }
+[data-theme="claro"] .painel .bg-\[\#1a1d27\],
+[data-theme="claro"] .painel .bg-\[\#151821\] { background-color: #ffffff; }
+[data-theme="claro"] .painel .bg-\[\#0d1117\] { background-color: #ffffff; }
+[data-theme="claro"] .painel .bg-\[\#252b3b\],
+[data-theme="claro"] .painel .hover\:bg-\[\#252b3b\]:hover { background-color: #e0f2fe; }
+[data-theme="claro"] .painel .bg-gray-800 { background-color: #e5e7eb; }
+[data-theme="claro"] .painel .bg-gray-700 { background-color: #e5e7eb; }
+[data-theme="claro"] .painel .bg-gray-600 { background-color: #d1d5db; }
+[data-theme="claro"] .painel .border-gray-800 { border-color: #e0f2fe; }
+[data-theme="claro"] .painel .border-gray-700 { border-color: #cbd5e1; }
+[data-theme="claro"] .painel .text-gray-200,
+[data-theme="claro"] .painel .text-gray-300 { color: #374151; }
+[data-theme="claro"] .painel .text-gray-400 { color: #4b5563; }
+[data-theme="claro"] .painel .text-gray-500 { color: #6b7280; }
+[data-theme="claro"] .painel .text-gray-600 { color: #6b7280; }
+[data-theme="claro"] .painel .text-blue-300,
+[data-theme="claro"] .painel .text-blue-400 { color: #0369a1; }
+[data-theme="claro"] .painel .text-green-400 { color: #15803d; }
+[data-theme="claro"] .painel .text-red-300,
+[data-theme="claro"] .painel .text-red-400 { color: #b91c1c; }
+[data-theme="claro"] .painel .text-yellow-400 { color: #a16207; }
+[data-theme="claro"] .painel .bg-green-900\/30 { background-color: #dcfce7; }
+[data-theme="claro"] .painel .bg-red-900\/30,
+[data-theme="claro"] .painel .bg-red-900\/20,
+[data-theme="claro"] .painel .bg-red-600\/20 { background-color: #fee2e2; }
+[data-theme="claro"] .painel .bg-blue-900\/30,
+[data-theme="claro"] .painel .bg-blue-900\/20,
+[data-theme="claro"] .painel .bg-blue-900\/10 { background-color: #e0f2fe; }
+[data-theme="claro"] .painel .border-blue-800\/50,
+[data-theme="claro"] .painel .border-blue-700\/40 { border-color: #7dd3fc; }
+[data-theme="claro"] .painel .border-red-800\/50 { border-color: #fca5a5; }
+[data-theme="claro"] .painel input::placeholder,
+[data-theme="claro"] .painel textarea::placeholder { color: #9ca3af; }
+/* titulos e textos brancos viram escuros, exceto sobre fundos coloridos */
+[data-theme="claro"] .painel .text-white:not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]):not([class*="bg-orange"]):not([class*="bg-apex"]):not([class*="bg-yellow"]):not([class*="bg-purple"]):not([class*="bg-indigo"]):not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-gray-9"]):not([class*="bg-black"]) { color: #0c4a6e; }
+[data-theme="claro"] .painel .bg-blue-600 .text-white,
+[data-theme="claro"] .painel [class*="bg-green-"] .text-white,
+[data-theme="claro"] .painel [class*="bg-red-"] .text-white,
+[data-theme="claro"] .painel [class*="bg-blue-"] .text-white { color: #ffffff; }
+[data-theme="claro"] .painel .bg-yellow-900\/30,
+[data-theme="claro"] .painel .bg-yellow-900\/20,
+[data-theme="claro"] .painel .bg-yellow-600\/20,
+[data-theme="claro"] .painel .bg-yellow-600\/30 { background-color: #fef9c3; }
+[data-theme="claro"] .painel .bg-emerald-900\/30 { background-color: #d1fae5; }
+[data-theme="claro"] .painel .border-yellow-700\/50,
+[data-theme="claro"] .painel .border-yellow-800\/50,
+[data-theme="claro"] .painel .border-yellow-800\/30 { border-color: #fde047; }
+[data-theme="claro"] .painel .text-yellow-200,
+[data-theme="claro"] .painel .text-yellow-300,
+[data-theme="claro"] .painel .text-yellow-400,
+[data-theme="claro"] .painel .text-yellow-500 { color: #854d0e; }
+[data-theme="claro"] .painel .text-purple-400 { color: #7e22ce; }
+[data-theme="claro"] .painel .text-cyan-400 { color: #0e7490; }
+[data-theme="claro"] .painel .text-orange-400 { color: #c2410c; }
+[data-theme="claro"] .painel .text-emerald-400 { color: #047857; }
+[data-theme="escuro"] .tema-site .text-apex-600 { color: #38bdf8; }

@@ -72,7 +72,7 @@ export default function Registro() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-apex-50 p-4 pt-24">
+    <div className="tema-site flex items-center justify-center min-h-screen bg-apex-50 p-4 pt-24">
       <SiteHeader />
       <form
         onSubmit={handleSubmit}

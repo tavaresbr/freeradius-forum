@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import MarcaApex from "../public/MarcaApex";
+import ToggleTema from "../ToggleTema";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
@@ -289,7 +290,7 @@ export default function AdminLayout({ children }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0f111a]">
+    <div className="painel min-h-screen flex bg-[#0f111a]">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -304,7 +305,7 @@ export default function AdminLayout({ children }) {
           fixed lg:static inset-y-0 left-0 z-30
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           transition-transform duration-300 ease-in-out
-          w-72 bg-white border-r border-apex-100 flex flex-col
+          tema-site w-72 bg-white border-r border-apex-100 flex flex-col
           shadow-2xl lg:shadow-none
         `}
       >
@@ -314,6 +315,7 @@ export default function AdminLayout({ children }) {
             {empresaLogo
               ? <img src={empresaLogo} alt="Logo" className="h-12 max-w-[160px] object-contain" />
               : <MarcaApex className="text-lg" />}
+            <ToggleTema className="hidden lg:block text-gray-600" />
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-2 rounded-lg hover:bg-apex-50 text-gray-500"
@@ -473,7 +475,7 @@ export default function AdminLayout({ children }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar (Mobile) */}
-        <header className="lg:hidden bg-white border-b border-apex-100 px-4 py-3 sticky top-0 z-10">
+        <header className="tema-site lg:hidden bg-white border-b border-apex-100 px-4 py-3 sticky top-0 z-10">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -486,7 +488,7 @@ export default function AdminLayout({ children }) {
             {empresaLogo
               ? <img src={empresaLogo} alt="Logo" className="h-8" />
               : <MarcaApex className="text-base" />}
-            <div className="w-10" />
+            <ToggleTema className="text-gray-600" />
           </div>
         </header>
 
