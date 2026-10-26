@@ -18,7 +18,10 @@
 [data-theme="escuro"] .tema-site.text-apex-900 { color: #f1f5f9; }
 [data-theme="escuro"] .tema-site .text-apex-700 { color: #7dd3fc; }
 [data-theme="escuro"] .tema-site .text-gray-900 { color: #f1f5f9; }
-[data-theme="escuro"] .tema-site .text-gray-800 { color: #e2e8f0; }
+[data-theme="escuro"] .tema-site .text-gray-800,
+[data-theme="escuro"] .tema-site.text-gray-800 { color: #e2e8f0; } /* o raiz da landing tem a propria classe: filhos herdam */
+[data-theme="escuro"] .tema-site .text-gray-700 { color: #cbd5e1; }
+[data-theme="escuro"] .tema-site .divide-apex-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
 [data-theme="escuro"] .tema-site .text-gray-600,
 [data-theme="escuro"] .tema-site .text-gray-500 { color: #94a3b8; }
 [data-theme="escuro"] .tema-site .border-apex-100,
