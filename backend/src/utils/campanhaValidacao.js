@@ -92,6 +92,8 @@ function assinaturaConfere(buf, mimetype) {
     case "image/jpeg": return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
     case "image/png": return buf[0] === 0x89 && ascii(1, 4) === "PNG" && buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a;
     case "image/webp": return ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP";
+    case "image/x-icon":
+    case "image/vnd.microsoft.icon": return buf[0] === 0 && buf[1] === 0 && buf[2] === 1 && buf[3] === 0;
     case "video/mp4": return ascii(4, 8) === "ftyp";
     case "video/webm": return buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3;
     default: return false;
