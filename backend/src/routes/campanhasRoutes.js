@@ -9,6 +9,7 @@ router.post('/', ctrl.criar);
 router.get('/:id', ctrl.obter);
 router.put('/:id', ctrl.atualizar);
 router.delete('/:id', ctrl.deletar);
+router.get('/:id/metricas', ctrl.metricas);
 
 // IMPORTANT: declare /reordenar BEFORE /:itemId to avoid Express capturing "reordenar" as itemId
 router.put('/:id/itens/reordenar', ctrl.reordenar);

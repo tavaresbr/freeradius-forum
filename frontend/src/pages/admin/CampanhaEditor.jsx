@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import CampanhaResultados from "../../components/admin/CampanhaResultados";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500";
 
@@ -37,6 +38,7 @@ export default function CampanhaEditor() {
   const [editandoDados, setEditandoDados] = useState(false);
   const [dados, setDados] = useState({ nome: "", descricao: "" });
   const [arrastando, setArrastando] = useState(null); // indice do item sendo arrastado
+  const [aba, setAba] = useState("itens"); // "itens" | "resultados"
   const fileInputRef = useRef(null);
   const token = localStorage.getItem("admin_token");
   const headersJson = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -316,7 +318,27 @@ export default function CampanhaEditor() {
         )}
       </div>
 
+      {/* Abas */}
+      <div className="flex gap-2 mb-4" role="tablist">
+        {[["itens", "Itens"], ["resultados", "Resultados"]].map(([chave, rotulo]) => (
+          <button
+            key={chave}
+            role="tab"
+            aria-selected={aba === chave}
+            onClick={() => setAba(chave)}
+            className={`px-4 py-1.5 rounded-full text-sm border ${
+              aba === chave ? "bg-blue-600 border-blue-600 text-white" : "border-gray-700 text-gray-300 hover:bg-[#252b3b]"
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {aba === "resultados" && <CampanhaResultados campanhaId={id} token={token} />}
+
       {/* Upload zone */}
+      {aba === "itens" && (
       <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 mb-6">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-white">Itens da Campanha</h2>
@@ -483,6 +505,7 @@ export default function CampanhaEditor() {
           </div>
         )}
       </div>
+      )}
     </AdminLayout>
   );
 }
