@@ -55,6 +55,11 @@ const servidor = http.createServer((req, res) => {
   });
 });
 let base;
+// o SGP falso escuta em 127.0.0.1, que os guards de SSRF bloqueariam
+const urlPermitidaOriginal = sgp.urlPermitida;
+sgp.urlPermitida = () => true;
+sgp.verificarDns = async () => true;
+
 test.before(() => new Promise((ok) => servidor.listen(0, '127.0.0.1', () => { base = `http://127.0.0.1:${servidor.address().port}`; ok(); })));
 test.after(() => new Promise((ok) => servidor.close(ok)));
 
@@ -117,6 +122,8 @@ function resFalso() {
 
 test('controller: guard SSRF bloqueia localhost; salvar nao devolve token', async () => {
   chamadas.length = 0; cfgSalva = null;
+  sgp.urlPermitida = urlPermitidaOriginal;
+  test.after(() => { sgp.urlPermitida = () => true; });
   let res = resFalso();
   await ctrl.salvarSgp({ empresa_id: 1, body: { url: 'http://localhost:9', app: 'a', token: 't' } }, res);
   assert.strictEqual(res.statusCode, 400);
@@ -169,8 +176,10 @@ test('syncSgp: so roda para sync_auto vencida e registra o resultado sem expor t
   const syncSgp = require('../../src/jobs/syncSgp');
   const base = { ...cfg(), sync_auto: true, sync_horas: 24 };
   const urlPermitidaReal = sgp.urlPermitida;
+  const verificarDnsReal = sgp.verificarDns;
+  sgp.verificarDns = async () => true;
   sgp.urlPermitida = () => true;   // o SGP falso escuta em 127.0.0.1, que o guard SSRF bloquearia
-  test.after(() => { sgp.urlPermitida = urlPermitidaReal; });
+  test.after(() => { sgp.urlPermitida = urlPermitidaReal; sgp.verificarDns = verificarDnsReal; });
 
   cfgSalva = { ...base, sync_auto: false };                       // desligada: nao roda
   await syncSgp();
@@ -202,3 +211,15 @@ test('salvarConfig: sync_auto/sync_horas so mudam quando enviados; horas fora da
   assert.strictEqual(cfgSalva.sync_auto, false);
   assert.strictEqual(cfgSalva.sync_horas, 24);
 });
+
+test('SSRF: faixas internas, IPv6 mapeado e formas numericas exoticas sao bloqueadas', () => {
+  for (const ip of ['10.0.0.1', '172.20.1.1', '192.168.0.9', '100.64.0.5', '169.254.169.254', '127.1.2.3', '::1', '::ffff:127.0.0.1', 'fd00::1', 'fe80::1', '0.0.0.0']) {
+    assert.strictEqual(sgp.ipInterno(ip), true, ip);
+  }
+  assert.strictEqual(sgp.ipInterno('8.8.8.8'), false);
+  for (const u of ['http://10.8.0.2/', 'http://[::ffff:7f00:1]/', 'http://0x7f.1/', 'http://2130706433/', 'https://u:p@sgp.exemplo.com/', 'http://srv.internal/']) {
+    assert.strictEqual(urlOriginalPermitida(u), false, u);
+  }
+  assert.strictEqual(urlOriginalPermitida('https://sgp.exemplo.com.br'), true);
+});
+const urlOriginalPermitida = (u) => urlPermitidaOriginal(u);

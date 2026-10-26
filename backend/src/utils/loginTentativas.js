@@ -24,6 +24,8 @@ function chaves({ username, ip }) {
 function limpar(agora) {
   if (falhas.size < 5000) return;
   for (const [k, v] of falhas) if (v.expira <= agora) falhas.delete(k);
+  // teto duro: o Map nao cresce sem limite sob ataque (descarta as entradas mais antigas)
+  for (const k of falhas.keys()) { if (falhas.size < 50000) break; falhas.delete(k); }
 }
 
 function bloqueado(ctx, agora = Date.now()) {

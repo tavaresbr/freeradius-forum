@@ -29,6 +29,9 @@ exports.criarPortal = async (req, res) => {
     campos_cadastro, mostrar_planos, mostrar_lgpd
   } = req.body;
   if (!nome || !slug) return res.status(400).json({ message: "Nome e slug são obrigatórios" });
+  if (url_redirect && !urlHttpSegura(String(url_redirect))) {
+    return res.status(400).json({ message: "URL de redirecionamento inválida (use http:// ou https://)" });
+  }
 
   try {
     const [existing] = await db.query("SELECT id FROM portais WHERE slug = ? AND empresa_id = ?", [slug, req.empresa_id]);
@@ -77,6 +80,9 @@ exports.atualizarPortal = async (req, res) => {
     campos_cadastro, mostrar_planos, mostrar_lgpd, configuracoes,
     whatsapp_enabled, whatsapp_template,
   } = req.body;
+  if (url_redirect && !urlHttpSegura(String(url_redirect))) {
+    return res.status(400).json({ message: "URL de redirecionamento inválida (use http:// ou https://)" });
+  }
 
   try {
     const [[portal]] = await db.query("SELECT * FROM portais WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);

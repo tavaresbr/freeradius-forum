@@ -78,7 +78,7 @@ router.put("/:id", atualizarEmpresa);
 router.delete("/:id", deletarEmpresa);
 
 // Upload de logo
-router.post("/:id/logo", upload.single('logo'), async (req, res) => {
+router.post("/:id/logo", upload.single('logo'), require("../middleware/assinaturaImagem"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
     const logoUrl = `/uploads/logos/${req.file.filename}`;

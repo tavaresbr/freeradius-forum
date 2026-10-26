@@ -122,7 +122,7 @@ exports.registrarEmpresa = async (req, res) => {
   } catch (err) {
     await conn.rollback();
     console.error("Erro ao registrar empresa:", err);
-    res.status(500).json({ message: "Erro ao registrar empresa", error: err.message });
+    res.status(500).json({ message: "Erro ao registrar empresa" });
   } finally {
     conn.release();
   }

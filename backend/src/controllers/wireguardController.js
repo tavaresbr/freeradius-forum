@@ -1,5 +1,6 @@
 const axios = require('axios');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const { execSync } = require('child_process');
 const db = require('../../db');
@@ -72,7 +73,7 @@ exports.getServerSettings = async (req, res) => {
     const settings = readComposeSettings();
     res.json(settings);
   } catch (err) {
-    res.status(500).json({ message: "Erro ao ler configurações", error: err.message });
+    res.status(500).json({ message: "Erro ao ler configurações" });
   }
 };
 
@@ -109,7 +110,7 @@ exports.updateServerSettings = async (req, res) => {
     res.json({ success: true, settings });
   } catch (err) {
     console.error("Erro ao atualizar configurações:", err.message);
-    res.status(500).json({ message: "Erro ao atualizar configurações", error: err.message });
+    res.status(500).json({ message: "Erro ao atualizar configurações" });
   }
 };
 
@@ -160,29 +161,35 @@ exports.getVpnStatus = async (req, res) => {
 
   } catch (err) {
     console.error("Erro no getVpnStatus:", err.stack);
-    res.status(500).json({ message: "Erro ao comunicar com WG", error: err.message });
+    res.status(500).json({ message: "Erro ao comunicar com WG" });
   }
 };
 
 exports.createClient = async (req, res) => {
   try {
-    const { name } = req.body;
-    const client = await makeRequest('POST', '/api/wireguard/client', { name });
+    const nome = String(req.body && req.body.name != null ? req.body.name : "").trim();
+    if (typeof (req.body && req.body.name) !== "string" || !nome || nome.length > 60) {
+      return res.status(400).json({ message: "Nome do peer inválido" });
+    }
+    // Nome unico no wg-easy: o peer recem-criado e' localizado por ele, nunca pelo nome
+    // digitado (dois tenants com o mesmo nome receberiam o peer - e a chave privada - um do outro).
+    const nomeWg = `emp${req.empresa_id}-${crypto.randomBytes(4).toString("hex")}-${nome}`.slice(0, 80);
+    const antes = new Set(((await makeRequest('GET', '/api/wireguard/client')) || []).map((c) => c.id));
+    const client = await makeRequest('POST', '/api/wireguard/client', { name: nomeWg });
 
-    // Map the new peer to this empresa
-    // wg-easy returns the client list after creation; find the new one by name
     const clients = await makeRequest('GET', '/api/wireguard/client');
-    const newClient = clients.find(c => c.name === name);
-    if (newClient) {
+    const novo = (clients || []).find((c) => c.name === nomeWg && !antes.has(c.id));
+    if (novo) {
       await db.execute(
         "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome) VALUES (?, ?, ?)",
-        [req.empresa_id, newClient.id, name]
+        [req.empresa_id, novo.id, nome]
       );
     }
 
     res.json(client);
   } catch (err) {
-    res.status(500).json({ message: "Erro ao criar peer", error: err.message });
+    console.error("Erro ao criar peer:", err.message);
+    res.status(500).json({ message: "Erro ao criar peer" });
   }
 };
 
@@ -206,7 +213,8 @@ exports.deleteClient = async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ message: "Erro ao deletar peer", error: err.message });
+    console.error("Erro ao deletar peer:", err.message);
+    res.status(500).json({ message: "Erro ao deletar peer" });
   }
 };
 
@@ -315,7 +323,7 @@ exports.getClientConfig = async (req, res) => {
 
     res.json({ conf, routerOsScript });
   } catch (err) {
-    res.status(500).json({ message: "Erro ao obter config", error: err.message });
+    res.status(500).json({ message: "Erro ao obter config" });
   }
 };
 

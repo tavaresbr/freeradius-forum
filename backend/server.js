@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -68,7 +68,7 @@ const logsRoutes = require("./src/routes/logsRoutes");
 const db = require("./db");
 const somentePrimitivos = require("./src/middleware/somentePrimitivos");
 const { detectPortalVendor } = require("./src/utils/portalVendor");
-const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost } = require("./src/utils/entradaSegura");
+const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost, urlHttpSegura } = require("./src/utils/entradaSegura");
 const { salvarContextoPortal } = require("./src/gateways/gatewayLiberacao");
 
 // Rotas exclusivas do servidor principal (OTA updates) - não existem nos servidores de alunos
@@ -126,10 +126,10 @@ app.use('/api/pagamentos', publicApiLimiter)      // captive portal (gerar/statu
 app.use('/api/admin', adminRoutes)          // Login
 app.use('/api/auth', authRoutes)            // Auth
 app.use('/api/auth', authTempRoutes)        // Acesso temporário
-app.use("/api/planos-publicos", planPublicRoutes);
+app.use("/api/planos-publicos", leituraPortalLimiter, planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
-app.use("/api/sessao", somentePrimitivos, sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
-app.use("/api/lgpd", somentePrimitivos, lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/sessao", cadastroPortalLimiter, somentePrimitivos, sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
+app.use("/api/lgpd", cadastroPortalLimiter, somentePrimitivos, lgpdRoutes);             // LGPD login/cadastro são públicos
 app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
@@ -141,13 +141,13 @@ app.use("/api/registro", registroRoutes);       // Registro público de empresas
 app.use("/api/cep", require("./src/routes/cepRoutes")); // Consulta de CEP (preenche o endereco)
 app.use("/api/cnpj", require("./src/routes/cnpjRoutes")); // Consulta de CNPJ (preenche cadastro da empresa)
 
-app.use("/api/public/campanha", campanhasPublicRoutes);
+app.use("/api/public/campanha", leituraPortalLimiter, campanhasPublicRoutes);
 
 // Rota pública para login do portal Lead (sem auth)
 const { leadLogin, capturaPassiva, cadastroCliente } = require("./src/controllers/leadController");
-app.post("/api/lead-portal/login", somentePrimitivos, leadLogin);
-app.post("/api/lead-portal/passivo", somentePrimitivos, capturaPassiva);
-app.post("/api/clientes/cadastro", somentePrimitivos, cadastroCliente);
+app.post("/api/lead-portal/login", cadastroPortalLimiter, somentePrimitivos, leadLogin);
+app.post("/api/lead-portal/passivo", cadastroPortalLimiter, somentePrimitivos, capturaPassiva);
+app.post("/api/clientes/cadastro", cadastroPortalLimiter, somentePrimitivos, cadastroCliente);
 
 // Rota pública para login do portal Wifi/Radius
 app.use("/api/login-portal", somentePrimitivos, loginPortalRoutes);
@@ -195,7 +195,7 @@ app.use("/api/empresa-config", auth, tenant, exigeAssinatura, checkPermissao('co
 
 // Rota pública: config visual do portal (sem auth)
 const portalCtrl = require("./src/controllers/portalController");
-app.get("/api/portal-config/:tipo", portalCtrl.getPortalConfig);
+app.get("/api/portal-config/:tipo", leituraPortalLimiter, portalCtrl.getPortalConfig);
 
 // --- Rotas super admin ---
 app.use("/api/empresas", empresaRoutes);  // Auth + authorize interno
@@ -558,7 +558,7 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
       return res.send(html);
     }
 
-    if (portal.url_redirect) {
+    if (portal.url_redirect && urlHttpSegura(portal.url_redirect)) {
       const separator = portal.url_redirect.includes("?") ? "&" : "?";
       return res.redirect(`${portal.url_redirect}${separator}${params}`);
     }
@@ -636,6 +636,16 @@ try {
 } catch (err) {
   console.warn('[freeradius-dict] erro inesperado:', err.message);
 }
+
+// Handler global: erros nao tratados (corpo JSON invalido, multer, etc.) nunca vazam stack/mensagem interna.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err && (err.status || err.statusCode);
+  if (status === 400 || (err && err.type === 'entity.parse.failed')) return res.status(400).json({ message: 'Requisição inválida' });
+  if (status === 413 || (err && err.type === 'entity.too.large')) return res.status(413).json({ message: 'Requisição grande demais' });
+  console.error('[erro-nao-tratado]', req.method, req.path, err && err.message);
+  res.status(500).json({ message: 'Erro interno' });
+});
 
 app.listen(process.env.PORT || 3001, () => {
   console.log(`API rodando na porta ${process.env.PORT || 3001}`)

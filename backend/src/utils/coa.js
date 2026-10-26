@@ -27,9 +27,15 @@ const COA_TIMEOUT_MS = 8000;
  */
 function enviarCoA({ nasip, secret, attrs, codigo = "coa" }) {
   return new Promise((resolve) => {
-    const payload = Object.entries(attrs)
-      .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${k} = ${typeof v === "number" ? v : `"${String(v)}"`}`)
+    // Valores vem de dados do cliente (username/MAC): sem quebra de linha nem aspas soltas,
+    // senao um valor poderia injetar atributos extras no pacote CoA/Disconnect.
+    const entradas = Object.entries(attrs).filter(([, v]) => v !== undefined && v !== null && v !== "");
+    if (!/^[\w.:-]+$/.test(String(nasip || ""))) return resolve({ ok: false, error: "nasip inválido" });
+    if (entradas.some(([k, v]) => !/^[\w-]+$/.test(k) || (typeof v !== "number" && /[\r\n\0]/.test(String(v))))) {
+      return resolve({ ok: false, error: "atributo inválido" });
+    }
+    const payload = entradas
+      .map(([k, v]) => `${k} = ${typeof v === "number" ? v : `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`}`)
       .join("\n");
 
     const child = execFile(
@@ -38,7 +44,8 @@ function enviarCoA({ nasip, secret, attrs, codigo = "coa" }) {
       { timeout: COA_TIMEOUT_MS },
       (err, stdout = "", stderr = "") => {
         if (err) {
-          return resolve({ ok: false, error: err.message, stdout, stderr });
+          // err.message traz a linha de comando (com o secret do NAS): nao repassar
+          return resolve({ ok: false, error: err.killed ? "timeout" : "falha ao executar radclient", stdout, stderr: "" });
         }
         const ok = codigo === "disconnect" ? /Disconnect-ACK/i.test(stdout) : /CoA-ACK/i.test(stdout);
         resolve({ ok, stdout, stderr });

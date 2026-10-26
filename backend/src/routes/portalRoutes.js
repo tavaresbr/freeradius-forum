@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/portalController");
+const assinaturaImagem = require("../middleware/assinaturaImagem");
 
 const multer = require("multer");
 const path = require("path");
@@ -40,7 +41,7 @@ router.post("/", ctrl.criarPortal);
 router.put("/:id", ctrl.atualizarPortal);
 router.delete("/:id", ctrl.deletarPortal);
 router.get("/:id/preview", ctrl.previewPortal);
-router.post("/:id/logo", upload.single('logo'), copyToPublic, ctrl.uploadLogo);
+router.post("/:id/logo", upload.single('logo'), assinaturaImagem, copyToPublic, ctrl.uploadLogo);
 router.put("/:portalId/campanha", ctrl.vincularCampanha);
 router.post("/:id/whatsapp-preview", ctrl.whatsappPreview);
 router.post("/:id/whatsapp-teste", ctrl.whatsappTeste);
