@@ -72,32 +72,32 @@ export default function Registro() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0f111a] p-4 pt-24">
+    <div className="flex items-center justify-center min-h-screen bg-apex-50 p-4 pt-24">
       <SiteHeader />
       <form
         onSubmit={handleSubmit}
-        className="bg-[#1a1d27] border border-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md"
+        className="bg-white border border-apex-100 p-8 rounded-xl shadow-xl w-full max-w-md"
       >
-        <h2 className="text-2xl font-bold mb-6 text-center text-white">
+        <h2 className="text-2xl font-bold mb-6 text-center text-apex-900">
           Cadastre sua Empresa
         </h2>
-        <p className="text-sm text-center text-gray-400 -mt-4 mb-6">Teste grátis por 7 dias, sem cartão.</p>
+        <p className="text-sm text-center text-gray-600 -mt-4 mb-6">Teste grátis por 7 dias, sem cartão.</p>
 
         {erro && (
-          <p className="text-red-400 text-sm mb-4 text-center">{erro}</p>
+          <p className="text-red-600 text-sm mb-4 text-center">{erro}</p>
         )}
 
         <div className="space-y-4 mb-4">
           <CamposEmpresa
             form={form}
             setForm={setForm}
-            labelClass="block text-gray-400 mb-2 text-sm"
-            inputClass="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            labelClass="block text-gray-600 mb-2 text-sm"
+            inputClass="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm">
+          <label className="block text-gray-600 mb-2 text-sm">
             Nome da Empresa
           </label>
           <input
@@ -105,49 +105,49 @@ export default function Registro() {
             name="nome"
             value={form.nome}
             onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
             required
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm">Email</label>
+          <label className="block text-gray-600 mb-2 text-sm">Email</label>
           <input
             type="email"
             name="email"
             value={form.email}
             onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
             required
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm">Telefone</label>
+          <label className="block text-gray-600 mb-2 text-sm">Telefone</label>
           <input
             type="text"
             name="telefone"
             value={form.telefone}
             onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
             placeholder="(00) 00000-0000"
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-400 mb-2 text-sm">Senha</label>
+          <label className="block text-gray-600 mb-2 text-sm">Senha</label>
           <input
             type="password"
             name="senha"
             value={form.senha}
             onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
             required
           />
         </div>
 
         <div className="mb-6">
-          <label className="block text-gray-400 mb-2 text-sm">
+          <label className="block text-gray-600 mb-2 text-sm">
             Confirmar Senha
           </label>
           <input
@@ -155,7 +155,7 @@ export default function Registro() {
             name="confirmarSenha"
             value={form.confirmarSenha}
             onChange={handleChange}
-            className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
             required
           />
         </div>
@@ -163,14 +163,14 @@ export default function Registro() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-500 transition-colors duration-200 cursor-pointer font-medium disabled:opacity-50"
+          className="w-full bg-apex-500 text-white py-2 rounded-lg hover:bg-apex-600 transition-colors duration-200 cursor-pointer font-medium disabled:opacity-50"
         >
           {loading ? "Cadastrando..." : "Cadastrar Empresa"}
         </button>
 
         <p className="text-center text-gray-500 text-sm mt-4">
           Já tem conta?{" "}
-          <Link to="/login" className="text-blue-400 hover:text-blue-300">
+          <Link to="/login" className="text-apex-600 hover:text-apex-700">
             Fazer login
           </Link>
         </p>
