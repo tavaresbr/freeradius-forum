@@ -1,7 +1,8 @@
 "use strict";
 
 const db = require("../../db");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
+const { idSeguro } = require("../utils/caminhoSeguro");
 const path = require("path");
 const fs = require("fs");
 const { criarBackupInterno } = require("./systemBackupController.internal");
@@ -47,6 +48,9 @@ async function listarBackups(req, res) {
 async function criarBackup(req, res) {
   try {
     const { update_id, tipo } = req.body || {};
+    if (update_id && !idSeguro(update_id)) {
+      return res.status(400).json({ message: "update_id inválido" });
+    }
 
     const result = await criarBackupInterno(update_id || null, tipo || "manual");
 
@@ -59,7 +63,7 @@ async function criarBackup(req, res) {
     });
   } catch (err) {
     console.error("Erro ao criar backup:", err);
-    res.status(500).json({ message: "Erro ao criar backup: " + err.message });
+    res.status(500).json({ message: "Erro ao criar backup" });
   }
 }
 
@@ -77,6 +81,12 @@ async function restaurarBackup(req, res) {
 
     if (!backup) {
       return res.status(404).json({ message: "Backup não encontrado" });
+    }
+
+    // Os caminhos vem do banco: so valem se estiverem dentro da pasta de backups.
+    const dentro = (p) => p && path.resolve(p).startsWith(path.resolve(BACKUPS_DIR) + path.sep);
+    if (!dentro(backup.db_dump_path) || !dentro(backup.files_zip_path)) {
+      return res.status(400).json({ message: "Caminho de backup inválido" });
     }
 
     // Verify files exist
@@ -102,20 +112,21 @@ async function restaurarBackup(req, res) {
     const password = process.env.DB_PASSWORD;
     const dbName = process.env.DB_NAME;
 
-    execSync(
-      `mysql -h ${host} -P ${port} -u ${user} --password=${password} ${dbName} < "${backup.db_dump_path}"`,
-      { stdio: "pipe" }
-    );
+    const entrada = fs.openSync(backup.db_dump_path, "r");
+    try {
+      execFileSync("mysql", ["-h", host, "-P", String(port), "-u", String(user), String(dbName)], {
+        stdio: [entrada, "pipe", "pipe"],
+        env: { ...process.env, MYSQL_PWD: password || "" },
+      });
+    } finally {
+      fs.closeSync(entrada);
+    }
 
     // --- Restore files ---
     if (backup.files_zip_path.endsWith(".tar.gz")) {
-      execSync(`tar xzf "${backup.files_zip_path}" -C "${PROJECT_ROOT}"`, {
-        stdio: "pipe",
-      });
+      execFileSync("tar", ["xzf", backup.files_zip_path, "-C", PROJECT_ROOT], { stdio: "pipe" });
     } else {
-      execSync(`unzip -o "${backup.files_zip_path}" -d "${PROJECT_ROOT}"`, {
-        stdio: "pipe",
-      });
+      execFileSync("unzip", ["-o", backup.files_zip_path, "-d", PROJECT_ROOT], { stdio: "pipe" });
     }
 
     // --- Rebuild frontend ---
@@ -140,7 +151,7 @@ async function restaurarBackup(req, res) {
     }, 1500);
   } catch (err) {
     console.error("Erro ao restaurar backup:", err);
-    res.status(500).json({ message: "Erro ao restaurar backup: " + err.message });
+    res.status(500).json({ message: "Erro ao restaurar backup" });
   }
 }
 
@@ -162,7 +173,7 @@ async function deletarBackup(req, res) {
 
     // Remove directory from disk (derive from db_dump_path)
     const backupDir = backup.db_dump_path ? path.dirname(backup.db_dump_path) : null;
-    if (backupDir && fs.existsSync(backupDir)) {
+    if (backupDir && path.resolve(backupDir).startsWith(path.resolve(BACKUPS_DIR) + path.sep) && fs.existsSync(backupDir)) {
       fs.rmSync(backupDir, { recursive: true, force: true });
     }
 
@@ -172,7 +183,7 @@ async function deletarBackup(req, res) {
     res.json({ message: "Backup deletado com sucesso" });
   } catch (err) {
     console.error("Erro ao deletar backup:", err);
-    res.status(500).json({ message: "Erro ao deletar backup: " + err.message });
+    res.status(500).json({ message: "Erro ao deletar backup" });
   }
 }
 

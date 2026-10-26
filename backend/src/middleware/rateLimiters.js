@@ -115,6 +115,25 @@ const publicApiLimiter = rateLimit({
   handler: jsonHandler('Muitas requisicoes. Aguarde alguns instantes.'),
 });
 
+// Cadastro/login do captive portal (LGPD, lead, cliente): muitos aparelhos dividem o IP do
+// estabelecimento, entao o teto e folgado; as travas por CPF/dispositivo ficam nos controllers.
+const cadastroPortalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas requisicoes. Aguarde alguns instantes.'),
+});
+
+// Leitura publica de configuracao de portal/planos/campanha (GET, sem efeito colateral).
+const leituraPortalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas requisicoes. Aguarde alguns instantes.'),
+});
+
 // Metricas do pre-portal (view/clique de campanha): publico e disparado pelo navegador de cada cliente,
 // que no hotspot divide o IP do estabelecimento — limite folgado, so contem abuso grosseiro.
 const campanhaMetricaLimiter = rateLimit({
@@ -184,4 +203,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { cartaoHotspotLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { cartaoHotspotLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };

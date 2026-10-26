@@ -2,7 +2,8 @@
 
 const db = require("../../db");
 const mysql = require("mysql2/promise");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
+const { idSeguro, resolverArquivoUpdate } = require("../utils/caminhoSeguro");
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
@@ -123,8 +124,8 @@ async function verificarAtualizacoes(req, res) {
 async function aplicarAtualizacao(req, res) {
   const { email, update_id } = req.body || {};
   try {
-    if (!update_id) {
-      return res.status(400).json({ message: "update_id é obrigatório" });
+    if (!update_id || !idSeguro(update_id)) {
+      return res.status(400).json({ message: "update_id inválido" });
     }
 
     const updateServerUrl = process.env.UPDATE_SERVER_URL;
@@ -176,10 +177,8 @@ async function aplicarAtualizacao(req, res) {
     for (const file of files) {
       // Paths com prefixo "external:" sao gravados no caminho absoluto original
       // (ex: /etc/freeradius/3.0/dictionary). Demais paths vao relativos ao PROJECT_ROOT.
-      const isExternal = file.path.startsWith(EXTERNAL_PREFIX);
-      const filePath = isExternal
-        ? file.path.slice(EXTERNAL_PREFIX.length)
-        : path.join(PROJECT_ROOT, file.path);
+      // Destino validado: dentro do projeto ou em /etc/freeradius/3.0/ (nunca .env, certificados, "..").
+      const { filePath, isExternal } = resolverArquivoUpdate(PROJECT_ROOT, file.path);
 
       try {
         if (file.action === "delete") {
@@ -203,8 +202,8 @@ async function aplicarAtualizacao(req, res) {
           // senao o daemon nao consegue ler e falha no restart.
           if (isExternal && filePath.startsWith("/etc/freeradius/")) {
             try {
-              execSync(`chown freerad:freerad "${filePath}"`, { stdio: "pipe" });
-              execSync(`chmod 640 "${filePath}"`, { stdio: "pipe" });
+              execFileSync("chown", ["freerad:freerad", filePath], { stdio: "pipe" });
+              execFileSync("chmod", ["640", filePath], { stdio: "pipe" });
             } catch (chownErr) {
               await logApply(update_id, "arquivos", "aviso",
                 `chown/chmod falhou em ${filePath}: ${chownErr.message}`);

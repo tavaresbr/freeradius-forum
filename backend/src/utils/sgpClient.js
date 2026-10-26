@@ -1,4 +1,6 @@
 const axios = require("axios");
+const dns = require("dns").promises;
+const net = require("net");
 const db = require("../../db");
 const { mascararNome } = require("./mascararDados");
 const { sugerirMapeamento } = require("./importCadastros");
@@ -54,15 +56,47 @@ function normalizarUrl(url) {
   return u;
 }
 
+/** IP (v4 ou v6, texto) em faixa interna: loopback, privada, CGNAT/VPN, link-local, multicast, reservada. */
+function ipInterno(ip) {
+  let h = String(ip || "").toLowerCase().replace(/^\[|\]$/g, "");
+  const mapeado = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(h);
+  if (mapeado) h = mapeado[1];
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
+  }
+  if (h.includes(":")) {
+    return h === "::" || h === "::1" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || /^ff/.test(h) || /^::ffff:/.test(h) || /^64:ff9b:/.test(h);
+  }
+  return false;
+}
+
 /** Bloqueia destinos internos (SSRF): o admin do tenant informa a URL, o servidor faz a chamada. */
 function urlPermitida(url) {
   let u;
   try { u = new URL(url); } catch { return false; }
-  if (!/^https?:$/.test(u.protocol)) return false;
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
   const h = u.hostname.toLowerCase();
-  if (h === "localhost" || h.endsWith(".localhost") || h === "0.0.0.0" || h === "[::1]" || h === "::1") return false;
-  if (/^127\./.test(h) || /^169\.254\./.test(h)) return false;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return false;
+  if (ipInterno(h)) return false;
+  // formas numericas exoticas (0x7f.1, 2130706433) que o resolvedor converte em IP
+  if (/^(0x[0-9a-f]+|\d+)(\.(0x[0-9a-f]+|\d+)){0,3}$/i.test(h) && !/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false;
   return true;
+}
+
+/** Resolve o nome e recusa se QUALQUER endereco for interno (anti DNS que aponta para a rede local). */
+async function verificarDns(url) {
+  const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+  if (net.isIP(host)) return !ipInterno(host);
+  try {
+    const enderecos = await dns.lookup(host, { all: true });
+    return enderecos.length > 0 && enderecos.every((e) => !ipInterno(e.address));
+  } catch {
+    return false;
+  }
 }
 
 /** Grava o resultado da ultima sincronizacao automatica (sem tocar no resto da config). */
@@ -113,6 +147,9 @@ class SgpError extends Error {}
 
 async function buscarPagina(cfg, offset, limite = PAGINA) {
   const caminho = cfg.endpoint && cfg.endpoint.startsWith("/") ? cfg.endpoint : `/${cfg.endpoint || ENDPOINT_PADRAO}`;
+  if (!module.exports.urlPermitida(cfg.url) || !(await module.exports.verificarDns(cfg.url))) {
+    throw new SgpError("URL do SGP aponta para um endereço não permitido");
+  }
   let resp;
   try {
     resp = await axios.post(
@@ -132,11 +169,7 @@ async function buscarPagina(cfg, offset, limite = PAGINA) {
   if (resp.status === 404) throw new SgpError("Endpoint não encontrado no SGP (HTTP 404) — ajuste o campo Endpoint");
   if (resp.status >= 300 && resp.status < 400) throw new SgpError("O SGP redirecionou a requisição — use a URL final (https) no cadastro");
   if (resp.status >= 400) {
-    // Inclui o motivo devolvido pelo SGP (sem app/token) para o admin saber o que ajustar.
-    let motivo = typeof resp.data === "string" ? resp.data : resp.data ? JSON.stringify(resp.data) : "";
-    for (const segredo of [cfg.token, cfg.app]) if (segredo) motivo = motivo.split(segredo).join("***");
-    motivo = motivo.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-    throw new SgpError(`SGP respondeu HTTP ${resp.status}${motivo ? `: ${motivo}` : ""}`);
+    throw new SgpError(`SGP respondeu HTTP ${resp.status}`);
   }
   const lista = extrairLista(resp.data);
   if (!lista) {
@@ -205,4 +238,4 @@ async function buscarTodos(cfg) {
   return todos;
 }
 
-module.exports = { SgpError, carregarConfig, salvarConfig, registrarSync, horasValidas, publica, testar, amostra, mascararValor, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, ENDPOINT_PADRAO };
+module.exports = { SgpError, carregarConfig, salvarConfig, registrarSync, horasValidas, publica, testar, amostra, mascararValor, buscarTodos, achatar, extrairLista, normalizarUrl, urlPermitida, verificarDns, ipInterno, ENDPOINT_PADRAO };

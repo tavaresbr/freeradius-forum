@@ -1,3 +1,4 @@
+const { urlHttpSegura } = require("../utils/entradaSegura");
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
 const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
@@ -63,7 +64,7 @@ exports.capturaPassiva = async (req, res) => {
       if (portal?.configuracoes) {
         try {
           const cfg = JSON.parse(portal.configuracoes);
-          if (cfg.redirect_portal_url) {
+          if (cfg.redirect_portal_url && (/^\/(?![\/\\])/.test(cfg.redirect_portal_url) || urlHttpSegura(cfg.redirect_portal_url))) {
             redirectUrl = cfg.redirect_portal_url;
             redirectDelay = cfg.redirect_delay || 3;
           }

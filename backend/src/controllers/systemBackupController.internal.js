@@ -1,7 +1,8 @@
 "use strict";
 
 const db = require("../../db");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
+const { idSeguro } = require("../utils/caminhoSeguro");
 const path = require("path");
 const fs = require("fs");
 
@@ -13,6 +14,8 @@ const BACKUPS_DIR = path.join(PROJECT_ROOT, "backups");
  * Returns { backupId, backupDir, dbDumpPath, filesZipPath }
  */
 async function criarBackupInterno(updateId, tipo) {
+  if (updateId && !idSeguro(updateId)) throw new Error("update_id inválido");
+
   // Ensure backups directory exists
   if (!fs.existsSync(BACKUPS_DIR)) {
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
@@ -40,8 +43,15 @@ async function criarBackupInterno(updateId, tipo) {
   const password = process.env.DB_PASSWORD;
   const dbName = process.env.DB_NAME;
 
-  const dumpCmd = `mysqldump -h ${host} -P ${port} -u ${user} --password=${password} ${dbName} > "${dbDumpPath}"`;
-  execSync(dumpCmd, { stdio: "pipe" });
+  // senha por variavel de ambiente: nunca na linha de comando (aparece em ps e nas mensagens de erro)
+  try {
+    execFileSync("mysqldump", ["-h", host, "-P", String(port), "-u", String(user), `--result-file=${dbDumpPath}`, String(dbName)], {
+      stdio: "pipe",
+      env: { ...process.env, MYSQL_PWD: password || "" },
+    });
+  } catch {
+    throw new Error("Falha ao exportar o banco (mysqldump)");
+  }
 
   // --- Zip project files ---
   // Files/dirs to include (relative to PROJECT_ROOT), excluding node_modules
@@ -55,11 +65,9 @@ async function criarBackupInterno(updateId, tipo) {
     "frontend/vite.config.js",
   ]
     .filter((t) => fs.existsSync(path.join(PROJECT_ROOT, t)))
-    .map((t) => `"${t}"`)
-    .join(" ");
+    ;
 
-  const tarCmd = `cd "${PROJECT_ROOT}" && tar czf "${filesZipPath}" --exclude="*/node_modules/*" ${includeTargets}`;
-  execSync(tarCmd, { stdio: "pipe" });
+  execFileSync("tar", ["czf", filesZipPath, "--exclude=*/node_modules/*", ...includeTargets], { stdio: "pipe", cwd: PROJECT_ROOT });
 
   // --- Record in DB ---
   const tipoFinal = tipo || (updateId ? "pre_update" : "manual");
