@@ -38,7 +38,7 @@ export default function Login() {
 
   const inp = 'w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2 focus:outline-none focus:border-apex-500 focus:ring-2 focus:ring-apex-200'
   return (
-    <div className="min-h-screen pt-16 bg-white flex">
+    <div className="tema-site min-h-screen pt-16 bg-white flex">
       <SiteHeader />
       <div className="hidden lg:flex flex-1 flex-col justify-center px-16 bg-gradient-to-br from-apex-50 to-apex-200 text-apex-900">
         <h1 className="text-4xl font-extrabold leading-tight">Gerencie seu Wi-Fi <span className="text-apex-600">em um só lugar</span></h1>

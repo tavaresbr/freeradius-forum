@@ -62,7 +62,7 @@ export default function ApexHome() {
   const cadastro = (p) => (p?.id ? `/registro?plano=${p.id}` : "/registro");
 
   return (
-    <div className="min-h-screen bg-white text-gray-800">
+    <div className="tema-site min-h-screen bg-white text-gray-800">
       <SiteHeader />
 
       <section id="topo" className="pt-32 pb-20 px-4 bg-gradient-to-br from-apex-50 via-white to-apex-100 text-apex-900">
