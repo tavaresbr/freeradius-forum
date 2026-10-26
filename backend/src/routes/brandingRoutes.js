@@ -23,7 +23,7 @@ const uploadLogo = (req, res, next) =>
   upload.single("logo")(req, res, (err) => (err ? res.status(400).json({ message: err.message }) : next()));
 
 router.get("/", c.obter); // publico: landing/login/registro
-router.put("/", auth, authorize("super_admin"), c.atualizarNome);
+router.put("/", auth, authorize("super_admin"), c.atualizar);
 router.post("/logo", auth, authorize("super_admin"), uploadLogo, c.enviarLogo);
 router.delete("/logo", auth, authorize("super_admin"), c.removerLogo);
 

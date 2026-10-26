@@ -314,7 +314,7 @@ export default function AdminLayout({ children }) {
           <div className="flex items-center justify-between">
             {empresaLogo
               ? <img src={empresaLogo} alt="Logo" className="h-12 max-w-[160px] object-contain" />
-              : <MarcaApex className="text-lg" />}
+              : <MarcaApex className="text-lg" local="painel" />}
             <ToggleTema className="hidden lg:block text-gray-600" />
             <button
               onClick={() => setSidebarOpen(false)}
@@ -487,7 +487,7 @@ export default function AdminLayout({ children }) {
             </button>
             {empresaLogo
               ? <img src={empresaLogo} alt="Logo" className="h-8" />
-              : <MarcaApex className="text-base" />}
+              : <MarcaApex className="text-base" local="painel" />}
             <ToggleTema className="text-gray-600" />
           </div>
         </header>
