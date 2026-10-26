@@ -51,7 +51,7 @@ export default function LgpdCadastros() {
   // O CSV inclui o snapshot do termo aceito — prova de consentimento LGPD.
   const handleExport = async () => {
     try {
-      const r = await fetch("/api/auth/download-token", {
+      const r = await fetch("/api/auth/download-token?para=leads", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!r.ok) throw new Error("token");

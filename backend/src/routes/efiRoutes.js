@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const { getConfig, saveConfig } = require("../models/EfiConfig");
+const { mascararObjeto, preservarSegredos } = require("../utils/segredos");
 const router = express.Router();
 
 // Certificado EFI: aceita apenas extensoes de certificado e limita o tamanho
@@ -19,13 +20,14 @@ const upload = multer({
 
 router.get("/", async (req, res) => {
   const config = await getConfig(req.empresa_id);
-  res.json(config || {});
+  res.json(mascararObjeto(config || {}));
 });
 
 router.post("/", upload.single("certificado"), async (req, res) => {
   try {
-    const { client_id, client_secret, chave_pix, ambiente } = req.body;
-    const certificado_nome = req.file?.filename;
+    const atual = (await getConfig(req.empresa_id)) || {};
+    const { client_id, client_secret, chave_pix, ambiente } = preservarSegredos(req.body, atual);
+    const certificado_nome = req.file?.filename || atual.certificado_nome;
     await saveConfig({ client_id, client_secret, chave_pix, ambiente, certificado_nome }, req.empresa_id);
     res.json({ message: "Configuração salva com sucesso." });
   } catch (err) {

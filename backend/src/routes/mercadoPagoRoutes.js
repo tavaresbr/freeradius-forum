@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { getConfig, saveConfig } = require("../models/ConfigMercadoPago");
+const { mascararObjeto, preservarSegredos } = require("../utils/segredos");
 
 router.get("/", async (req, res) => {
   try {
     const config = await getConfig(req.empresa_id);
-    res.json(config || {});
+    res.json(mascararObjeto(config || {}));
   } catch (err) {
     console.error("Erro ao obter config Mercado Pago:", err);
     res.status(500).json({ message: "Erro ao buscar configuração" });
@@ -14,7 +15,9 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { public_key, access_token, client_id, client_secret, webhook_secret } = req.body;
+    const atual = (await getConfig(req.empresa_id)) || {};
+    const { public_key, access_token, client_id, client_secret, webhook_secret } =
+      preservarSegredos(req.body, atual);
     await saveConfig({ public_key, access_token, client_id, client_secret, webhook_secret }, req.empresa_id);
     res.json({ message: "Configuração Mercado Pago salva com sucesso" });
   } catch (err) {

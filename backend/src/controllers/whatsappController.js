@@ -1,5 +1,6 @@
 const axios = require("axios");
 const db = require("../../db");
+const { mascarar } = require("../utils/segredos");
 
 // Fallback global do .env (usado se empresa nao tiver config propria)
 const DEFAULT_API_URL = process.env.EVOLUTION_API_URL || "http://localhost:8080";
@@ -36,9 +37,12 @@ async function getEvolutionConfig(empresaId) {
     );
     if (config) {
       const cfg = typeof config.config_json === 'string' ? JSON.parse(config.config_json) : config.config_json;
+      // URL propria so vale junto com chave propria (par definido pela plataforma). Sem isso a chave
+      // global iria para um host escolhido pela empresa (vazamento da chave + SSRF).
+      const servidorProprio = !!cfg.api_key && cfg.api_key !== DEFAULT_API_KEY && !!cfg.api_url;
       return {
-        apiUrl: cfg.api_url || DEFAULT_API_URL,
-        apiKey: cfg.api_key || DEFAULT_API_KEY,
+        apiUrl: servidorProprio ? cfg.api_url : DEFAULT_API_URL,
+        apiKey: servidorProprio ? cfg.api_key : DEFAULT_API_KEY,
         instanceName: cfg.instance_name || `empresa_${empresaId}`,
       };
     }
@@ -273,16 +277,24 @@ async function logoutInstance(req, res) {
 async function saveConfig(req, res) {
   try {
     const { api_url, api_key, instance_name } = req.body;
-    const configJson = JSON.stringify({
-      api_url: api_url || DEFAULT_API_URL,
-      api_key: api_key || DEFAULT_API_KEY,
-      instance_name: instance_name || `empresa_${req.empresa_id}`,
-    });
-
     const [[existing]] = await db.query(
-      "SELECT id FROM empresa_configs WHERE empresa_id = ? AND config_type = 'whatsapp'",
+      "SELECT id, config_json FROM empresa_configs WHERE empresa_id = ? AND config_type = 'whatsapp'",
       [req.empresa_id]
     );
+    const atual = existing
+      ? (typeof existing.config_json === "string" ? JSON.parse(existing.config_json) : existing.config_json) || {}
+      : {};
+
+    // URL/chave da Evolution e instancia de outra empresa: so a plataforma (super_admin) define.
+    // Para as empresas a instancia e sempre `empresa_<id>` no servidor global; a chave global
+    // do .env NUNCA e gravada na config da empresa nem devolvida ao navegador.
+    const plataforma = req.user?.role === "super_admin";
+    const nome = typeof instance_name === "string" ? instance_name.trim() : "";
+    const configJson = JSON.stringify({
+      api_url: plataforma && typeof api_url === "string" && api_url.trim() ? api_url.trim() : (atual.api_url || DEFAULT_API_URL),
+      api_key: plataforma && typeof api_key === "string" && api_key.trim() && !api_key.endsWith("...") ? api_key.trim() : (atual.api_key && atual.api_key !== DEFAULT_API_KEY ? atual.api_key : ""),
+      instance_name: plataforma && nome ? nome : `empresa_${req.empresa_id}`,
+    });
 
     if (existing) {
       await db.query(
@@ -308,7 +320,8 @@ async function getConfig(req, res) {
     const evo = await getEvolutionConfig(req.empresa_id);
     res.json({
       api_url: evo.apiUrl,
-      api_key: evo.apiKey,
+      // Nunca devolve a chave: a global do servidor e as particulares saem mascaradas.
+      api_key: evo.apiKey && evo.apiKey !== DEFAULT_API_KEY ? mascarar(evo.apiKey) : "",
       instance_name: evo.instanceName,
     });
   } catch (err) {
