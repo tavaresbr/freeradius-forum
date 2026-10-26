@@ -5,7 +5,7 @@ import MarcaApex from "./MarcaApex";
 import ToggleTema from "../ToggleTema";
 
 // Cabecalho do site (landing, login e registro). Links com hash funcionam de qualquer pagina.
-const LINKS = [["/#vantagens", "Recursos"], ["/#planos", "Planos"], ["/#faq", "Dúvidas"]];
+const LINKS = [["/#recursos", "Recursos"], ["/#planos", "Planos"], ["/#faq", "Dúvidas"]];
 
 export default function SiteHeader() {
   const [menu, setMenu] = useState(false);

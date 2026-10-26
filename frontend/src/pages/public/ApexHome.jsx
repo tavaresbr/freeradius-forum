@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
 import useBranding from "../../hooks/useBranding";
-import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle } from "lucide-react";
+import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle, Layout, Router, Users, Image as Imagem } from "lucide-react";
 
 const WHATSAPP = "5593991935695";
 const TELEFONE = "(93) 99193-5695";
@@ -19,6 +19,17 @@ const VANTAGENS = [
   { icone: Zap, titulo: "PIX e cartão", texto: "Venda acesso Wi-Fi e receba na hora, sem trabalho manual." },
   { icone: ShieldCheck, titulo: "Marco Civil e LGPD", texto: "Logs de conexão e consentimento prontos para auditoria." },
   { icone: BarChart3, titulo: "Multi-equipamento", texto: "MikroTik, Omada, UniFi e Grandstream em um só painel." },
+];
+// So recursos que o sistema tem hoje. O plano muda apenas os limites (equipamentos e administradores).
+const RECURSOS = [
+  { icone: Layout, titulo: "Portais de acesso", texto: "LGPD, cadastro de lead, venda de planos e login por usuário e senha, com editor visual." },
+  { icone: Zap, titulo: "PIX e cartão", texto: "Mercado Pago e EFI, liberação automática do acesso e PIX com acesso grátis de teste." },
+  { icone: MessageCircle, titulo: "WhatsApp automático", texto: "Mensagem com as credenciais assim que o acesso é liberado, com texto que você edita." },
+  { icone: ShieldCheck, titulo: "LGPD e Marco Civil", texto: "Aceite com o termo gravado e logs de conexão com exportação em CSV." },
+  { icone: Router, titulo: "Vários equipamentos", texto: "MikroTik, Omada, UniFi e Grandstream no mesmo painel, com script de instalação rápida e VPN WireGuard." },
+  { icone: Users, titulo: "Clientes e sessões", texto: "Cadastro completo, importação por planilha ou SGP, sessões ativas com tempo restante e desconexão remota." },
+  { icone: Imagem, titulo: "Campanhas", texto: "Imagens e vídeos antes do portal para divulgar suas ofertas." },
+  { icone: BarChart3, titulo: "Equipe e acesso", texto: "Perfis de Administrador e Usuário Padrão, painel pelo navegador e pelo celular." },
 ];
 const FAQ = [
   ["Como funciona o teste grátis?", "Você cria sua conta e usa o sistema por 7 dias, sem cartão. Depois escolhe um plano e paga por PIX."],
@@ -49,7 +60,7 @@ export default function ApexHome() {
       meta.name = "description";
       document.head.appendChild(meta);
     }
-    meta.content = "Sistema de Wi-Fi Hotspot com captive portal, pagamentos PIX/cartão e conformidade LGPD. Teste grátis por 7 dias.";
+    meta.content = "Sistema de Wi-Fi Hotspot com captive portal, pagamentos PIX/cartão, WhatsApp automático, vários equipamentos e conformidade LGPD. Teste grátis por 7 dias.";
   }, [nome]);
 
   useEffect(() => {
@@ -107,10 +118,26 @@ export default function ApexHome() {
         </div>
       </section>
 
+      <section id="recursos" className="py-16 px-4 bg-apex-50">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-center">Tudo incluído em todos os planos</h2>
+          <p className="text-center text-gray-600 mt-2">Você não paga a mais por recurso: o plano muda só o tamanho da sua operação.</p>
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {RECURSOS.map(({ icone: Icone, titulo, texto }) => (
+              <div key={titulo} className="bg-white rounded-2xl p-5 border border-apex-100 shadow-sm">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-apex-100"><Icone className="text-apex-500" size={22} /></span>
+                <h3 className="mt-3 font-bold text-apex-900">{titulo}</h3>
+                <p className="mt-1 text-sm text-gray-600">{texto}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="planos" className="py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-center">Escolha seu plano</h2>
-          <p className="text-center text-gray-600 mt-2">Todos começam com 7 dias grátis.</p>
+          <p className="text-center text-gray-600 mt-2">Todos começam com 7 dias grátis e têm todos os recursos. Muda o limite de equipamentos e de administradores.</p>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {planos.map((p, i) => {
               const destaque = planos.length >= 3 && i === 1;
@@ -123,12 +150,26 @@ export default function ApexHome() {
                   <ul className="mt-4 space-y-2 flex-1 text-sm">
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{limite(p.max_equipamentos)} equipamento(s)</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{limite(p.max_admins)} administrador(es)</li>
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />Portal, pagamentos e LGPD</li>
+                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />Todos os recursos incluídos</li>
+                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />7 dias grátis, sem cartão</li>
                   </ul>
                   <Link to={cadastro(p)} className="mt-6 text-center bg-apex-500 hover:bg-apex-600 text-white py-3 rounded-lg font-semibold">Testar grátis</Link>
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-10 hidden sm:block overflow-x-auto rounded-2xl border border-apex-100">
+            <table className="w-full text-sm">
+              <thead className="bg-apex-50 text-apex-900">
+                <tr><th className="text-left px-4 py-3">Comparar</th>{planos.map((p) => <th key={p.id ?? p.nome} className="px-4 py-3 text-center">{p.nome}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-apex-100">
+                {[["Valor", (p) => `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}`], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", () => "Todos"], ["Teste grátis", () => "7 dias"]].map(([rotulo, fn]) => (
+                  <tr key={rotulo}><td className="px-4 py-3 font-medium text-apex-900">{rotulo}</td>{planos.map((p) => <td key={p.id ?? p.nome} className="px-4 py-3 text-center text-gray-700">{fn(p)}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
