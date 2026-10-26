@@ -141,8 +141,8 @@ export default function AdminLayout({ children }) {
       )
     },
     {
-      key: "banner_group",
-      title: "Banner",
+      key: "marketing_group",
+      title: "Marketing",
       children: [
         { key: "campanhas", title: "Campanhas", path: `${basePath}/campanhas` },
       ],
