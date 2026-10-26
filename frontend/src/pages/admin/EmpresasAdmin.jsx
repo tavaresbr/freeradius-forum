@@ -283,8 +283,8 @@ export default function EmpresasAdmin() {
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Telefone</label>
-                  <input type="text" value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                  <label className="block text-sm text-gray-400 mb-1">Telefone *</label>
+                  <input type="text" required value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 </div>
               </div>

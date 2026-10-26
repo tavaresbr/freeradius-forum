@@ -40,7 +40,7 @@ exports.criarEmpresa = async (req, res) => {
       return res.status(400).json({ message: "Nome e email são obrigatórios" });
     }
 
-    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    const { dados: emp, erro } = sanitizarEmpresa(req.body, { exigirCompleto: true });
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(db, emp.cnpj)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
     if (await cpfDuplicado(db, emp.cpf)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });
@@ -77,7 +77,7 @@ exports.atualizarEmpresa = async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, email, logo_url, ativo } = req.body;
-    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    const { dados: emp, erro } = sanitizarEmpresa(req.body, { exigirCompleto: true });
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(db, emp.cnpj, id)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
     if (await cpfDuplicado(db, emp.cpf, id)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });

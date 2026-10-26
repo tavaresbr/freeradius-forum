@@ -55,10 +55,13 @@ function ctrlEmpresa(db) {
   });
 }
 
+// Campos obrigatorios (so Complemento e' opcional) para os testes que precisam salvar
+const COMPLETO = { telefone: '93991935695', razao_social: 'Acme Ltda', nome_fantasia: 'Acme', cep: '68000000', logradouro: 'Rua X', numero: '1', bairro: 'Centro', cidade: 'Santarem', uf: 'pa' };
+
 test('criarEmpresa grava CNPJ so com digitos e os campos de endereco', async () => {
   const db = criarDb(async (sql) => (/INSERT INTO empresas/.test(sql) ? [{ insertId: 9 }] : undefined));
   const res = criarRes();
-  await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK, telefone: '93991935695', cep: '68000000', logradouro: 'Rua X', numero: '1', cidade: 'Santarem', uf: 'pa' } }), res);
+  await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK, ...COMPLETO } }), res);
   assert.strictEqual(res.statusCode, 201);
   const ins = db.calls.find((c) => /INSERT INTO empresas/.test(c.sql));
   assert.ok(ins.params.includes('11222333000181'));
@@ -86,7 +89,7 @@ test('CNPJ duplicado: criar e editar (outra empresa) recusam com 409; a propria 
     if (/INSERT INTO empresas/.test(sql)) return [{ insertId: 9 }];
     return undefined;
   });
-  const corpo = { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK };
+  const corpo = { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK, ...COMPLETO };
 
   let db = mk(() => true);
   let res = criarRes();
@@ -133,7 +136,7 @@ test('criarEmpresa PF grava tipo_pessoa e CPF; CPF invalido e duplicado recusam 
   try {
     let db = criarDb(async (sql) => (/INSERT INTO empresas/.test(sql) ? [{ insertId: 9 }] : undefined));
     let res = criarRes();
-    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK, ...COMPLETO } }), res);
     assert.strictEqual(res.statusCode, 201);
     const ins = db.calls.find((c) => /INSERT INTO empresas/.test(c.sql));
     assert.ok(ins.params.includes('PF') && ins.params.includes('52998224725'));
@@ -147,14 +150,44 @@ test('criarEmpresa PF grava tipo_pessoa e CPF; CPF invalido e duplicado recusam 
     const dup = (sql) => (/tipo_pessoa = 'PF' AND cpf = \?/.test(sql) ? [[{ id: 5 }]] : undefined);
     db = criarDb(dup);
     res = criarRes();
-    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK, ...COMPLETO } }), res);
     assert.strictEqual(res.statusCode, 409);
     assert.ok(!db.calls.some((c) => /INSERT INTO empresas/.test(c.sql)));
 
     db = criarDb(dup);
     res = criarRes();
-    await ctrlEmpresa(db).atualizarEmpresa(criarReq({ params: { id: 7 }, body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    await ctrlEmpresa(db).atualizarEmpresa(criarReq({ params: { id: 7 }, body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK, ...COMPLETO } }), res);
     assert.strictEqual(res.statusCode, 409);
     assert.ok(!db.calls.some((c) => /UPDATE empresas/.test(c.sql)));
+  } finally { restaura(); }
+});
+
+test('sanitizarEmpresa exigirCompleto: lista o que falta; Complemento e dados de PJ so em PJ', () => {
+  const { sanitizarEmpresa } = require(path.join(ROOT, 'src/utils/empresaCadastro.js'));
+  const vazio = sanitizarEmpresa({ cnpj: CNPJ_OK }, { exigirCompleto: true });
+  assert.match(vazio.erro, /^Preencha todos os campos obrigatórios: /);
+  for (const rotulo of ['Razão social', 'Nome fantasia', 'CEP', 'Endereço', 'Número', 'Bairro', 'Cidade', 'UF', 'Telefone']) assert.ok(vazio.erro.includes(rotulo), rotulo);
+  assert.ok(!vazio.erro.includes('CNPJ,') && !vazio.erro.includes('Complemento'));
+  assert.match(sanitizarEmpresa({ ...COMPLETO }, { exigirCompleto: true }).erro, /CNPJ/);
+  assert.ok(sanitizarEmpresa({ cnpj: CNPJ_OK, ...COMPLETO }, { exigirCompleto: true }).dados);
+  // PF: sem razao social/nome fantasia/CNPJ, mas com CPF e endereco completos
+  const { razao_social, nome_fantasia, ...semPJ } = COMPLETO;
+  assert.ok(sanitizarEmpresa({ tipo_pessoa: 'PF', cpf: CPF_OK, ...semPJ }, { exigirCompleto: true }).dados);
+  assert.match(sanitizarEmpresa({ tipo_pessoa: 'PF', cpf: CPF_OK, ...semPJ, numero: '' }, { exigirCompleto: true }).erro, /Número/);
+  // sem a flag, o comportamento antigo (tudo opcional) continua
+  assert.ok(sanitizarEmpresa({ cnpj: CNPJ_OK }).dados);
+});
+
+test('criarEmpresa e atualizarEmpresa recusam cadastro incompleto com 400 sem gravar', async () => {
+  const restaura = silencia();
+  try {
+    for (const fn of ['criarEmpresa', 'atualizarEmpresa']) {
+      const db = criarDb();
+      const res = criarRes();
+      await ctrlEmpresa(db)[fn](criarReq({ params: { id: 1 }, body: { nome: 'Acme', email: 'a@b.com', cnpj: CNPJ_OK } }), res);
+      assert.strictEqual(res.statusCode, 400, fn);
+      assert.match(res.body.message, /Preencha todos os campos obrigatórios/);
+      assert.ok(!db.calls.some((c) => /INSERT|UPDATE/.test(c.sql)), fn);
+    }
   } finally { restaura(); }
 });

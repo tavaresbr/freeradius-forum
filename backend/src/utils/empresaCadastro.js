@@ -6,9 +6,10 @@ const txt = (v, max) => { const s = v == null ? "" : String(v).trim(); return s 
 
 /**
  * Normaliza os campos de cadastro da empresa vindos do corpo (registro e tela Empresas).
+ * `exigirCompleto`: todo campo obrigatorio, exceto Complemento (CNPJ/razao social/nome fantasia so em PJ).
  * @returns {{dados?: Object, erro?: string}} dados sempre com todas as chaves (NULL quando vazio)
  */
-function sanitizarEmpresa(body) {
+function sanitizarEmpresa(body, { exigirCompleto = false } = {}) {
   const pf = String(body.tipo_pessoa || "").toUpperCase() === "PF";
   const cpfNum = pf ? String(body.cpf || "").replace(/\D/g, "") : "";
   if (pf && !validarCPF(cpfNum)) return { erro: "CPF inválido" };
@@ -23,23 +24,31 @@ function sanitizarEmpresa(body) {
   if (cepCru && !cep) return { erro: "CEP inválido" };
   const ufCru = txt(body.uf, 2);
   if (ufCru && !/^[A-Za-z]{2}$/.test(ufCru)) return { erro: "UF inválida" };
-  return {
-    dados: {
-      tipo_pessoa: pf ? "PF" : "PJ",
-      cpf: pf ? cpfNum : null,
-      cnpj: cnpjNum || null,
-      telefone,
-      razao_social: pf ? null : txt(body.razao_social, 255),
-      nome_fantasia: pf ? null : txt(body.nome_fantasia, 255),
-      cep,
-      logradouro: txt(body.logradouro, 255),
-      numero: txt(body.numero, 20),
-      complemento: txt(body.complemento, 100),
-      bairro: txt(body.bairro, 100),
-      cidade: txt(body.cidade, 100),
-      uf: ufCru ? ufCru.toUpperCase() : null,
-    },
+  const dados = {
+    tipo_pessoa: pf ? "PF" : "PJ",
+    cpf: pf ? cpfNum : null,
+    cnpj: cnpjNum || null,
+    telefone,
+    razao_social: pf ? null : txt(body.razao_social, 255),
+    nome_fantasia: pf ? null : txt(body.nome_fantasia, 255),
+    cep,
+    logradouro: txt(body.logradouro, 255),
+    numero: txt(body.numero, 20),
+    complemento: txt(body.complemento, 100),
+    bairro: txt(body.bairro, 100),
+    cidade: txt(body.cidade, 100),
+    uf: ufCru ? ufCru.toUpperCase() : null,
   };
+  if (exigirCompleto) {
+    const obrigatorios = [
+      ...(pf ? [] : [["cnpj", "CNPJ"], ["razao_social", "Razão social"], ["nome_fantasia", "Nome fantasia"]]),
+      ["cep", "CEP"], ["logradouro", "Endereço"], ["numero", "Número"], ["bairro", "Bairro"],
+      ["cidade", "Cidade"], ["uf", "UF"], ["telefone", "Telefone"],
+    ];
+    const faltando = obrigatorios.filter(([k]) => !dados[k]).map(([, rotulo]) => rotulo);
+    if (faltando.length) return { erro: `Preencha todos os campos obrigatórios: ${faltando.join(", ")}` };
+  }
+  return { dados };
 }
 
 const MSG_CNPJ_DUPLICADO = "Já existe uma empresa cadastrada com este CNPJ";

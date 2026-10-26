@@ -170,13 +170,14 @@ test('registro publico: dono vira owner vinculado em admin_empresas e Administra
     const sql = norm(sqlRaw);
     if (/^SELECT id FROM admins WHERE email = \?/.test(sql)) return [[]];
     if (/^SELECT id FROM empresas WHERE slug = \?/.test(sql)) return [[]];
+    if (/^SELECT id FROM empresas WHERE (tipo_pessoa|REPLACE)/.test(sql)) return [[]];
     if (/^INSERT INTO empresas/.test(sql)) return [{ insertId: 9 }];
     if (/^INSERT INTO admins \(empresa_id, email, nome, role, password\)/.test(sql)) { const id = ++S.seq.a; S.admins.push({ id, empresa_id: p[0], email: p[1], role: 'owner' }); return [{ insertId: id }]; }
     return origExec.call(this, sqlRaw, p);
   };
   process.env.JWT_SECRET = 'x';
   const r = res();
-  await registro.registrarEmpresa({ body: { nome: 'Empresa Nova', email: 'dono@x.com', senha: '123456' } }, r);
+  await registro.registrarEmpresa({ body: { nome: 'Empresa Nova', email: 'dono@x.com', senha: '123456', tipo_pessoa: 'PF', cpf: '529.982.247-25', telefone: '93991935695', cep: '68000000', logradouro: 'Rua X', numero: '1', bairro: 'Centro', cidade: 'Santarem', uf: 'PA' } }, r);
   fakeDb.execute = origExec;
   assert.strictEqual(r.code, 201, JSON.stringify(r.body));
   const adminId = S.admins[0].id;
