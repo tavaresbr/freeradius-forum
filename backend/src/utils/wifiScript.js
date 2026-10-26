@@ -17,9 +17,18 @@ function linhasWifi(ssid) {
     `/interface wifi set [find] configuration=cfg-hotspot disabled=no`,
   ].join("; ");
 
+  // `set` essencial primeiro (so o que e' indispensavel); cada ajuste opcional em comando
+  // proprio: se a versao do RouterOS recusar um argumento, os outros ainda sao aplicados.
+  const opcionais = [
+    `default-forwarding=no`,
+    `band=2ghz-b/g/n`,
+    `frequency-mode=regulatory-domain`,
+    `country=brazil`,
+  ].map((arg) => `:do { /interface wireless set [find default-name=wlan1] ${arg} } on-error={ }`);
   const wireless = [
-    `/interface wireless set [find default-name=wlan1] mode=ap-bridge ssid="${ssid}" country=brazil frequency-mode=regulatory-domain default-forwarding=no disabled=no`,
-    `:do { /interface wireless set [find default-name=wlan1] band=2ghz-b/g/n } on-error={ }`,
+    `/interface wireless set [find default-name=wlan1] mode=ap-bridge ssid="${ssid}" disabled=no`,
+    ...opcionais,
+    `:put "Wi-Fi configurado: ${ssid}"`,
   ].join("; ");
 
   return [

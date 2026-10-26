@@ -29,3 +29,14 @@ test('chaves e aspas da linha final balanceadas', () => {
   const fora = semEscapes.replace(/"[^"]*"/g, '');
   assert.strictEqual((fora.match(/\{/g) || []).length, (fora.match(/\}/g) || []).length);
 });
+
+test('wireless: set essencial (so mode/ssid/disabled) antes dos opcionais, cada opcional isolado', () => {
+  const essencial = linha.indexOf('mode=ap-bridge ssid=\\"RB02\\" disabled=no');
+  assert.ok(essencial > 0);
+  for (const arg of ['default-forwarding=no', 'band=2ghz-b/g/n', 'frequency-mode=regulatory-domain', 'country=brazil']) {
+    const i = linha.indexOf(arg);
+    assert.ok(i > essencial, arg);
+    assert.ok(linha.slice(essencial, i).includes(':do {'), `${arg} fora do set essencial`);
+  }
+  assert.ok(linha.includes('Wi-Fi configurado: RB02'));
+});
