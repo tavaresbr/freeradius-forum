@@ -26,7 +26,7 @@ exports.registrarEmpresa = async (req, res) => {
       return res.status(400).json({ message: "Nome, email e senha são obrigatórios" });
     }
 
-    const { dados: emp, erro } = sanitizarEmpresa(req.body);
+    const { dados: emp, erro } = sanitizarEmpresa(req.body, { exigirCompleto: true });
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(conn, emp.cnpj)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
     if (await cpfDuplicado(conn, emp.cpf)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });

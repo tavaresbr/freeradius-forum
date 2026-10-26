@@ -29,6 +29,12 @@ export default function Registro() {
     e.preventDefault();
     setErro(null);
 
+    const tel = form.telefone.replace(/\D/g, "");
+    if (tel.length < 10 || tel.length > 11) {
+      setErro("Informe o telefone com DDD (10 ou 11 dígitos)");
+      return;
+    }
+
     if (form.senha !== form.confirmarSenha) {
       setErro("As senhas não coincidem");
       return;
@@ -98,7 +104,7 @@ export default function Registro() {
 
         <div className="mb-4">
           <label className="block text-gray-600 mb-2 text-sm">
-            {form.tipo_pessoa === "PF" ? "Seu nome" : "Nome da Empresa"}
+            {form.tipo_pessoa === "PF" ? "Seu nome" : "Nome da Empresa"} *
           </label>
           <input
             type="text"
@@ -111,7 +117,7 @@ export default function Registro() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-600 mb-2 text-sm">Email</label>
+          <label className="block text-gray-600 mb-2 text-sm">Email *</label>
           <input
             type="email"
             name="email"
@@ -123,10 +129,11 @@ export default function Registro() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-600 mb-2 text-sm">Telefone</label>
+          <label className="block text-gray-600 mb-2 text-sm">Telefone *</label>
           <input
             type="text"
             name="telefone"
+            required
             value={form.telefone}
             onChange={handleChange}
             className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2 focus:outline-none focus:border-apex-500"
@@ -135,7 +142,7 @@ export default function Registro() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-gray-600 mb-2 text-sm">Senha</label>
+          <label className="block text-gray-600 mb-2 text-sm">Senha *</label>
           <input
             type="password"
             name="senha"
@@ -148,7 +155,7 @@ export default function Registro() {
 
         <div className="mb-6">
           <label className="block text-gray-600 mb-2 text-sm">
-            Confirmar Senha
+            Confirmar Senha *
           </label>
           <input
             type="password"

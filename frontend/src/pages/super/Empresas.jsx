@@ -10,6 +10,7 @@ export default function Empresas() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [erro, setErro] = useState(null);
   const [form, setForm] = useState({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
 
   const token = localStorage.getItem("admin_token");
@@ -36,6 +37,7 @@ export default function Empresas() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErro(null);
     try {
       const url = editId ? `/api/empresas/${editId}` : "/api/empresas";
       const method = editId ? "PUT" : "POST";
@@ -45,9 +47,12 @@ export default function Empresas() {
         setEditId(null);
         setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS });
         fetchEmpresas();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setErro(data.message || "Erro ao salvar");
       }
     } catch (err) {
-      console.error(err);
+      setErro("Erro de conexão");
     }
   };
 
@@ -135,6 +140,7 @@ export default function Empresas() {
               <h2 className="text-lg font-bold text-white mb-4">
                 {editId ? "Editar Empresa" : "Nova Empresa"}
               </h2>
+              {erro && <p className="text-red-400 text-sm mb-3 bg-red-900/20 p-2 rounded">{erro}</p>}
 
               <div className="space-y-3">
                 <CamposEmpresa
@@ -144,7 +150,7 @@ export default function Empresas() {
                   inputClass="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm"
                 />
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Nome</label>
+                  <label className="block text-sm text-gray-400 mb-1">Nome *</label>
                   <input
                     type="text" required
                     value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })}
@@ -152,7 +158,7 @@ export default function Empresas() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Email</label>
+                  <label className="block text-sm text-gray-400 mb-1">Email *</label>
                   <input
                     type="email" required
                     value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -160,9 +166,9 @@ export default function Empresas() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Telefone</label>
+                  <label className="block text-sm text-gray-400 mb-1">Telefone *</label>
                   <input
-                    type="text"
+                    type="text" required
                     value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm"
                   />

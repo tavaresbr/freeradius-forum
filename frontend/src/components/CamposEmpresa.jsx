@@ -139,11 +139,14 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
     </>
   );
 
+  // Todo campo e' obrigatorio, exceto os marcados com `opcional` (Complemento)
   const campo = (rotulo, nome, extra = {}) => (
     <div className={extra.className}>
-      <label className={labelClass}>{rotulo}</label>
+      <label className={labelClass}>{rotulo}{!extra.opcional && " *"}</label>
       <input
         type="text"
+        required={!extra.opcional}
+        minLength={extra.minLength}
         value={form[nome] || ""}
         onChange={(e) => (extra.aoMudar ? extra.aoMudar(e.target.value) : set(nome, extra.mascara ? extra.mascara(e.target.value) : e.target.value))}
         maxLength={extra.maxLength}
@@ -163,9 +166,11 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
           <button type="button" onClick={() => trocarTipo("PF")} className={abaCls(true)}>Pessoa física (CPF)</button>
         </div>
         <div>
-          <label className={labelClass}>CPF</label>
+          <label className={labelClass}>CPF *</label>
           <input
             type="text"
+            required
+            minLength={14}
             inputMode="numeric"
             name="cpf"
             value={mascaraCpf(form.cpf)}
@@ -184,12 +189,12 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
         </div>
         <div className="grid grid-cols-3 gap-3">
           {campo("Número", "numero")}
-          {campo("Complemento", "complemento", { className: "col-span-2" })}
+          {campo("Complemento", "complemento", { className: "col-span-2", opcional: true })}
         </div>
         <div className="grid grid-cols-3 gap-3">
           {campo("Bairro", "bairro")}
           {campo("Cidade", "cidade")}
-          {campo("UF", "uf", { maxLength: 2 })}
+          {campo("UF", "uf", { maxLength: 2, minLength: 2 })}
         </div>
       </>
     );
@@ -202,10 +207,12 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
         <button type="button" onClick={() => trocarTipo("PF")} className={abaCls(false)}>Pessoa física (CPF)</button>
       </div>
       <div>
-        <label className={labelClass}>CNPJ</label>
+        <label className={labelClass}>CNPJ *</label>
         <div className="flex gap-2">
           <input
             type="text"
+            required
+            minLength={18}
             inputMode="numeric"
             name="cnpj"
             value={form.cnpj || ""}
@@ -236,12 +243,12 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
       </div>
       <div className="grid grid-cols-3 gap-3">
         {campo("Número", "numero")}
-        {campo("Complemento", "complemento", { className: "col-span-2" })}
+        {campo("Complemento", "complemento", { className: "col-span-2", opcional: true })}
       </div>
       <div className="grid grid-cols-3 gap-3">
         {campo("Bairro", "bairro")}
         {campo("Cidade", "cidade")}
-        {campo("UF", "uf", { maxLength: 2 })}
+        {campo("UF", "uf", { maxLength: 2, minLength: 2 })}
       </div>
     </>
   );
