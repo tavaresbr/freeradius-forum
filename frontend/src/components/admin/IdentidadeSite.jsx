@@ -7,7 +7,7 @@ const PRESETS = [["p", "P"], ["m", "M"], ["g", "G"], ["xg", "XG"]];
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("admin_token")}` });
 
 export default function IdentidadeSite() {
-  const { nome, logoUrl, tamanhos, recarregar } = useBranding();
+  const { nome, logoUrl, faviconUrl, appleIconUrl, tamanhos, recarregar } = useBranding();
   const [tam, setTam] = useState(tamanhos);
   const [campo, setCampo] = useState(nome);
   const [msg, setMsg] = useState(null);
@@ -49,6 +49,18 @@ export default function IdentidadeSite() {
     fd.append("logo", f);
     chamar("/api/branding/logo", { method: "POST", headers: auth(), body: fd }, "Logo atualizada.");
   };
+
+  const enviarIcone = (rota, ok) => (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("arquivo", f);
+    chamar(rota, { method: "POST", headers: auth(), body: fd }, ok);
+  };
+  const enviarFavicon = enviarIcone("/api/branding/favicon", "Favicon atualizado. Use Ctrl+F5 se a aba não mudar.");
+  const enviarApple = enviarIcone("/api/branding/apple-icon", "Ícone do iPhone atualizado. No iPhone, refaça o \"Adicionar à Tela de Início\".");
+  const removerIcone = (rota, ok) => () => chamar(rota, { method: "DELETE", headers: auth() }, ok);
 
   const removerLogo = () => chamar("/api/branding/logo", { method: "DELETE", headers: auth() }, "Logo padrão restaurada.");
 
@@ -99,6 +111,27 @@ export default function IdentidadeSite() {
       ) : (
         <p className="mt-4 text-xs text-gray-500">Envie uma logo para escolher o tamanho em cada lugar (a logo padrão já tem tamanho fixo).</p>
       )}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {[
+          { titulo: "Favicon (aba do navegador)", dica: "PNG, ICO ou WEBP, até 512 KB (ideal 32×32 ou 48×48)", url: faviconUrl, accept: "image/png,image/x-icon,image/vnd.microsoft.icon,image/webp,.ico", onEnviar: enviarFavicon, onRemover: removerIcone("/api/branding/favicon", "Favicon padrão restaurado."), redondo: false },
+          { titulo: "Ícone para iPhone (tela inicial)", dica: "PNG, até 1 MB (ideal 180×180, sem transparência)", url: appleIconUrl, accept: "image/png", onEnviar: enviarApple, onRemover: removerIcone("/api/branding/apple-icon", "Ícone do iPhone removido."), redondo: true },
+        ].map((i) => (
+          <div key={i.titulo}>
+            <label className="block text-sm text-gray-400 mb-1">{i.titulo}</label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className={`border border-gray-500/40 w-16 h-16 flex items-center justify-center overflow-hidden ${i.redondo ? "rounded-2xl" : "rounded"}`}>
+                {i.url ? <img src={i.url} alt="" className="w-full h-full object-contain" /> : <span className="text-xs text-blue-200 text-center">Padrão</span>}
+              </div>
+              <label className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded cursor-pointer">
+                Enviar
+                <input type="file" accept={i.accept} className="hidden" onChange={i.onEnviar} disabled={busy} />
+              </label>
+              {i.url && <button disabled={busy} onClick={i.onRemover} className="text-red-400 hover:text-red-300 text-sm">Remover</button>}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">{i.dica}</p>
+          </div>
+        ))}
+      </div>
       {msg && <p className={`mt-3 text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.texto}</p>}
     </div>
   );

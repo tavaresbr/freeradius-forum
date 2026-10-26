@@ -50,6 +50,8 @@ function mascaraCep(v) {
 export default function CamposEmpresa({ form, setForm, inputClass, labelClass }) {
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [avisoCep, setAvisoCep] = useState(null);
 
   const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
   const pf = form.tipo_pessoa === "PF";
@@ -95,11 +97,47 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
     }
   };
 
+  // CEP completo (8 digitos): preenche endereco, bairro, cidade e UF; numero/complemento ficam como estao
+  const onCep = async (valor) => {
+    const v = mascaraCep(valor);
+    set("cep", v);
+    if (soDigitos(v).length !== 8) return;
+    setBuscandoCep(true);
+    setAvisoCep(null);
+    try {
+      const res = await fetch(`/api/cep/${soDigitos(v)}`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || "Erro ao consultar CEP");
+      setForm((f) => ({
+        ...f,
+        cep: v,
+        logradouro: d.logradouro || f.logradouro,
+        bairro: d.bairro || f.bairro,
+        cidade: d.cidade || f.cidade,
+        uf: d.uf || f.uf,
+      }));
+      setAvisoCep({ tipo: "ok", texto: "Endereço preenchido pelo CEP. Informe o número." });
+    } catch (err) {
+      setAvisoCep({ tipo: "erro", texto: err.message });
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
   const onCnpj = (e) => {
     const v = mascaraCnpj(e.target.value);
     set("cnpj", v);
     if (soDigitos(v).length === 14) buscar(v);
   };
+
+  const avisoDoCep = () => (
+    <>
+      {buscandoCep && <p className="text-xs text-gray-500 col-span-3">Buscando CEP...</p>}
+      {avisoCep && !buscandoCep && (
+        <p className={`text-xs col-span-3 ${avisoCep.tipo === "ok" ? "text-green-500" : "text-red-400"}`}>{avisoCep.texto}</p>
+      )}
+    </>
+  );
 
   const campo = (rotulo, nome, extra = {}) => (
     <div className={extra.className}>
@@ -107,7 +145,7 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
       <input
         type="text"
         value={form[nome] || ""}
-        onChange={(e) => set(nome, extra.mascara ? extra.mascara(e.target.value) : e.target.value)}
+        onChange={(e) => (extra.aoMudar ? extra.aoMudar(e.target.value) : set(nome, extra.mascara ? extra.mascara(e.target.value) : e.target.value))}
         maxLength={extra.maxLength}
         className={inputClass}
       />
@@ -140,8 +178,9 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
           )}
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {campo("CEP", "cep", { mascara: mascaraCep, maxLength: 9 })}
+          {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9 })}
           {campo("Endereço", "logradouro", { className: "col-span-2" })}
+          {avisoDoCep()}
         </div>
         <div className="grid grid-cols-3 gap-3">
           {campo("Número", "numero")}
@@ -191,8 +230,9 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
       {campo("Razão social", "razao_social")}
       {campo("Nome fantasia", "nome_fantasia")}
       <div className="grid grid-cols-3 gap-3">
-        {campo("CEP", "cep", { mascara: mascaraCep, maxLength: 9 })}
+        {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9 })}
         {campo("Endereço", "logradouro", { className: "col-span-2" })}
+        {avisoDoCep()}
       </div>
       <div className="grid grid-cols-3 gap-3">
         {campo("Número", "numero")}
