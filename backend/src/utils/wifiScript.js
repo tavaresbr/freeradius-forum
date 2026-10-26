@@ -1,10 +1,9 @@
 /**
  * Trecho "Wi-Fi" do script de instalacao rapida do roteador (RouterOS).
- * O codigo de cada familia fica numa string passada a [:parse] e executada dentro de :do/on-error:
- * assim o comando que nao existe no modelo (ex.: /interface wifi num hAP lite) so falha
- * dentro do :do e o script segue para a tentativa seguinte, em vez de quebrar a linha toda.
- *   1) pacote `wifi` (hAP ax, RouterOS 7.13+): /interface wifi
- *   2) pacote `wireless` (hAP ac/lite etc.): /interface wireless, wlan1
+ * (`[[:parse "..."]]` nao executa nada no RouterOS: o codigo precisa de `:local f [:parse ...]; $f`.)
+ * Cada comando em linha propria; so o ramo `wifi` (hAP ax, RouterOS 7.13+) usa [:parse]
+ * para que um modelo sem /interface wifi nao quebre a linha. O ramo `wireless`
+ * (hAP ac/lite, RB951 etc.: /interface wireless, wlan1) usa comandos diretos.
  * Colchetes viram \5B/\5D (hex) porque dentro de aspas o RouterOS os trataria como substituicao.
  * O SSID ja vem sanitizado de utils/ssid (sem aspas, $, [, ], ?, \).
  */
@@ -17,22 +16,16 @@ function linhasWifi(ssid) {
     `/interface wifi set [find] configuration=cfg-hotspot disabled=no`,
   ].join("; ");
 
-  // `set` essencial primeiro (so o que e' indispensavel); cada ajuste opcional em comando
-  // proprio: se a versao do RouterOS recusar um argumento, os outros ainda sao aplicados.
-  const opcionais = [
-    `default-forwarding=no`,
-    `band=2ghz-b/g/n`,
-    `frequency-mode=regulatory-domain`,
-    `country=brazil`,
-  ].map((arg) => `:do { /interface wireless set [find default-name=wlan1] ${arg} } on-error={ }`);
-  const wireless = [
-    `/interface wireless set [find default-name=wlan1] mode=ap-bridge ssid="${ssid}" disabled=no`,
-    ...opcionais,
-    `:put "Wi-Fi configurado: ${ssid}"`,
-  ].join("; ");
-
+  const wlan = `/interface wireless set [find default-name=wlan1]`;
+  // Uma linha por comando e SEM [:parse]: o set essencial (modo AP + SSID) vem primeiro e cada
+  // ajuste opcional tem a sua linha, entao um argumento recusado pela versao do RouterOS nao
+  // impede o resto. Num roteador do outro pacote, so a linha daquele pacote da erro e a colagem segue.
   return [
-    `:do { [[:parse "${emString(wifi)}"]] } on-error={ :do { [[:parse "${emString(wireless)}"]] } on-error={ :put "Aviso: nao foi possivel configurar o Wi-Fi (nem /interface wifi nem wlan1)" } }`,
+    `:do { ${wlan} mode=ap-bridge ssid="${ssid}" disabled=no } on-error={ :put "Aviso: Wi-Fi (wlan1) nao configurado" }`,
+    ...[`default-forwarding=no`, `band=2ghz-b/g/n`, `frequency-mode=regulatory-domain`, `country=brazil`]
+      .map((arg) => `:do { ${wlan} ${arg} } on-error={ }`),
+    `:do { :local f [:parse "${emString(wifi)}"]; $f } on-error={ }`,
+    `:do { :put ("Wi-Fi wlan1: " . [/interface wireless get [find default-name=wlan1] mode] . " / " . [/interface wireless get [find default-name=wlan1] ssid]) } on-error={ }`,
   ];
 }
 
