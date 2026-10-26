@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj } from "../../components/CamposEmpresa";
+import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj, mascaraCpf } from "../../components/CamposEmpresa";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -96,7 +96,7 @@ export default function Empresas() {
               <div key={e.id} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">{e.nome}</p>
-                  <p className="text-sm text-gray-500">{e.email} | slug: {e.slug} {e.cnpj && `| CNPJ: ${e.cnpj}`}</p>
+                  <p className="text-sm text-gray-500">{e.email} | slug: {e.slug} {e.cnpj && `| CNPJ: ${e.cnpj}`}{e.tipo_pessoa === "PF" && e.cpf && `| CPF: ${mascaraCpf(e.cpf)}`}</p>
                   <p className="text-xs text-gray-600 mt-1">
                     {e.total_mikrotiks || 0} mikrotiks | {e.total_planos || 0} planos | {e.total_admins || 0} admins
                   </p>
