@@ -48,6 +48,7 @@ const portalRoutes = require("./src/routes/portalRoutes");
 const portalTemplateRoutes = require("./src/routes/portalTemplateRoutes");
 const campanhasRoutes = require("./src/routes/campanhasRoutes");
 const campanhasPublicRoutes = require("./src/routes/campanhasPublicRoutes");
+const { campanhaAtivaDoPortal } = require("./src/utils/campanhaAtiva");
 const leadRoutes = require("./src/routes/leadRoutes");
 const importacaoRoutes = require("./src/routes/importacaoRoutes");
 const integracaoRoutes = require("./src/routes/integracaoRoutes");
@@ -501,7 +502,7 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
     const empresaSlug = mikrotik.empresa_slug || 'default';
 
     // Pré-portal: se o portal tem campanha ativa e usuario ainda nao viu, redireciona
-    if (portal.campanha_ativa_id && req.query.campanha_vista !== '1') {
+    if (portal.campanha_ativa_id && req.query.campanha_vista !== '1' && await campanhaAtivaDoPortal(portal.id)) {
       const qs = new URLSearchParams({
         mac: mac || '',
         ip: ip || '',

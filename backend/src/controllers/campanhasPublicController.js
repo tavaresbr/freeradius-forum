@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { campanhaAtivaDoPortal } = require("../utils/campanhaAtiva");
 
 /**
  * Retorna a campanha ativa de um portal, incluindo seus itens.
@@ -63,8 +64,8 @@ exports.registrarView = async (req, res) => {
       "SELECT campanha_ativa_id, empresa_id FROM portais WHERE id = ?",
       [portalId]
     );
-    if (!portal || !portal.campanha_ativa_id) {
-      // Sem campanha ativa — não é erro, apenas ignora
+    // Sem campanha utilizavel (ausente, inativa ou sem itens) — nao e erro, apenas ignora
+    if (!portal || !portal.campanha_ativa_id || !(await campanhaAtivaDoPortal(portalId))) {
       return res.json({ success: true, skipped: true });
     }
 

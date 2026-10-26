@@ -1930,3 +1930,13 @@ Perfis de usuario customizados (grupos diferentes de `default`) nao sao alterado
 **Wi-Fi no assistente:** se a interface escolhida for Wi-Fi (`wlan*`/`wifi*`) e o campo "Nome do Wi-Fi (SSID)" vier preenchido, `configurarWifiAP` poe o rádio em `ap-bridge` com esse SSID, `security-profile=default` e `disabled=no` (pacote wireless legado; no pacote `wifi` novo vira aviso). Vazio = nao mexe no radio. O script de provisionamento da VPN (`wireguardController`) ja configura o Wi-Fi do roteador no primeiro uso; este passo serve para equipamentos provisionados de outro jeito ou para trocar o nome depois. Nao testado contra MikroTik real (so mocks).
 
 **Tema claro/escuro:** botao `ToggleTema` (SiteHeader e sidebar do painel), hook `hooks/useTema.js`, `localStorage.tema`, `<html data-theme="claro|escuro">` (padrao claro). Site/login/registro/sidebar usam a classe `tema-site` e o tema escuro e' um remapeamento por CSS em `frontend/src/index.css`; o conteudo do painel (classes escuras fixas) fica sob `.painel` e e' remapeado para claro em `[data-theme="claro"] .painel`. Pagina nova do painel que use cor fora dessas listas precisa de regra nesse bloco (ou fica ilegivel no claro). Paginas do captive portal nao sao afetadas.
+
+---
+
+## Campanhas (pre-portal com imagens/videos)
+
+Slides (imagem/video) mostrados antes do portal: `portais.campanha_ativa_id` -> `/campanha/:portalId` (`CampanhaPlayer.jsx`). Admin em `/admin/:slug/campanhas` (`Campanhas.jsx`, `CampanhaEditor.jsx`), API `/api/campanhas` (modulo `portais`), publico `/api/public/campanha/:portalId` (+ `/view`). Uploads em `backend/uploads/campanhas/<empresa>/<campanha>/`.
+- **Campanha utilizavel = `ativo=1` e >= 1 item** (`utils/campanhaAtiva.js`): so assim o redirect do hotspot (`server.js`, `/hotspot/redirect`) manda para `/campanha/...` e so assim o `vincularCampanha` aceita vincular (inativa/sem itens = 400); `registrarView` ignora campanha inutilizavel.
+- Validacoes em `utils/campanhaValidacao.js`: duracao inteira 1-60 s, `link_destino` so `http(s)://` (nunca `javascript:`), nome/titulo <= 150, assinatura (magic bytes) do arquivo conferida alem do mimetype. `PUT` da campanha/item so altera os campos enviados e campo vazio LIMPA (sem COALESCE).
+- Upload: `validarCampanhaDoUpload` (campanha da empresa) roda ANTES do multer (sem arquivo/pasta orfaos); `receberArquivo` traduz erros do multer (tamanho => 413). Excluir campanha em uso por portal responde 409 com a lista (`?forcar=1` confirma); banco e apagado antes dos arquivos.
+- Testes: `backend/tests/unit/campanhaValidacao.test.js`, `campanhasController.test.js` (os scripts de `backend/tests/campanhas/` sao de integracao com MySQL real e nao entram no `npm test`).

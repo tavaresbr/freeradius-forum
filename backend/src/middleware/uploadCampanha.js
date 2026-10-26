@@ -2,6 +2,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
+const db = require("../../db");
 
 const UPLOAD_ROOT = path.join(__dirname, "../../uploads/campanhas");
 
@@ -45,4 +46,34 @@ const uploadCampanha = multer({
   limits: { fileSize: MAX_VIDEO_BYTES }, // 50 MB global; controller enforces per-type
 });
 
-module.exports = { uploadCampanha, ALLOWED_MIMES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ROOT };
+// Valida a campanha (da empresa) ANTES de o multer gravar qualquer coisa: sem isso um id invalido ou de outra
+// empresa criava a pasta e deixava o arquivo orfao quando o controller respondia 404.
+async function validarCampanhaDoUpload(req, res, next) {
+  try {
+    const [rows] = await db.execute(
+      "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
+      [req.params.id, req.empresa_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Campanha não encontrada" });
+    next();
+  } catch (err) {
+    console.error("Erro ao validar campanha do upload:", err);
+    res.status(500).json({ error: "Erro ao validar campanha" });
+  }
+}
+
+// multer com erros viram resposta clara (tamanho => 413, tipo invalido => 400) em vez de cair no handler global.
+function receberArquivo(req, res, next) {
+  uploadCampanha.single("arquivo")(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "Arquivo excede o limite de 50 MB" });
+    }
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: "Arquivo inválido" });
+    }
+    return res.status(400).json({ error: err.message || "Arquivo inválido" });
+  });
+}
+
+module.exports = { uploadCampanha, validarCampanhaDoUpload, receberArquivo, ALLOWED_MIMES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ROOT };
