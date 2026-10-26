@@ -4,6 +4,32 @@ import useBranding, { ALTURAS } from "../../hooks/useBranding";
 const LOCAIS = [["site", "Cabeçalho do site"], ["login", "Tela de login"], ["painel", "Barra lateral do painel"]];
 const PRESETS = [["p", "P"], ["m", "M"], ["g", "G"], ["xg", "XG"]];
 
+// Converte qualquer imagem para PNG quadrado no tamanho padrao (sem distorcer: centraliza com margem).
+// fundo = cor de preenchimento (iPhone nao aceita transparencia); sem fundo, mantem a transparencia.
+function paraPng(arquivo, lado, fundo) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(arquivo);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (!img.naturalWidth || !img.naturalHeight) return reject(new Error("Imagem inválida."));
+      const c = document.createElement("canvas");
+      c.width = lado; c.height = lado;
+      const ctx = c.getContext("2d");
+      if (fundo) { ctx.fillStyle = fundo; ctx.fillRect(0, 0, lado, lado); }
+      const margem = fundo ? Math.round(lado * 0.1) : 0;
+      const area = lado - margem * 2;
+      const k = Math.min(area / img.naturalWidth, area / img.naturalHeight);
+      const w = img.naturalWidth * k, h = img.naturalHeight * k;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Não foi possível converter a imagem."))), "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Não foi possível ler a imagem. Use PNG, JPG, WEBP, ICO ou SVG.")); };
+    img.src = url;
+  });
+}
+
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("admin_token")}` });
 
 export default function IdentidadeSite() {
@@ -50,16 +76,21 @@ export default function IdentidadeSite() {
     chamar("/api/branding/logo", { method: "POST", headers: auth(), body: fd }, "Logo atualizada.");
   };
 
-  const enviarIcone = (rota, ok) => (e) => {
+  const enviarIcone = (rota, ok, lado, fundo) => async (e) => {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    const fd = new FormData();
-    fd.append("arquivo", f);
-    chamar(rota, { method: "POST", headers: auth(), body: fd }, ok);
+    try {
+      const png = await paraPng(f, lado, fundo);
+      const fd = new FormData();
+      fd.append("arquivo", png, "icone.png");
+      chamar(rota, { method: "POST", headers: auth(), body: fd }, ok);
+    } catch (err) {
+      setMsg({ ok: false, texto: err.message });
+    }
   };
-  const enviarFavicon = enviarIcone("/api/branding/favicon", "Favicon atualizado. Use Ctrl+F5 se a aba não mudar.");
-  const enviarApple = enviarIcone("/api/branding/apple-icon", "Ícone do iPhone atualizado. No iPhone, refaça o \"Adicionar à Tela de Início\".");
+  const enviarFavicon = enviarIcone("/api/branding/favicon", "Favicon atualizado (48×48). Use Ctrl+F5 se a aba não mudar.", 48);
+  const enviarApple = enviarIcone("/api/branding/apple-icon", "Ícone do iPhone atualizado. No iPhone, refaça o \"Adicionar à Tela de Início\".", 180, "#ffffff");
   const removerIcone = (rota, ok) => () => chamar(rota, { method: "DELETE", headers: auth() }, ok);
 
   const removerLogo = () => chamar("/api/branding/logo", { method: "DELETE", headers: auth() }, "Logo padrão restaurada.");
@@ -113,8 +144,8 @@ export default function IdentidadeSite() {
       )}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {[
-          { titulo: "Favicon (aba do navegador)", dica: "PNG, ICO ou WEBP, até 512 KB (ideal 32×32 ou 48×48)", url: faviconUrl, accept: "image/png,image/x-icon,image/vnd.microsoft.icon,image/webp,.ico", onEnviar: enviarFavicon, onRemover: removerIcone("/api/branding/favicon", "Favicon padrão restaurado."), redondo: false },
-          { titulo: "Ícone para iPhone (tela inicial)", dica: "PNG, até 1 MB (ideal 180×180, sem transparência)", url: appleIconUrl, accept: "image/png", onEnviar: enviarApple, onRemover: removerIcone("/api/branding/apple-icon", "Ícone do iPhone removido."), redondo: true },
+          { titulo: "Favicon (aba do navegador)", dica: "Qualquer imagem (PNG, JPG, WEBP, ICO, SVG): convertida para PNG 48×48", url: faviconUrl, accept: "image/*,.ico", onEnviar: enviarFavicon, onRemover: removerIcone("/api/branding/favicon", "Favicon padrão restaurado."), redondo: false },
+          { titulo: "Ícone para iPhone (tela inicial)", dica: "Qualquer imagem: convertida para PNG 180×180 com fundo branco (o iPhone não aceita transparência)", url: appleIconUrl, accept: "image/*,.ico", onEnviar: enviarApple, onRemover: removerIcone("/api/branding/apple-icon", "Ícone do iPhone removido."), redondo: true },
         ].map((i) => (
           <div key={i.titulo}>
             <label className="block text-sm text-gray-400 mb-1">{i.titulo}</label>
