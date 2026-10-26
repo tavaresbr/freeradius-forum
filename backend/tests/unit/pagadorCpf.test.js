@@ -42,11 +42,11 @@ test('cpfCompativel: compara posicao a posicao ignorando o que o MP mascarou', (
 });
 
 // ---------- webhook do PIX grava o CPF do pagador ----------
-function webhook({ mp, cpfDoCadastro = CPF }) {
+function webhook({ mp, cpfDoCadastro = CPF, linha = {} }) {
   const axiosPath = require.resolve('axios');
   require.cache[axiosPath] = { id: axiosPath, filename: axiosPath, loaded: true, exports: { get: async () => ({ data: mp }), post: async () => ({ data: {} }) } };
   const db = criarDb(async (sql) => {
-    if (/SELECT id, empresa_id, status FROM pagamentos WHERE mp_pagamento_id/.test(sql)) return [[{ id: 1, empresa_id: 5, status: 'aguardando' }]];
+    if (/SELECT id, empresa_id, status, valor FROM pagamentos WHERE mp_pagamento_id/.test(sql)) return [[{ id: 1, empresa_id: 5, status: 'aguardando', ...linha }]];
     if (/FROM empresa_configs/.test(sql)) return [[{ config_json: { access_token: 'APP_USR-x' } }]];
     if (/SELECT duracao_minutos FROM planos/.test(sql)) return [[{ duracao_minutos: 60 }]];
     if (/SELECT cpf FROM pagamentos WHERE mp_pagamento_id/.test(sql)) return [[{ cpf: cpfDoCadastro }]];
@@ -105,4 +105,31 @@ test('webhook PIX: falha ao gravar o pagador nao derruba o webhook', async () =>
   db.execute = db.query;
   const un = silencia(); let res; try { res = await rodar(mod); } finally { un(); }
   assert.strictEqual(res.codigo, 200);
+});
+
+// ---------- webhook nao pode ser usado para renovar/reativar acesso nem aprovar o pagamento errado ----------
+const aprovou = (db) => db.calls.find((c) => /^UPDATE pagamentos SET status = 'approved'/.test(c.sql));
+
+test('webhook PIX: o UPDATE de aprovacao so age em pagamento ainda nao aprovado/expirado (replay nao renova expira_em)', async () => {
+  const { db, mod } = webhook({ mp: mpAprovado() });
+  const un = silencia(); try { await rodar(mod); } finally { un(); }
+  assert.match(aprovou(db).sql, /status NOT IN \('approved', 'expirado'\)/);
+});
+
+test('webhook PIX: valor pago diferente do registro => nao aprova', async () => {
+  const { db, mod } = webhook({ mp: mpAprovado({ transaction_amount: 1 }), linha: { valor: '25.00' } });
+  const un = silencia(); try { await rodar(mod); } finally { un(); }
+  assert.strictEqual(aprovou(db), undefined);
+});
+
+test('webhook PIX: external_reference de OUTRO pagamento => nao aprova', async () => {
+  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_77_emp_5' }), linha: { valor: '5.00' } });
+  const un = silencia(); try { await rodar(mod); } finally { un(); }
+  assert.strictEqual(aprovou(db), undefined);
+});
+
+test('webhook PIX: referencia e valor conferem => aprova', async () => {
+  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_1_emp_5' }), linha: { valor: '5.00' } });
+  const un = silencia(); try { await rodar(mod); } finally { un(); }
+  assert.ok(aprovou(db));
 });

@@ -4,6 +4,7 @@ const auth = require("../middleware/auth");
 const tenant = require("../middleware/tenant");
 const exigeAssinatura = require("../middleware/assinatura");
 const checkPermissao = require("../middleware/checkPermissao");
+const { cartaoHotspotLimiters } = require("../middleware/rateLimiters");
 const {
   gerarPagamento,
   gerarPagamentoCartao,
@@ -19,7 +20,7 @@ const {
 
 // Rotas públicas (captive portal)
 router.post("/gerar", gerarPagamento);
-router.post("/gerar-cartao", gerarPagamentoCartao);
+router.post("/gerar-cartao", ...cartaoHotspotLimiters, gerarPagamentoCartao);
 router.post("/mp-device-session/:tipo", proxyDeviceSession);
 router.get("/mp-public-key", obterPublicKey);
 router.post("/notificacao", notificacaoWebhook);

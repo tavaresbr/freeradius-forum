@@ -9,6 +9,8 @@ const { gerarAcessoTemporario } = require("./authTempController");
 const { obterSenhaRadius } = require("../utils/radiusPassword");
 const { bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO } = require("../utils/leadUtils");
 const { extrairCpfPagador, cpfCompativel, PAGADOR_DESCONHECIDO } = require("../utils/pagadorCpf");
+const { baseUrlPublica } = require("../utils/baseUrl");
+const { validarCPF } = require("../utils/cpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 
@@ -56,7 +58,7 @@ async function resolvePortalIdByMikrotik(mikrotikId, empresaId) {
 
 exports.gerarPagamento = async (req, res) => {
   const { plano_id, mac, ip, cpf, cliente_id, portal_id: portalIdInput } = req.body;
-  console.log("[gerarPagamento PIX] body:", { plano_id, mac, ip, cpf, cliente_id, portal_id: portalIdInput });
+  console.log("[gerarPagamento PIX] body:", { plano_id, cliente_id, portal_id: portalIdInput });
 
   try {
     const [planos] = await db.query("SELECT * FROM planos WHERE id = ?", [plano_id]);
@@ -69,6 +71,11 @@ exports.gerarPagamento = async (req, res) => {
 
     if (!mpConfig?.access_token) {
       return res.status(400).json({ message: "Configuração do Mercado Pago não encontrada." });
+    }
+
+    // CPF vindo do corpo (publico) precisa ter digitos verificadores validos.
+    if (cpf && !validarCPF(String(cpf))) {
+      return res.status(400).json({ message: "CPF inválido." });
     }
 
     // Buscar CPF e telefone do cliente
@@ -111,9 +118,7 @@ exports.gerarPagamento = async (req, res) => {
     //    campo no body, o MP usa a URL global do painel - se ela aponta pro
     //    master, o aluno NUNCA recebe webhook do PIX.
     //    Doc: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
-    const baseUrl = `${proto}://${host}`;
+    const baseUrl = baseUrlPublica(req);
 
     // 3. POST /v1/payments com notification_url e external_reference contendo o id interno
     const response = await axios.post(
@@ -339,7 +344,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
     portal_id: portalIdInput,
   } = req.body;
 
-  console.log("💳 gerarPagamentoCartao body:", { plano_id, mac, ip, cliente_id });
+  console.log("💳 gerarPagamentoCartao body:", { plano_id, cliente_id });
 
   // 1. Validacao de input
   //
@@ -510,9 +515,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
     //
     //    6. Email do pagador deve ser real. Se cliente_id veio na request, usar
     //       o email do lead. Email placeholder com dominio fake aciona antifraude.
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
-    const baseUrl = `${proto}://${host}`;
+    const baseUrl = baseUrlPublica(req);
 
     const paymentBody = {
       transaction_amount: valorReais,
@@ -717,7 +720,7 @@ exports.notificacaoWebhook = async (req, res) => {
     // ja foi processado (pelo direct response do /gerar-cartao ou webhook previo)
     // e NAO devemos chamar liberarUsuario de novo (senao dispara WhatsApp dobrado).
     const [existente] = await db.query(
-      "SELECT id, empresa_id, status FROM pagamentos WHERE mp_pagamento_id = ?",
+      "SELECT id, empresa_id, status, valor FROM pagamentos WHERE mp_pagamento_id = ?",
       [mpPagamentoId]
     );
 
@@ -770,6 +773,23 @@ exports.notificacaoWebhook = async (req, res) => {
     );
     const pagamento = response.data;
 
+    // O corpo do webhook nao e confiavel; a fonte da verdade e o pagamento buscado no MP. Mesmo assim,
+    // o pagamento do MP tem que ser o MESMO registro interno (referencia e valor), senao um pagamento
+    // real e barato de outra empresa/plano aprovaria um pagamento caro ainda em aberto.
+    if (existente.length > 0 && pagamento.status === "approved") {
+      const ref = String(pagamento.external_reference || "").match(/^pag_(\d+)_emp_(\d+)$/);
+      if (ref && (Number(ref[1]) !== Number(existente[0].id) || Number(ref[2]) !== Number(existente[0].empresa_id))) {
+        console.warn(`[webhook MP] external_reference nao confere (mp_id=${mpPagamentoId}): nao aprova`);
+        return res.sendStatus(200);
+      }
+      const esperado = Number(existente[0].valor);
+      const pago = Number(pagamento.transaction_amount);
+      if (Number.isFinite(esperado) && esperado > 0 && Number.isFinite(pago) && Math.abs(esperado - pago) > 0.01) {
+        console.warn(`[webhook MP] valor pago (${pago}) diferente do esperado (${esperado}) (mp_id=${mpPagamentoId}): nao aprova`);
+        return res.sendStatus(200);
+      }
+    }
+
     // Extrair empresa_id da external_reference se não temos ainda
     if (!empresaId && pagamento.external_reference) {
       const match = pagamento.external_reference.match(/empresa_(\d+)|emp_(\d+)/);
@@ -813,9 +833,11 @@ exports.notificacaoWebhook = async (req, res) => {
         const [planoInfo] = await db.query(planoQuery, planoParams);
         const duracao = planoInfo[0]?.duracao_minutos || 60;
 
+        // So aprova quem ainda nao foi aprovado/expirado: um webhook repetido (ou forjado) nao pode
+        // renovar `expira_em` nem reativar um pagamento ja vencido (acesso gratis indefinido).
         await db.query(
           `UPDATE pagamentos SET status = 'approved', email = ?, expira_em = DATE_ADD(NOW(), INTERVAL ? MINUTE)
-           WHERE mp_pagamento_id = ?`,
+           WHERE mp_pagamento_id = ? AND status NOT IN ('approved', 'expirado')`,
           [email, duracao, mpPagamentoId]
         );
 
@@ -1196,12 +1218,12 @@ exports.liberarPixTrial = async (req, res) => {
     const [trials] = await db.query(
       `SELECT id, status, trial_liberado_em
          FROM pagamentos
-        WHERE REPLACE(REPLACE(REPLACE(cpf,'.',''),'-',''),' ','') = ?
+        WHERE (REPLACE(REPLACE(REPLACE(cpf,'.',''),'-',''),' ','') = ? OR LOWER(mac) = LOWER(?))
           AND trial_liberado_em IS NOT NULL
           AND trial_liberado_em > DATE_SUB(NOW(), INTERVAL 24 HOUR)
           AND status <> 'approved'
         ORDER BY trial_liberado_em DESC`,
-      [cpfCliente]
+      [cpfCliente, pag.mac || ""]
     );
 
     if (trials.length >= MAX_TRIALS_24H) {
