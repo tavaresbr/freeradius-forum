@@ -45,6 +45,15 @@ const sitePedidoLimiter = rateLimit({
   handler: jsonHandler('Muitos pedidos enviados. Tente novamente mais tarde.'),
 });
 
+// Promocoes por WhatsApp (criar/iniciar/teste): poucas por hora e por IP; o ritmo real de envio e' do job.
+const promocaoLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas operações de promoção. Tente novamente mais tarde.'),
+});
+
 // Cartao da assinatura SaaS: limita tentativas (card testing) por IP.
 const cartaoAssinaturaLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -133,4 +142,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };

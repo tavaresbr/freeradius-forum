@@ -39,6 +39,7 @@ const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const lgpdRoutes = require("./src/routes/lgpdRoutes");
 const sessaoRoutes = require("./src/routes/sessaoRoutes");
 const whatsappRoutes = require("./src/routes/whatsappRoutes");
+const promocaoWhatsappRoutes = require("./src/routes/promocaoWhatsappRoutes");
 const authTempRoutes = require("./src/routes/authTempRoutes");
 const limpezaRoutes = require("./src/routes/limpezaRoutes");
 const radiusLogsRoutes = require("./src/routes/radiusLogsRoutes");
@@ -168,6 +169,7 @@ app.use("/api/config-mercadopago", auth, tenant, exigeAssinatura, checkPermissao
 app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
 app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
 app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), whatsappRoutes);
+app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), promocaoWhatsappRoutes);
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);
 app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
@@ -596,6 +598,12 @@ cron.schedule('*/5 * * * *', () => {
 const syncSgp = require('./src/jobs/syncSgp');
 cron.schedule('10 * * * *', () => {
   syncSgp().catch(err => console.error('[CRON] Erro syncSgp:', err.message));
+});
+
+// Promocoes por WhatsApp: fila com intervalo entre mensagens (1 envio por empresa por rodada)
+const enviaPromocoes = require('./src/jobs/enviaPromocoes');
+cron.schedule('* * * * *', () => {
+  enviaPromocoes().catch(err => console.error('[CRON] Erro enviaPromocoes:', err.message));
 });
 
 // --- Tela de emergencia (SEM auth) ---

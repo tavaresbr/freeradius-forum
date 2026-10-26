@@ -97,6 +97,35 @@ async function enviarMensagemDireta(telefone, mensagem, empresaId) {
   return resposta.data;
 }
 
+// Envio estrito (promocoes): ao contrario de enviarMensagemDireta, NUNCA devolve sucesso sem enviar
+// (sem apiKey/telefone/mensagem lanca erro), para a fila nao marcar "enviado" o que nao saiu.
+async function enviarMensagemEstrita(telefone, mensagem, empresaId) {
+  const evo = await getEvolutionConfig(empresaId);
+  if (!evo.apiKey) throw new Error("WhatsApp sem chave de API configurada");
+  if (!telefone || !mensagem) throw new Error("Telefone ou mensagem vazios");
+  const resposta = await axios.post(
+    `${evo.apiUrl}/message/sendText/${evo.instanceName}`,
+    { number: formatarNumeroComNonoDigito(telefone), text: mensagem },
+    { headers: evoHeaders(evo.apiKey), timeout: 20000 }
+  );
+  return resposta.data;
+}
+
+// A instancia da empresa existe e esta conectada (state "open")? Usado pelo worker de promocoes.
+async function instanciaConectada(empresaId) {
+  try {
+    const evo = await getEvolutionConfig(empresaId);
+    if (!evo.apiKey) return false;
+    const r = await axios.get(
+      `${evo.apiUrl}/instance/connectionState/${evo.instanceName}`,
+      { headers: evoHeaders(evo.apiKey), timeout: 10000 }
+    );
+    return (r.data?.instance?.state || r.data?.state) === "open";
+  } catch {
+    return false;
+  }
+}
+
 // === Gerenciamento de instancia (multi-tenant) ===
 
 async function getInstanceStatus(req, res) {
@@ -376,6 +405,8 @@ async function limparLogs(req, res) {
 module.exports = {
   enviarMensagem,
   enviarMensagemDireta,
+  enviarMensagemEstrita,
+  instanciaConectada,
   getInstanceStatus,
   createInstance,
   getQrCode,
