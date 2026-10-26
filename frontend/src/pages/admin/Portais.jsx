@@ -188,7 +188,7 @@ export default function Portais() {
                 <button
                   onClick={async () => {
                     try {
-                      const r = await fetch(`/api/auth/download-token`, {
+                      const r = await fetch(`/api/auth/download-token?para=portais`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
                       if (!r.ok) throw new Error("token");

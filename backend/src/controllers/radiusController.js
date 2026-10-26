@@ -127,7 +127,6 @@ const listarUsuarios = async (req, res) => {
     const [usuarios] = await db.query(`
       SELECT
         rc.username,
-        rc.value AS senha,
         p.nome AS plano,
         p.duracao_minutos,
         p.velocidade_down,

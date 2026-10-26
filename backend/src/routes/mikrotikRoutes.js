@@ -1,5 +1,6 @@
 const express = require("express")
 const router = express.Router()
+const { mascararObjeto, preservarSegredos, semAlteracao } = require("../utils/segredos");
 const db = require("../../db")
 const { getDriver } = require("../gateways");
 const { resolveHotspotHtmlDir, aplicarPadroesHotspot } = require("../utils/hotspotSetup");
@@ -230,7 +231,8 @@ router.get("/", async (req, res) => {
       WHERE m.empresa_id = ?
       ORDER BY m.id DESC
     `, [req.empresa_id]);
-    res.json(rows)
+    // Segredos (senha/secret RADIUS, api_pass, chaves GWN) nunca vao ao navegador.
+    res.json(rows.map(mascararObjeto))
   } catch (err) {
     res.status(500).json({ message: "Erro ao buscar Mikrotiks." })
   }
@@ -246,7 +248,8 @@ router.put("/:id", async (req, res) => {
     if (!atual) return res.status(404).json({ message: "Gateway não encontrado." });
 
     // Tipo e' travado na edicao (mudar tipo deixaria NAS/portal em estado inconsistente)
-    const { erro, dados } = validarGateway({ ...req.body, tipo: atual.tipo || "mikrotik" });
+    // Segredo vazio/mascarado no corpo = manter o gravado (a lista devolve so a mascara).
+    const { erro, dados } = validarGateway({ ...preservarSegredos(req.body, atual), tipo: atual.tipo || "mikrotik" });
     if (erro) return res.status(400).json({ message: erro });
 
     // Omada: os campos da API do controller sao gerenciados por /:id/omada-api —
@@ -327,7 +330,7 @@ router.put("/:id/omada-api", async (req, res) => {
 
     const controller_url = String(req.body.controller_url || "").trim().replace(/\/+$/, "");
     const api_user = String(req.body.api_user || "").trim();
-    const api_pass = req.body.api_pass || "";
+    const api_pass = semAlteracao(req.body.api_pass) ? (gw.api_pass || "") : req.body.api_pass;
     const verify_tls = Number(req.body.verify_tls) ? 1 : 0;
     if (!controller_url || !api_user || !api_pass) {
       return res.status(400).json({ message: "Informe URL do controller, usuário e senha do admin local." });

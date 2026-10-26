@@ -158,13 +158,19 @@ const checkPermissao = require('./src/middleware/checkPermissao');
 // Downloads/previews abertos via window.open (sem header Authorization): usam
 // token de download curto (purpose='download', 120s) emitido por rota protegida.
 // Registrados ANTES dos mounts /api/leads e /api/portais pra casar primeiro.
-const { issueDownloadToken, verifyDownloadToken } = require('./src/middleware/downloadToken');
+const { issueDownloadToken, verifyDownloadToken, MODULOS_DOWNLOAD } = require('./src/middleware/downloadToken');
 const leadCtrlDl = require('./src/controllers/leadController');
 const portalCtrlDl = require('./src/controllers/portalController');
-app.get('/api/auth/download-token', auth, tenant, issueDownloadToken);
-app.get('/api/leads/export', verifyDownloadToken, leadCtrlDl.exportarLeadsCSV);
-app.get('/api/lgpd/export', verifyDownloadToken, require('./src/controllers/lgpdController').exportarLgpdCSV);
-app.get('/api/portais/:id/preview', verifyDownloadToken, portalCtrlDl.previewPortal);
+// O token so e emitido a quem tem permissao (e assinatura valida) no modulo pedido em ?para=.
+app.get('/api/auth/download-token', auth, tenant, exigeAssinatura, (req, res, next) => {
+  if (!MODULOS_DOWNLOAD.includes(String(req.query.para || ''))) {
+    return res.status(400).json({ error: 'Modulo de download invalido' });
+  }
+  return checkPermissao(String(req.query.para))(req, res, next);
+}, issueDownloadToken);
+app.get('/api/leads/export', verifyDownloadToken('leads'), leadCtrlDl.exportarLeadsCSV);
+app.get('/api/lgpd/export', verifyDownloadToken('leads'), require('./src/controllers/lgpdController').exportarLgpdCSV);
+app.get('/api/portais/:id/preview', verifyDownloadToken('portais'), portalCtrlDl.previewPortal);
 
 app.use('/api/planos', auth, tenant, exigeAssinatura, checkPermissao('planos'), planRoutes)
 app.use("/api/mikrotiks", auth, tenant, exigeAssinatura, checkPermissao('mikrotiks'), mikrotikRoutes);

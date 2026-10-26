@@ -246,7 +246,7 @@ export default function Leads() {
 
   const handleExport = async () => {
     try {
-      const r = await fetch(`${API}/api/auth/download-token`, {
+      const r = await fetch(`${API}/api/auth/download-token?para=leads`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!r.ok) throw new Error("token");

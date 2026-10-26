@@ -10,6 +10,8 @@ module.exports = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] })
+    // Token de download (?token=, 120s) vale so nas rotas de download/preview, nunca como sessao.
+    if (decoded.purpose) return res.status(403).json({ error: 'Token inválido' })
     req.user = decoded
     next()
   } catch (err) {
