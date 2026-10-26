@@ -294,7 +294,7 @@ export default function Logs() {
             Auto-refresh (4s)
           </label>
 
-          <div className="flex gap-2 ml-auto">
+          <div className="flex flex-wrap gap-2 ml-auto">
             <button
               onClick={carregar}
               disabled={loading}

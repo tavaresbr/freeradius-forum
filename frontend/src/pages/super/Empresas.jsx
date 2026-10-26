@@ -93,7 +93,7 @@ export default function Empresas() {
         ) : (
           <div className="space-y-3">
             {empresas.map((e) => (
-              <div key={e.id} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+              <div key={e.id} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 flex flex-col gap-3 sm:flex-row sm:items-center justify-between">
                 <div>
                   <p className="font-medium text-white">{e.nome}</p>
                   <p className="text-sm text-gray-500">{e.email} | slug: {e.slug} {e.cnpj && `| CNPJ: ${e.cnpj}`}{e.tipo_pessoa === "PF" && e.cpf && `| CPF: ${mascaraCpf(e.cpf)}`}</p>
@@ -101,7 +101,7 @@ export default function Empresas() {
                     {e.total_mikrotiks || 0} mikrotiks | {e.total_planos || 0} planos | {e.total_admins || 0} admins
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Link
                     to={`/admin/${e.slug}`}
                     className="px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded text-sm hover:bg-blue-600/30"

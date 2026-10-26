@@ -410,7 +410,7 @@ export default function PortalEditor() {
   return (
     <AdminLayout>
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/admin/${empresaSlug}/portais`)} className="p-2 text-gray-400 hover:text-white hover:bg-[#252b3b] rounded-lg cursor-pointer">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -423,7 +423,7 @@ export default function PortalEditor() {
             <p className="text-xs text-gray-500">Clique nos elementos para editar diretamente</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {msg && <span className={`text-sm ${msg === "Salvo!" ? "text-green-400" : "text-red-400"}`}>{msg}</span>}
           <button onClick={() => navigate(`/admin/${empresaSlug}/portais`)} className="px-4 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-[#252b3b] cursor-pointer text-sm">Voltar</button>
           <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 cursor-pointer text-sm disabled:opacity-50">

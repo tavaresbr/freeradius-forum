@@ -102,7 +102,7 @@ export default function IdentidadeSite() {
       <label className="block text-sm text-gray-400 mb-1">Nome do site</label>
       <div className="flex gap-2 mb-4">
         <input value={campo} maxLength={60} onChange={(e) => setCampo(e.target.value)}
-          className="flex-1 bg-[#0f1117] border border-gray-700 rounded px-3 py-2 text-white" />
+          className="flex-1 min-w-0 bg-[#0f1117] border border-gray-700 rounded px-3 py-2 text-white" />
         <button disabled={busy || !campo.trim()} onClick={salvarNome}
           className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded">Salvar</button>
       </div>

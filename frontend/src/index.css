@@ -161,3 +161,12 @@
 
 /* Logo enviada (fundo transparente, texto azul-escuro) fica sem fundo; no tema escuro ganha um halo branco fino para o texto escuro continuar legivel */
 [data-theme="escuro"] .tema-site img.logo-enviada { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgb(255 255 255 / .85)); }
+
+/* Celular: tabelas do painel rolam na horizontal em vez de esticar a pagina */
+@media (max-width: 1023px) {
+  .painel table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .painel pre { max-width: 100%; overflow-x: auto; }
+  .painel code { overflow-wrap: anywhere; }
+  .painel img { max-width: 100%; }
+}
+html { -webkit-text-size-adjust: 100%; }
