@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
+import useBranding, { ALTURAS } from "../../hooks/useBranding";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
@@ -12,6 +13,8 @@ export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [switchingEmpresa, setSwitchingEmpresa] = useState(false);
   const [empresaLogo, setEmpresaLogo] = useState(null);
+  const { tamanhos } = useBranding();
+  const alturaLogo = ALTURAS[tamanhos?.painel] || ALTURAS.m;
   const [openMenus, setOpenMenus] = useState({});
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [whatsappAvisoFechado, setWhatsappAvisoFechado] = useState(false);
@@ -313,7 +316,7 @@ export default function AdminLayout({ children }) {
         <div className="p-6 border-b border-apex-100">
           <div className="flex items-center justify-between">
             {empresaLogo
-              ? <img src={empresaLogo} alt="Logo" className="h-12 max-w-[160px] object-contain" />
+              ? <img src={empresaLogo} alt="Logo" style={{ height: alturaLogo }} className="w-auto max-w-[200px] object-contain" />
               : <MarcaApex className="text-lg" local="painel" />}
             <ToggleTema className="hidden lg:block text-gray-600" />
             <button
@@ -486,7 +489,7 @@ export default function AdminLayout({ children }) {
               </svg>
             </button>
             {empresaLogo
-              ? <img src={empresaLogo} alt="Logo" className="h-8" />
+              ? <img src={empresaLogo} alt="Logo" style={{ height: alturaLogo }} className="w-auto max-w-[200px] object-contain" />
               : <MarcaApex className="text-base" local="painel" />}
             <ToggleTema className="text-gray-600" />
           </div>
