@@ -10,7 +10,7 @@ export default function MarcaApex({ className = "text-xl", tema = "escuro", loca
     const altura = ALTURAS[tamanhos?.[local]] || ALTURAS.m;
     return (
       <span className={`inline-flex items-center gap-2 font-bold max-w-full ${className}`}>
-        <img src={logoUrl} alt={nome} style={{ height: altura }} className="w-auto max-w-full object-contain" />
+        <img src={logoUrl} alt={nome} style={{ height: altura }} className="logo-enviada w-auto max-w-full object-contain" />
       </span>
     );
   }
