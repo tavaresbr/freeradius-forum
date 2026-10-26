@@ -165,9 +165,9 @@ export default function Backups() {
     <div className="min-h-screen bg-[#0f111a] text-gray-300 p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white">Backups do Sistema</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Backups do Sistema</h1>
             <p className="text-gray-500 mt-1">Gerencie os backups de banco de dados e arquivos</p>
           </div>
           <div className="flex gap-3">

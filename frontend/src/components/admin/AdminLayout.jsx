@@ -9,7 +9,7 @@ export default function AdminLayout({ children }) {
   const location = useLocation();
   const { empresaSlug } = useParams();
   const { user, logout, isSuperAdmin, empresas, switchEmpresa, hasPermission } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
   const [switchingEmpresa, setSwitchingEmpresa] = useState(false);
   const [openMenus, setOpenMenus] = useState({});
   const [whatsappStatus, setWhatsappStatus] = useState(null);
@@ -32,6 +32,11 @@ export default function AdminLayout({ children }) {
       .catch(() => {});
     return () => { ativo = false; };
   }, [isSuperAdmin, user, location.pathname]);
+
+  // Celular: a gaveta fecha ao navegar por um item do menu.
+  useEffect(() => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  }, [location.pathname]);
 
   const naTelaAssinatura = location.pathname.startsWith(`${basePath}/assinatura`);
   useEffect(() => {
@@ -287,10 +292,10 @@ export default function AdminLayout({ children }) {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-30
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}
           transition-transform duration-300 ease-in-out
           tema-site w-72 bg-white border-r border-apex-100 flex flex-col
-          shadow-2xl lg:shadow-none
+          lg:shadow-none
         `}
       >
         {/* Logo Header */}
@@ -457,7 +462,7 @@ export default function AdminLayout({ children }) {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* Top Bar (Mobile) */}
         <header className="tema-site lg:hidden bg-white border-b border-apex-100 px-4 py-3 sticky top-0 z-10">
           <div className="flex items-center justify-between">
@@ -477,7 +482,7 @@ export default function AdminLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-8 text-gray-300">
+        <main className="flex-1 min-w-0 p-4 lg:p-8 text-gray-300">
           {mostrarAvisoWhatsapp && (
             <div className="mb-4 bg-yellow-900/30 border border-yellow-700/50 text-yellow-200 rounded-lg px-4 py-3 flex items-start gap-3">
               <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

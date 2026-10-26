@@ -356,9 +356,9 @@ const carregarMikrotiks = async () => {
 
   return (
     <AdminLayout>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-white">Equipamentos</h1>
-        <div className="flex gap-3">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Equipamentos</h1>
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={aplicarPadroesEmTodos}
             disabled={aplicandoPadroes}

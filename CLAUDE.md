@@ -1934,6 +1934,8 @@ Perfis de usuario customizados (grupos diferentes de `default`) nao sao alterado
 
 **Tema claro/escuro:** botao `ToggleTema` (SiteHeader e sidebar do painel), hook `hooks/useTema.js`, `localStorage.tema`, `<html data-theme="claro|escuro">` (padrao claro). Site/login/registro/sidebar usam a classe `tema-site` e o tema escuro e' um remapeamento por CSS em `frontend/src/index.css`; o conteudo do painel (classes escuras fixas) fica sob `.painel` e e' remapeado para claro em `[data-theme="claro"] .painel`. Cobertura ampliada (fundos/bordas/textos escuros slate, gray-900, tintas -900/30, hovers, text-gray-100 etc.) e `bg-gray-9*` nao e mais excecao do `text-white`. Pagina nova do painel que use cor fora dessas listas precisa de regra nesse bloco (ou fica ilegivel no claro). Paginas do captive portal nao sao afetadas.
 
+**Responsividade (celular):** `AdminLayout` abre a gaveta so em `lg+` (fechada por padrao no celular e fecha ao navegar; sombra so quando aberta); o wrapper de conteudo e o `main` tem `min-w-0` (sem isso qualquer tabela/grid largo estica a pagina). Abaixo de 1024 px o CSS global (`index.css`) faz toda `.painel table` rolar na horizontal (`display:block; overflow-x:auto`), `code` quebra linha e `pre` rola. Cabecalhos de pagina e barras de botoes usam `flex-wrap gap-*`; input em linha com botao precisa de `min-w-0`. Verificar com Playwright em 320/360/390/768 px (`scrollWidth <= innerWidth`) ao criar pagina nova do painel.
+
 ---
 
 ## Campanhas (pre-portal com imagens/videos)

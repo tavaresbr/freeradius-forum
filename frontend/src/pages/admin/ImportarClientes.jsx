@@ -125,7 +125,7 @@ function Planilha({ token, campos }) {
             URL.revokeObjectURL(url);
           }} className="text-blue-400 hover:text-blue-300 text-sm">Baixar planilha modelo</a>
         </div>
-        <input type="file" accept=".csv,.txt,.xlsx" onChange={escolher} className="text-sm text-gray-300" />
+        <input type="file" accept=".csv,.txt,.xlsx" onChange={escolher} className="text-sm text-gray-300 w-full max-w-full" />
       </div>
 
       {prev && (
