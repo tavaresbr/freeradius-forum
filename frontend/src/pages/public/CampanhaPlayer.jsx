@@ -9,12 +9,16 @@ export default function CampanhaPlayer() {
 
   const mikrotikId = searchParams.get("mikrotik_id") || portalId;
   const isPreview = searchParams.get("preview") === "1";
+  // Pre-visualizacao pelo painel: ?preview=1&campanha=<id> le a campanha direto pela API do admin
+  // (funciona mesmo inativa ou ainda nao vinculada a um portal). Sem token valido volta ao erro/redirect.
+  const campanhaPreviewId = isPreview ? searchParams.get("campanha") : null;
 
   const [itens, setItens] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0); // 0..1 for current item
   const [loaded, setLoaded] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [erroPreview, setErroPreview] = useState(null);
 
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
@@ -51,8 +55,12 @@ export default function CampanhaPlayer() {
 
   // On mount: fetch campanha
   useEffect(() => {
-    axios
-      .get(`/api/public/campanha/${portalId}`)
+    const requisicao = campanhaPreviewId
+      ? axios.get(`/api/campanhas/${campanhaPreviewId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("admin_token") || ""}` },
+        })
+      : axios.get(`/api/public/campanha/${portalId}`);
+    requisicao
       .then((res) => {
         const data = res.data?.data;
         if (data && Array.isArray(data.itens) && data.itens.length > 0) {
@@ -65,14 +73,17 @@ export default function CampanhaPlayer() {
               .post(`/api/public/campanha/${portalId}/view`)
               .catch(() => {});
           }
+        } else if (isPreview) {
+          setErroPreview("Esta campanha não tem itens para visualizar.");
         } else {
           window.location.href = buildRedirectUrl();
         }
       })
       .catch(() => {
-        window.location.href = buildRedirectUrl();
+        if (isPreview) setErroPreview("Não foi possível carregar a campanha. Entre no painel e tente de novo.");
+        else window.location.href = buildRedirectUrl();
       });
-  }, [portalId, isPreview, buildRedirectUrl]);
+  }, [portalId, isPreview, campanhaPreviewId, buildRedirectUrl]);
 
   // When currentIndex advances past the last item, redirect
   useEffect(() => {
@@ -191,6 +202,14 @@ export default function CampanhaPlayer() {
     advance();
   }, [advance]);
 
+  if (erroPreview) {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <p className="text-white text-center px-6">{erroPreview}</p>
+      </div>
+    );
+  }
+
   if (!loaded) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -227,6 +246,12 @@ export default function CampanhaPlayer() {
       onClick={handleClick}
       style={{ touchAction: "manipulation" }}
     >
+      {isPreview && (
+        <div className="absolute top-5 right-3 z-20 bg-yellow-400 text-black text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded">
+          Pré-visualização
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="absolute top-0 left-0 right-0 z-10 flex gap-1 px-2 pt-2">
         {itens.map((_, idx) => {

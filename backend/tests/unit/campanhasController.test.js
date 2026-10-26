@@ -147,3 +147,13 @@ test('vincular campanha: inativa / sem itens / inexistente recusadas', async () 
   await portal.vincularCampanha(req({ params: { portalId: '1' }, body: { campanha_ativa_id: 3 } }), res);
   assert.strictEqual(res.body.success, true);
 });
+
+test('listar: traz os portais que usam cada campanha (so da empresa)', async () => {
+  const { db, ctrl } = montar(() => [[{ id: 1, nome: 'teste', total_itens: 3, portais_em_uso: 'Planos - Pagamento' }]]);
+  const res = criarRes();
+  await ctrl.listar(req(), res);
+  assert.strictEqual(res.body.data[0].portais_em_uso, 'Planos - Pagamento');
+  assert.match(db.calls[0].sql, /portais_em_uso/);
+  assert.match(db.calls[0].sql, /p\.empresa_id = c\.empresa_id/);
+  assert.deepStrictEqual(db.calls[0].params, [7]);
+});

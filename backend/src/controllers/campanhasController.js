@@ -12,7 +12,9 @@ exports.listar = async (req, res) => {
   try {
     const [campanhas] = await db.execute(
       `SELECT c.*,
-         (SELECT COUNT(*) FROM campanha_itens ci WHERE ci.campanha_id = c.id) AS total_itens
+         (SELECT COUNT(*) FROM campanha_itens ci WHERE ci.campanha_id = c.id) AS total_itens,
+         (SELECT GROUP_CONCAT(p.nome ORDER BY p.nome SEPARATOR ', ')
+            FROM portais p WHERE p.campanha_ativa_id = c.id AND p.empresa_id = c.empresa_id) AS portais_em_uso
        FROM campanhas c
        WHERE c.empresa_id = ?
        ORDER BY c.criado_em DESC`,
