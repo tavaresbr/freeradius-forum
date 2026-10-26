@@ -146,6 +146,21 @@ export default function Leads() {
     }
   };
 
+  // Cliente respondeu SAIR (ou voltou a querer): liga/desliga o opt-out de promocoes por WhatsApp
+  const handleOptout = async (lead) => {
+    const sair = !Number(lead.whatsapp_optout);
+    try {
+      await fetch(`${API}/api/leads/${lead.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ whatsapp_optout: sair }),
+      });
+      fetchLeads();
+    } catch (err) {
+      console.error("Erro ao atualizar opt-out:", err);
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm("Tem certeza que deseja excluir este cadastro?")) return;
     try {
@@ -361,7 +376,12 @@ export default function Leads() {
                 ) : (
                   leads.map((lead) => (
                     <tr key={lead.id} className="border-b border-gray-800/50 hover:bg-[#252b3b]/30">
-                      <td className="px-4 py-3 text-gray-200">{lead.nome || "-"}</td>
+                      <td className="px-4 py-3 text-gray-200">
+                        {lead.nome || "-"}
+                        {Number(lead.whatsapp_optout) === 1 && (
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-800/50" title="Não recebe promoções por WhatsApp">sem promoções</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-gray-400">{lead.email || "-"}</td>
                       <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{lead.telefone || "-"}</td>
                       <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">{doc(lead)}</td>
@@ -391,6 +411,13 @@ export default function Leads() {
                           className="text-blue-400 hover:text-blue-300 text-xs cursor-pointer mr-3"
                         >
                           Editar
+                        </button>
+                        <button
+                          onClick={() => handleOptout(lead)}
+                          className="text-yellow-400 hover:text-yellow-300 text-xs cursor-pointer mr-3"
+                          title="Marque quando o cliente responder SAIR às promoções por WhatsApp"
+                        >
+                          {Number(lead.whatsapp_optout) === 1 ? "Voltar a receber promoções" : "Não quer promoções"}
                         </button>
                         <button
                           onClick={() => handleDelete(lead.id)}

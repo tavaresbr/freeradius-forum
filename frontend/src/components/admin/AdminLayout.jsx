@@ -177,6 +177,7 @@ export default function AdminLayout({ children }) {
         { key: "clientes", title: "Cadastro LGPD", path: `${basePath}/lgpd` },
         { key: "leads", title: "Clientes / Leads", path: `${basePath}/leads` },
         { key: "leads", title: "Importar clientes", path: `${basePath}/importar-clientes` },
+        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
       ]
     },
     {
