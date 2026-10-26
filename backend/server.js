@@ -66,6 +66,7 @@ const systemBackupRoutes = require("./src/routes/systemBackupRoutes");
 const systemUpdateRoutes = require("./src/routes/systemUpdateRoutes");
 const logsRoutes = require("./src/routes/logsRoutes");
 const db = require("./db");
+const somentePrimitivos = require("./src/middleware/somentePrimitivos");
 const { detectPortalVendor } = require("./src/utils/portalVendor");
 const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost } = require("./src/utils/entradaSegura");
 const { salvarContextoPortal } = require("./src/gateways/gatewayLiberacao");
@@ -127,8 +128,8 @@ app.use('/api/auth', authRoutes)            // Auth
 app.use('/api/auth', authTempRoutes)        // Acesso temporário
 app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
-app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
-app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/sessao", somentePrimitivos, sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
+app.use("/api/lgpd", somentePrimitivos, lgpdRoutes);             // LGPD login/cadastro são públicos
 app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
@@ -144,12 +145,12 @@ app.use("/api/public/campanha", campanhasPublicRoutes);
 
 // Rota pública para login do portal Lead (sem auth)
 const { leadLogin, capturaPassiva, cadastroCliente } = require("./src/controllers/leadController");
-app.post("/api/lead-portal/login", leadLogin);
-app.post("/api/lead-portal/passivo", capturaPassiva);
-app.post("/api/clientes/cadastro", cadastroCliente);
+app.post("/api/lead-portal/login", somentePrimitivos, leadLogin);
+app.post("/api/lead-portal/passivo", somentePrimitivos, capturaPassiva);
+app.post("/api/clientes/cadastro", somentePrimitivos, cadastroCliente);
 
 // Rota pública para login do portal Wifi/Radius
-app.use("/api/login-portal", loginPortalRoutes);
+app.use("/api/login-portal", somentePrimitivos, loginPortalRoutes);
 
 // --- Rotas protegidas (auth + tenant + permissão) ---
 const checkPermissao = require('./src/middleware/checkPermissao');

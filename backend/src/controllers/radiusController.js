@@ -43,6 +43,9 @@ async function criarUsuarioRadius(req, res) {
 
 const vincularPlano = async (req, res) => {
   const { username, planoId } = req.body;
+  if (typeof username !== 'string' || !username) {
+    return res.status(400).json({ error: 'username inválido' });
+  }
 
   try {
     // Verificar se o username pertence a esta empresa
