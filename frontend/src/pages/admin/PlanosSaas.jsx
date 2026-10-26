@@ -12,6 +12,7 @@ export default function PlanosSaas() {
   const [planos, setPlanos] = useState([]);
   const [form, setForm] = useState(null);
   const [editId, setEditId] = useState(null);
+  const [copiaDe, setCopiaDe] = useState(null);
   const [msg, setMsg] = useState("");
   const [cfg, setCfg] = useState({ access_token: "", public_key: "", webhook_secret: "", email_pagador: "", configurado: false });
 
@@ -37,7 +38,7 @@ export default function PlanosSaas() {
     const res = await fetch(editId ? `/api/assinatura/admin/planos/${editId}` : "/api/assinatura/admin/planos", {
       method: editId ? "PUT" : "POST", headers, body: JSON.stringify(form),
     });
-    if (res.ok) { setForm(null); setEditId(null); carregar(); } else setMsg("Erro ao salvar plano");
+    if (res.ok) { setForm(null); setEditId(null); setCopiaDe(null); carregar(); } else setMsg("Erro ao salvar plano");
   };
 
   const remover = async (id) => {
@@ -53,7 +54,14 @@ export default function PlanosSaas() {
     if (res.ok) carregar();
   };
 
-  const editar = (p) => { setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", ativo: !!p.ativo }); };
+  // Duplicar: abre o modal de "Novo plano" ja preenchido; nasce inativo para nao aparecer na
+  // landing/registro antes de ser revisado.
+  const duplicar = (p) => {
+    setEditId(null);
+    setCopiaDe(p.nome);
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", ativo: false, ordem: (p.ordem ?? 0) + 1 });
+  };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", ativo: !!p.ativo }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -64,7 +72,7 @@ export default function PlanosSaas() {
             <h1 className="text-2xl font-bold text-white">Planos SaaS</h1>
             <p className="text-sm text-gray-400 mt-1">Planos de uso do sistema cobrados das empresas.</p>
           </div>
-          <button onClick={() => { setEditId(null); setForm(VAZIO); }} className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-500 text-sm font-medium">Novo plano</button>
+          <button onClick={() => { setEditId(null); setCopiaDe(null); setForm(VAZIO); }} className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-500 text-sm font-medium">Novo plano</button>
         </div>
 
         {msg && <p className="text-sm text-blue-300 bg-blue-900/20 p-3 rounded-lg">{msg}</p>}
@@ -85,6 +93,7 @@ export default function PlanosSaas() {
                   <td className="px-5 py-3">{p.max_admins ?? "∞"}</td>
                   <td className="px-5 py-3">{p.ativo ? "Ativo" : "Inativo"}</td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
+                    <button onClick={() => duplicar(p)} className="px-2.5 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg text-xs mr-2">Duplicar</button>
                     <button onClick={() => editar(p)} className="px-2.5 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs mr-2">Editar</button>
                     <button onClick={() => remover(p.id)} className="px-2.5 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs">Remover</button>
                   </td>
@@ -109,7 +118,8 @@ export default function PlanosSaas() {
         {form && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <form onSubmit={salvarPlano} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md space-y-3">
-              <h2 className="text-lg font-bold text-white">{editId ? "Editar plano" : "Novo plano"}</h2>
+              <h2 className="text-lg font-bold text-white">{editId ? "Editar plano" : copiaDe ? "Duplicar plano" : "Novo plano"}</h2>
+              {copiaDe && <p className="text-xs text-gray-500">Cópia de "{copiaDe}". Ajuste e salve; nasce inativo.</p>}
               <div><label className="block text-sm text-gray-400 mb-1">Nome *</label><input required className={inputCls} value={form.nome} onChange={campo("nome")} /></div>
               <div><label className="block text-sm text-gray-400 mb-1">Descrição</label><input className={inputCls} value={form.descricao || ""} onChange={campo("descricao")} /></div>
               <div className="grid grid-cols-2 gap-3">
@@ -122,7 +132,7 @@ export default function PlanosSaas() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium">Salvar</button>
-                <button type="button" onClick={() => setForm(null)} className="flex-1 bg-gray-700 text-gray-300 py-2.5 rounded-lg text-sm">Cancelar</button>
+                <button type="button" onClick={() => { setForm(null); setCopiaDe(null); }} className="flex-1 bg-gray-700 text-gray-300 py-2.5 rounded-lg text-sm">Cancelar</button>
               </div>
             </form>
           </div>
