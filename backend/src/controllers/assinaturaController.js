@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
+const { baseUrlPublica } = require("../utils/baseUrl");
 const db = require("../../db");
 const { validarAssinaturaWebhook } = require("../utils/mpSignature");
 const { obterStatus, invalidar } = require("../utils/assinatura");
@@ -120,8 +121,7 @@ exports.pagarCartao = async (req, res) => {
       return res.status(400).json({ message: "Erro ao validar dados do cartão." });
     }
 
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
+    const baseUrl = baseUrlPublica(req);
     const { data } = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
@@ -133,7 +133,7 @@ exports.pagarCartao = async (req, res) => {
         issuer_id: bin.issuer_id || undefined,
         statement_descriptor: "APEXTELECOM",
         external_reference: `ass_${cobrancaId}_emp_${empresaId}`,
-        notification_url: `${proto}://${host}/api/assinatura/webhook`,
+        notification_url: `${baseUrl}/api/assinatura/webhook`,
         capture: true,
         binary_mode: false,
         metadata: { device_session_id: b.device_session_id },
@@ -208,8 +208,7 @@ exports.criarCobranca = async (req, res) => {
     );
     const cobrancaId = ins.insertId;
 
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
+    const baseUrl = baseUrlPublica(req);
     const { data } = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
@@ -217,7 +216,7 @@ exports.criarCobranca = async (req, res) => {
         description: `Assinatura ${plano.nome}`,
         payment_method_id: "pix",
         external_reference: `ass_${cobrancaId}_emp_${empresaId}`,
-        notification_url: `${proto}://${host}/api/assinatura/webhook`,
+        notification_url: `${baseUrl}/api/assinatura/webhook`,
         payer: { email: (cfg.email_pagador || empresa?.email || "").trim() },
       },
       { headers: { Authorization: `Bearer ${cfg.access_token}`, "Content-Type": "application/json", "X-Idempotency-Key": uuidv4() } }

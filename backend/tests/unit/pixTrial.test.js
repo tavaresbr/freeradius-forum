@@ -10,14 +10,14 @@ const silencia = () => { const l = console.log, w = console.warn, e = console.er
 const PAG = { id: 4, mac: 'aa:bb:cc:dd:ee:ff', ip: '10.0.0.5', cpf: '529.982.247-25', cliente_id: 77, portal_id: 2, plano_id: 9, empresa_id: 5, status: 'aguardando', trial_liberado_em: null,
   mikrotik_id: 3, plano_nome: 'Plano 1h', portal_config: JSON.stringify({ pix_trial_enabled: true, pix_trial_duracao_minutos: 5 }) };
 
-function montar({ sessaoResp = {}, pagExtra = {} } = {}) {
+function montar({ sessaoResp = {}, pagExtra = {}, trials = [] } = {}) {
   const estado = { acesso: 0, tratar: [] };
   const db = criarDb(async (sql, p) => {
     if (/FROM pagamentos p LEFT JOIN planos/.test(sql)) {
       // so devolve o registro se a prova de posse bater (id + mp_pagamento_id + mac)
       return [[(p[0] === 4 && p[1] === '999' && String(p[2]).toLowerCase() === PAG.mac) ? { ...PAG, ...pagExtra } : undefined]];
     }
-    if (/trial_liberado_em IS NOT NULL/.test(sql)) return [[]];
+    if (/trial_liberado_em IS NOT NULL/.test(sql)) { estado.paramsTrials = p; return [trials]; }
     return undefined;
   });
   for (const k of Object.keys(require.cache)) if (k.startsWith(path.join(ROOT, 'src'))) delete require.cache[k];
@@ -101,4 +101,38 @@ test('pix-trial: a 2a chamada do MESMO pagamento (depois de liberado) nao regrav
   const { mod: mod2, estado: estado2 } = montar({ pagExtra: { trial_liberado_em: new Date() } });
   assert.strictEqual((await chamar(mod2, BOM)).statusCode, 409);
   assert.strictEqual(estado2.acesso, 0);
+});
+
+test('pix-trial: o limite de 2 trials/24h tambem vale por MAC (trocar de CPF nao contorna)', async () => {
+  const agora = new Date().toISOString();
+  const { mod, estado } = montar({ trials: [{ id: 1, status: 'aguardando', trial_liberado_em: agora }, { id: 2, status: 'aguardando', trial_liberado_em: agora }] });
+  const res = await chamar(mod, BOM);
+  assert.strictEqual(res.statusCode, 429);
+  assert.strictEqual(estado.acesso, 0);
+  assert.deepStrictEqual(estado.paramsTrials, ['52998224725', 'aa:bb:cc:dd:ee:ff']);
+});
+
+test('PIX gerar: CPF com digitos verificadores invalidos => 400 antes de qualquer cobranca', async () => {
+  const db = criarDb(async (sql) => {
+    if (/FROM planos WHERE id/.test(sql)) return [[{ id: 9, empresa_id: 5, valor: 5, nome: 'P', mikrotik_id: 3 }]];
+    if (/FROM empresa_configs/.test(sql)) return [[{ config_json: { access_token: 'APP_USR-x' } }]];
+    return undefined;
+  });
+  for (const k of Object.keys(require.cache)) if (k.startsWith(path.join(ROOT, 'src'))) delete require.cache[k];
+  const mod = carregar('src/controllers/pagamentoController.js', { db });
+  const res = criarRes(); const un = silencia();
+  try { await mod.gerarPagamento(criarReq({ body: { plano_id: 9, mac: 'aa:bb:cc:dd:ee:ff', ip: '10.0.0.5', cpf: '111.111.111-11' } }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 400);
+  assert.ok(!db.calls.some((c) => /^INSERT INTO pagamentos/.test(c.sql)));
+});
+
+test('baseUrlPublica ignora X-Forwarded-Host (o host do webhook nao e escolhido pelo cliente)', () => {
+  const { baseUrlPublica } = require('../../src/utils/baseUrl');
+  const antes = process.env.SYSTEM_DOMAIN;
+  delete process.env.SYSTEM_DOMAIN;
+  assert.strictEqual(baseUrlPublica({ headers: { host: 'hotspot.exemplo.com', 'x-forwarded-host': 'evil.com' } }), 'https://hotspot.exemplo.com');
+  process.env.SYSTEM_DOMAIN = 'fixo.exemplo.com';
+  assert.strictEqual(baseUrlPublica({ headers: { host: 'outro.com', 'x-forwarded-host': 'evil.com' } }), 'https://fixo.exemplo.com');
+  assert.strictEqual(baseUrlPublica({ headers: { host: 'a.com"><x' } }).includes('"'), false);
+  if (antes === undefined) delete process.env.SYSTEM_DOMAIN; else process.env.SYSTEM_DOMAIN = antes;
 });

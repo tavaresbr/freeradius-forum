@@ -33,6 +33,24 @@ const loginPorContaLimiter = rateLimit({
   handler: jsonHandler('Muitas tentativas de login para esta conta. Tente novamente em alguns minutos.'),
 });
 
+// Cartao no hotspot (POST /api/pagamentos/gerar-cartao): endpoint publico que cobra na conta MP da empresa.
+// Sem teto proprio serve para "testar cartoes" em massa. Conta so as FALHAS (recusa/erro = 4xx) por IP e por
+// aparelho (MAC) / CPF informado; a compra aprovada nao consome cota.
+const hashCurto = (v) => crypto.createHash('sha256').update(String(v || '').toLowerCase()).digest('hex').slice(0, 24);
+const falhasCartao = (limit, keyGenerator) => rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator,
+  handler: jsonHandler('Muitas tentativas de pagamento com cartao. Aguarde alguns minutos ou pague com PIX.'),
+});
+const cartaoHotspotLimiters = [
+  falhasCartao(10, (req) => `ip:${ipKeyGenerator(req.ip)}`),
+  falhasCartao(5, (req) => `dev:${hashCurto(req.body?.mac)}|${hashCurto(req.body?.cpf || req.body?.identification_number)}`),
+];
+
 // Registro de empresa: evita criacao em massa.
 const registroLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -166,4 +184,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { cartaoHotspotLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
