@@ -49,7 +49,7 @@ const fakeDb = {
 const stub = (rel, exports) => { const f = require.resolve(path.join(__dirname, rel)); require.cache[f] = { id: f, filename: f, loaded: true, exports }; };
 stub('../../db', fakeDb);
 stub('../../src/utils/assinatura', { checarLimiteSeguro: async () => ({ ok: true }), criarTrial: async () => {} });
-stub('../../src/utils/empresaSetup', { criarPortaisPadrao: async () => {} });
+stub('../../src/utils/empresaSetup', { criarPortaisPadrao: async () => {}, criarPlanosPadrao: async () => {} });
 
 const perfis = require('../../src/utils/perfis');
 const ctrl = require('../../src/controllers/adminController');
