@@ -93,3 +93,6 @@
 [data-theme="claro"] .painel .text-orange-400 { color: #c2410c; }
 [data-theme="claro"] .painel .text-emerald-400 { color: #047857; }
 [data-theme="escuro"] .tema-site .text-apex-600 { color: #38bdf8; }
+
+/* Logo enviada (fundo transparente, texto azul-escuro) precisa de placa clara no tema escuro */
+[data-theme="escuro"] .tema-site img.logo-enviada { background: #fff; border-radius: 8px; padding: 4px; }

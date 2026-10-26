@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
-import useBranding, { ALTURAS } from "../../hooks/useBranding";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
@@ -12,9 +11,6 @@ export default function AdminLayout({ children }) {
   const { user, logout, isSuperAdmin, empresas, switchEmpresa, hasPermission } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [switchingEmpresa, setSwitchingEmpresa] = useState(false);
-  const [empresaLogo, setEmpresaLogo] = useState(null);
-  const { tamanhos } = useBranding();
-  const alturaLogo = ALTURAS[tamanhos?.painel] || ALTURAS.m;
   const [openMenus, setOpenMenus] = useState({});
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [whatsappAvisoFechado, setWhatsappAvisoFechado] = useState(false);
@@ -42,22 +38,6 @@ export default function AdminLayout({ children }) {
     if (assinatura?.bloqueada && !naTelaAssinatura) navigate(`${basePath}/assinatura`, { replace: true });
   }, [assinatura, naTelaAssinatura, basePath]);
 
-  // Buscar logo da empresa ativa
-  useEffect(() => {
-    const fetchLogo = async () => {
-      try {
-        const token = localStorage.getItem('admin_token');
-        const res = await fetch(`/api/empresas/by-slug/${slug}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setEmpresaLogo(data.logo_url);
-        }
-      } catch (e) { /* silencioso */ }
-    };
-    if (slug) fetchLogo();
-  }, [slug]);
 
   // Verificar status do WhatsApp para exibir aviso se desconectado
   useEffect(() => {
@@ -315,9 +295,7 @@ export default function AdminLayout({ children }) {
         {/* Logo Header */}
         <div className="p-6 border-b border-apex-100">
           <div className="flex items-center justify-between">
-            {empresaLogo
-              ? <img src={empresaLogo} alt="Logo" style={{ height: alturaLogo }} className="w-auto max-w-[200px] object-contain" />
-              : <MarcaApex className="text-lg" local="painel" />}
+            <MarcaApex className="text-lg" local="painel" />
             <ToggleTema className="hidden lg:block text-gray-600" />
             <button
               onClick={() => setSidebarOpen(false)}
@@ -488,9 +466,7 @@ export default function AdminLayout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
             </button>
-            {empresaLogo
-              ? <img src={empresaLogo} alt="Logo" style={{ height: alturaLogo }} className="w-auto max-w-[200px] object-contain" />
-              : <MarcaApex className="text-base" local="painel" />}
+            <MarcaApex className="text-base" local="painel" />
             <ToggleTema className="text-gray-600" />
           </div>
         </header>
