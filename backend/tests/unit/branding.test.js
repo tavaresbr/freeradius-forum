@@ -25,7 +25,7 @@ test('sem configuracao devolve o padrao Apex Telecom', async () => {
   reset();
   const res = resMock();
   await c.obter({}, res);
-  assert.deepStrictEqual(res.body, { nome: 'Apex Telecom', logo_url: null, tamanhos: { site: 'm', login: 'g', painel: 'm' } });
+  assert.deepStrictEqual(res.body, { nome: 'Apex Telecom', logo_url: null, favicon_url: null, apple_icon_url: null, tamanhos: { site: 'm', login: 'g', painel: 'm' } });
 });
 
 test('validarNome: obrigatorio, limite e caracteres proibidos', () => {
@@ -40,7 +40,7 @@ test('atualizarNome grava e preserva a logo; nome invalido nao grava', async () 
   linhaBranding = JSON.stringify({ nome: 'Antigo', logo_url: '/uploads/logos/site-1.png' });
   const res = resMock();
   await c.atualizarNome({ body: { nome: 'Nova Marca' } }, res);
-  assert.deepStrictEqual(res.body, { nome: 'Nova Marca', logo_url: '/uploads/logos/site-1.png', tamanhos: { site: 'm', login: 'g', painel: 'm' } });
+  assert.deepStrictEqual(res.body, { nome: 'Nova Marca', logo_url: '/uploads/logos/site-1.png', favicon_url: null, apple_icon_url: null, tamanhos: { site: 'm', login: 'g', painel: 'm' } });
 
   chamadas.length = 0;
   const ruim = resMock();
@@ -83,7 +83,7 @@ test('atualizar tamanhos: valida presets, preserva nome/logo e completa o que fa
   const ok = resMock();
   await c.atualizar({ body: { tamanhos: { login: 'xg' } } }, ok);
   assert.strictEqual(ok.code, 200);
-  assert.deepStrictEqual(ok.body, { nome: 'Marca', logo_url: '/uploads/logos/site-1.png', tamanhos: { site: 'm', login: 'xg', painel: 'm' } });
+  assert.deepStrictEqual(ok.body, { nome: 'Marca', logo_url: '/uploads/logos/site-1.png', favicon_url: null, apple_icon_url: null, tamanhos: { site: 'm', login: 'xg', painel: 'm' } });
 
   chamadas.length = 0;
   for (const ruim of [{ tamanhos: { site: 'gigante' } }, { tamanhos: { rodape: 'm' } }, { tamanhos: 'x' }, {}]) {
@@ -100,4 +100,52 @@ test('enviarLogo e removerLogo preservam os tamanhos salvos', async () => {
   const r = resMock();
   await c.removerLogo({}, r);
   assert.deepStrictEqual(r.body.tamanhos, { site: 'p', login: 'm', painel: 'g' });
+});
+
+test('favicon e icone do iPhone: grava, preserva o resto, troca apagando o anterior e remove', async () => {
+  reset();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-'));
+  const original = c.DIRS.slice();
+  c.DIRS[0] = tmp; c.DIRS[1] = tmp;
+  linhaBranding = JSON.stringify({ nome: 'Marca', logo_url: '/uploads/logos/site-1.png', favicon_url: '/uploads/logos/favicon-1.png' });
+  fs.writeFileSync(path.join(tmp, 'favicon-1.png'), 'x');
+  fs.writeFileSync(path.join(tmp, 'favicon-2.ico'), 'x');
+  fs.writeFileSync(path.join(tmp, 'apple-1.png'), 'x');
+
+  const r = resMock();
+  await c.enviarFavicon({ file: { filename: 'favicon-2.ico' } }, r);
+  assert.strictEqual(r.body.favicon_url, '/uploads/logos/favicon-2.ico');
+  assert.strictEqual(r.body.logo_url, '/uploads/logos/site-1.png');
+  assert.ok(!fs.existsSync(path.join(tmp, 'favicon-1.png')));
+
+  const a = resMock();
+  await c.enviarIconeApple({ file: { filename: 'apple-1.png' } }, a);
+  assert.strictEqual(a.body.apple_icon_url, '/uploads/logos/apple-1.png');
+  assert.strictEqual(a.body.favicon_url, '/uploads/logos/favicon-2.ico');
+
+  const rm = resMock();
+  await c.removerFavicon({}, rm);
+  assert.strictEqual(rm.body.favicon_url, null);
+  assert.strictEqual(rm.body.apple_icon_url, '/uploads/logos/apple-1.png');
+  assert.ok(!fs.existsSync(path.join(tmp, 'favicon-2.ico')));
+  await c.removerIconeApple({}, resMock());
+  assert.ok(!fs.existsSync(path.join(tmp, 'apple-1.png')));
+  c.DIRS[0] = original[0]; c.DIRS[1] = original[1];
+});
+
+test('enviarFavicon/enviarIconeApple sem arquivo respondem 400', async () => {
+  for (const fn of [c.enviarFavicon, c.enviarIconeApple]) {
+    const r = resMock();
+    await fn({}, r);
+    assert.strictEqual(r.code, 400);
+  }
+});
+
+test('assinatura de ICO e PNG conferida (nao confia no mimetype)', () => {
+  const { assinaturaConfere } = require('../../src/utils/campanhaValidacao');
+  const ico = Buffer.from([0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0]);
+  assert.ok(assinaturaConfere(ico, 'image/x-icon'));
+  assert.ok(assinaturaConfere(ico, 'image/vnd.microsoft.icon'));
+  assert.ok(!assinaturaConfere(Buffer.from('<svg xmlns=...>......'), 'image/x-icon'));
+  assert.ok(!assinaturaConfere(ico, 'image/png'));
 });
