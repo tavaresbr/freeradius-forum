@@ -65,7 +65,7 @@ export default function IdentidadeSite() {
       </div>
       <label className="block text-sm text-gray-400 mb-1">Logo (JPG, PNG ou WEBP, até 2 MB)</label>
       <div className="flex items-center gap-4 flex-wrap">
-        <div className="bg-white border border-gray-200 rounded p-3 min-w-[140px] flex items-center justify-center">
+        <div className="border border-gray-500/40 rounded p-3 min-w-[140px] flex items-center justify-center">
           {logoUrl ? <img src={logoUrl} alt={nome} className="h-10 w-auto" /> : <span className="text-xs text-blue-200">Logo padrão</span>}
         </div>
         <label className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded cursor-pointer">
@@ -87,7 +87,7 @@ export default function IdentidadeSite() {
                       className={`px-3 py-1.5 text-sm cursor-pointer ${tam?.[local] === k ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>{t}</button>
                   ))}
                 </div>
-                <div className="bg-white border border-gray-200 rounded p-2 flex items-center">
+                <div className="border border-gray-500/40 rounded p-2 flex items-center">
                   <img src={logoUrl} alt="" style={{ height: ALTURAS[tam?.[local]] || ALTURAS.m }} className="w-auto max-w-[240px] object-contain" />
                 </div>
               </div>
