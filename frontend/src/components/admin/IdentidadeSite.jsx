@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import useBranding, { ALTURAS } from "../../hooks/useBranding";
 
-const LOCAIS = [["site", "Cabeçalho do site"], ["login", "Tela de login"], ["painel", "Barra lateral do painel"]];
+const LOCAIS = [["site", "Cabeçalho do site"], ["login", "Tela de login"], ["painel", "Barra lateral do painel (logo da empresa ou da plataforma)"]];
 const PRESETS = [["p", "P"], ["m", "M"], ["g", "G"], ["xg", "XG"]];
 
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("admin_token")}` });
@@ -80,7 +80,7 @@ export default function IdentidadeSite() {
           <div className="space-y-3">
             {LOCAIS.map(([local, rotulo]) => (
               <div key={local} className="flex flex-wrap items-center gap-3">
-                <span className="w-44 text-sm text-gray-300">{rotulo}</span>
+                <span className="w-56 text-sm text-gray-300">{rotulo}</span>
                 <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
                   {PRESETS.map(([k, t]) => (
                     <button key={k} type="button" onClick={() => setTam({ ...tam, [local]: k })}
