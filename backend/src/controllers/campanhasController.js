@@ -4,6 +4,9 @@ const db   = require("../../db");
 const { ALLOWED_MIMES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ROOT } = require("../middleware/uploadCampanha");
 const v = require("../utils/campanhaValidacao");
 
+// DATE do MySQL chega como Date (fuso do servidor): devolve 'AAAA-MM-DD' para o painel nao deslocar o dia.
+const comDatas = (c) => (c ? { ...c, data_inicio: v.dataISO(c.data_inicio), data_fim: v.dataISO(c.data_fim) } : c);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CRUD Campanhas
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,7 +23,7 @@ exports.listar = async (req, res) => {
        ORDER BY c.criado_em DESC`,
       [req.empresa_id]
     );
-    res.json({ success: true, data: campanhas });
+    res.json({ success: true, data: campanhas.map(comDatas) });
   } catch (err) {
     console.error("Erro ao listar campanhas:", err);
     res.status(500).json({ error: "Erro ao listar campanhas" });
@@ -32,16 +35,24 @@ exports.criar = async (req, res) => {
   if (!nome.ok) return res.status(400).json({ error: nome.erro });
   const descricao = v.validarDescricao(req.body?.descricao);
   if (!descricao.ok) return res.status(400).json({ error: descricao.erro });
+  const inicio = v.validarData(req.body?.data_inicio, "Data de início");
+  if (!inicio.ok) return res.status(400).json({ error: inicio.erro });
+  const fim = v.validarData(req.body?.data_fim, "Data de término");
+  if (!fim.ok) return res.status(400).json({ error: fim.erro });
+  const janela = v.validarJanela(inicio.valor, fim.valor);
+  if (!janela.ok) return res.status(400).json({ error: janela.erro });
+  const freq = v.validarFrequencia(req.body?.frequencia);
+  if (!freq.ok) return res.status(400).json({ error: freq.erro });
   try {
     const [result] = await db.execute(
-      `INSERT INTO campanhas (empresa_id, nome, descricao) VALUES (?, ?, ?)`,
-      [req.empresa_id, nome.valor, descricao.valor]
+      `INSERT INTO campanhas (empresa_id, nome, descricao, data_inicio, data_fim, frequencia) VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.empresa_id, nome.valor, descricao.valor, inicio.valor, fim.valor, freq.valor]
     );
     const [[campanha]] = await db.execute(
       "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
       [result.insertId, req.empresa_id]
     );
-    res.status(201).json({ success: true, data: campanha });
+    res.status(201).json({ success: true, data: comDatas(campanha) });
   } catch (err) {
     console.error("Erro ao criar campanha:", err);
     res.status(500).json({ error: "Erro ao criar campanha" });
@@ -61,7 +72,7 @@ exports.obter = async (req, res) => {
       "SELECT * FROM campanha_itens WHERE campanha_id = ? AND empresa_id = ? ORDER BY ordem ASC, id ASC",
       [id, req.empresa_id]
     );
-    res.json({ success: true, data: { ...campanha, itens } });
+    res.json({ success: true, data: { ...comDatas(campanha), itens } });
   } catch (err) {
     console.error("Erro ao obter campanha:", err);
     res.status(500).json({ error: "Erro ao obter campanha" });
@@ -89,12 +100,32 @@ exports.atualizar = async (req, res) => {
     sets.push("ativo = ?"); params.push(body.ativo ? 1 : 0);
   }
 
+  const novaData = {};
+  for (const [campo, rotulo] of [["data_inicio", "Data de início"], ["data_fim", "Data de término"]]) {
+    if (!v.temCampo(body, campo)) continue;
+    const d = v.validarData(body[campo], rotulo);
+    if (!d.ok) return res.status(400).json({ error: d.erro });
+    novaData[campo] = d.valor;
+    sets.push(`${campo} = ?`); params.push(d.valor);
+  }
+  if (v.temCampo(body, "frequencia")) {
+    const f = v.validarFrequencia(body.frequencia);
+    if (!f.ok) return res.status(400).json({ error: f.erro });
+    sets.push("frequencia = ?"); params.push(f.valor);
+  }
+
   try {
     const [[existing]] = await db.execute(
-      "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
+      "SELECT id, data_inicio, data_fim FROM campanhas WHERE id = ? AND empresa_id = ?",
       [id, req.empresa_id]
     );
     if (!existing) return res.status(404).json({ error: "Campanha não encontrada" });
+
+    // A janela final (o que veio + o que ja estava gravado) tem que ser coerente
+    const inicioFinal = "data_inicio" in novaData ? novaData.data_inicio : v.dataISO(existing.data_inicio);
+    const fimFinal = "data_fim" in novaData ? novaData.data_fim : v.dataISO(existing.data_fim);
+    const janela = v.validarJanela(inicioFinal, fimFinal);
+    if (!janela.ok) return res.status(400).json({ error: janela.erro });
 
     if (sets.length) {
       await db.execute(
@@ -106,7 +137,7 @@ exports.atualizar = async (req, res) => {
       "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
       [id, req.empresa_id]
     );
-    res.json({ success: true, data: campanha });
+    res.json({ success: true, data: comDatas(campanha) });
   } catch (err) {
     console.error("Erro ao atualizar campanha:", err);
     res.status(500).json({ error: "Erro ao atualizar campanha" });

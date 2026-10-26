@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import CamposAgenda, { resumoAgenda } from "../../components/admin/CamposAgenda";
+
+const FORM_VAZIO = { nome: "", descricao: "", data_inicio: "", data_fim: "", frequencia: "sempre" };
 
 export default function Campanhas() {
   const { empresaSlug } = useParams();
   const [campanhas, setCampanhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ nome: "", descricao: "" });
+  const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const token = localStorage.getItem("admin_token");
 
@@ -42,12 +45,12 @@ export default function Campanhas() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ nome: form.nome, descricao: form.descricao }),
+        body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao criar campanha");
       setShowModal(false);
-      setForm({ nome: "", descricao: "" });
+      setForm(FORM_VAZIO);
       carregar();
     } catch (err) {
       alert(err.message);
@@ -105,7 +108,7 @@ export default function Campanhas() {
         <h1 className="text-3xl font-bold text-white">Campanhas</h1>
         <button
           onClick={() => {
-            setForm({ nome: "", descricao: "" });
+            setForm(FORM_VAZIO);
             setShowModal(true);
           }}
           className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-neutral-800"
@@ -137,7 +140,10 @@ export default function Campanhas() {
               {campanhas.map((c) => (
                 <tr key={c.id} className="border-b border-gray-800 hover:bg-[#151821]">
                   <td className="p-2 font-semibold text-white">{c.nome}</td>
-                  <td className="p-2 text-gray-400 text-xs max-w-xs truncate">{c.descricao || "—"}</td>
+                  <td className="p-2 text-gray-400 text-xs max-w-xs truncate">
+                    {c.descricao || "—"}
+                    {resumoAgenda(c) && <span className="block text-blue-300">{resumoAgenda(c)}</span>}
+                  </td>
                   <td className="p-2 text-gray-300">{c.total_itens ?? 0}</td>
                   <td className="p-2 text-gray-300">{c.views ?? 0}</td>
                   <td className="p-2 text-gray-400 text-xs max-w-[10rem] truncate" title={c.portais_em_uso || ""}>
@@ -213,6 +219,7 @@ export default function Campanhas() {
                   onChange={(e) => setForm({ ...form, descricao: e.target.value })}
                 />
               </div>
+              <CamposAgenda valor={form} onChange={setForm} />
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"

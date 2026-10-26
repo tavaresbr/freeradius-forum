@@ -1,5 +1,5 @@
 const db = require("../../db");
-const { campanhaAtivaDoPortal } = require("../utils/campanhaAtiva");
+const { campanhaAtivaDoPortal, campanhaAtivaInfo } = require("../utils/campanhaAtiva");
 const { criarDedupe } = require("../utils/dedupeTtl");
 
 /**
@@ -18,10 +18,14 @@ exports.obterPorPortal = async (req, res) => {
       return res.status(404).json({ error: "Sem campanha ativa" });
     }
 
-    // 2. Buscar campanha (valida empresa e ativo=1)
+    // 2. Campanha utilizavel agora (empresa, ativo=1 e dentro da janela de datas)
+    const info = await campanhaAtivaInfo(portal.id);
+    if (!info) {
+      return res.status(404).json({ error: "Sem campanha ativa" });
+    }
     const [[campanha]] = await db.execute(
-      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ? AND ativo = 1",
-      [portal.campanha_ativa_id, portal.empresa_id]
+      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
+      [info.id, portal.empresa_id]
     );
     if (!campanha) {
       return res.status(404).json({ error: "Sem campanha ativa" });
@@ -44,6 +48,7 @@ exports.obterPorPortal = async (req, res) => {
       data: {
         id:    campanha.id,
         nome:  campanha.nome,
+        frequencia: info.frequencia,
         itens,
       },
     });

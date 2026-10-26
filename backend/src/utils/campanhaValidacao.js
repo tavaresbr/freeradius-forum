@@ -48,6 +48,42 @@ function validarDuracao(v, { padrao = null } = {}) {
   return { ok: true, valor: n };
 }
 
+// Data AAAA-MM-DD real (rejeita 2026-02-31). Vazio => sem data (campanha sem limite naquele lado).
+function validarData(v, rotulo) {
+  if (vazio(v)) return { ok: true, valor: null };
+  const s = String(v).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  const d = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (!m || d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) {
+    return { ok: false, erro: `${rotulo} inválida. Use o formato AAAA-MM-DD` };
+  }
+  return { ok: true, valor: s };
+}
+
+// Valor vindo do MySQL (Date ou string) -> 'AAAA-MM-DD' ou null.
+function dataISO(d) {
+  if (!d) return null;
+  if (d instanceof Date) {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  return String(d).slice(0, 10);
+}
+
+// Fim nao pode ser antes do inicio (strings ISO comparam corretamente).
+function validarJanela(inicio, fim) {
+  if (inicio && fim && fim < inicio) return { ok: false, erro: "A data de término não pode ser anterior à de início" };
+  return { ok: true };
+}
+
+const FREQUENCIAS = ["sempre", "sessao", "diaria"];
+function validarFrequencia(v) {
+  if (vazio(v)) return { ok: true, valor: "sempre" };
+  const s = String(v).trim();
+  if (!FREQUENCIAS.includes(s)) return { ok: false, erro: "Frequência inválida. Use sempre, sessao ou diaria" };
+  return { ok: true, valor: s };
+}
+
 // Assinatura (magic bytes) do arquivo enviado: o mimetype vem do cliente e nao prova nada.
 function assinaturaConfere(buf, mimetype) {
   if (!buf || buf.length < 12) return false;
@@ -78,5 +114,6 @@ function arquivoConfere(caminho, mimetype) {
 
 module.exports = {
   temCampo, validarNome, validarTitulo, validarDescricao, validarLink, validarDuracao,
+  validarData, dataISO, validarJanela, validarFrequencia, FREQUENCIAS,
   assinaturaConfere, arquivoConfere, DURACAO_PADRAO,
 };

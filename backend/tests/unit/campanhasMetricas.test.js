@@ -110,7 +110,7 @@ const rq = (query) => criarReq({ empresa_id: 7, params: { id: '5' }, query });
 
 test('metricas: filtra por empresa, separa total (item 0) de itens e calcula % de clique', async () => {
   const { db, ctrl } = admin((sql) => {
-    if (/^SELECT id FROM campanhas/.test(sql)) return [[{ id: 5 }]];
+    if (/^SELECT id.* FROM campanhas/.test(sql)) return [[{ id: 5 }]];
     if (/FROM campanha_metricas/.test(sql)) return [[
       { item_id: 0, dia: '2026-10-20', views: 10, cliques: 2 },
       { item_id: 0, dia: '2026-10-21', views: 30, cliques: 3 },
@@ -136,7 +136,7 @@ test('metricas: filtra por empresa, separa total (item 0) de itens e calcula % d
 });
 
 test('metricas: periodo invalido, longo demais e campanha de outra empresa', async () => {
-  const { ctrl } = admin((sql) => (/^SELECT id FROM campanhas/.test(sql) ? [[]] : [[]]));
+  const { ctrl } = admin((sql) => (/^SELECT id.* FROM campanhas/.test(sql) ? [[]] : [[]]));
   for (const q of [{ de: '20/10/2026', ate: '2026-10-21' }, { de: '2026-10-21', ate: '2026-10-20' }, { de: '2024-01-01', ate: '2026-10-21' }, { de: '2026-13-45', ate: '2026-10-21' }]) {
     const res = criarRes();
     await ctrl.metricas(rq(q), res);
