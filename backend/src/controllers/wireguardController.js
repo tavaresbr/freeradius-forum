@@ -79,13 +79,20 @@ exports.getServerSettings = async (req, res) => {
 exports.updateServerSettings = async (req, res) => {
   try {
     const { wgPort, wgHost } = req.body;
+    // Valores entram no docker-compose.yml: formato estrito (sem quebra de linha / YAML injetado).
+    if (wgPort !== undefined && wgPort !== '' && !(/^\d{1,5}$/.test(String(wgPort)) && Number(wgPort) >= 1 && Number(wgPort) <= 65535)) {
+      return res.status(400).json({ message: "Porta inválida" });
+    }
+    if (wgHost !== undefined && wgHost !== '' && !require('net').isIPv4(String(wgHost))) {
+      return res.status(400).json({ message: "Host inválido (use o IPv4 público do servidor)" });
+    }
     let content = fs.readFileSync(COMPOSE_PATH, 'utf8');
 
     if (wgPort) {
-      content = content.replace(/WG_PORT=\d+/, `WG_PORT=${wgPort}`);
+      content = content.replace(/WG_PORT=\d+/, () => `WG_PORT=${String(wgPort)}`);
     }
     if (wgHost) {
-      content = content.replace(/WG_HOST=[\d.]+/, `WG_HOST=${wgHost}`);
+      content = content.replace(/WG_HOST=[\d.]+/, () => `WG_HOST=${String(wgHost)}`);
     }
 
     fs.writeFileSync(COMPOSE_PATH, content, 'utf8');

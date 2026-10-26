@@ -175,7 +175,7 @@ export default function PlanosCliente() {
 
             {/* Botão de Ação */}
             <button
-              onClick={() => navigate(`/pagamento/${plano.id}?mac=${mac}&ip=${ip}&mikrotik_id=${mikrotikId || ''}&empresa_id=${empresaId || ''}&cliente_id=${clienteId}${portalId ? `&portal_id=${portalId}` : ''}`)}
+              onClick={() => navigate(`/pagamento/${plano.id}?mac=${encodeURIComponent(mac || "")}&ip=${encodeURIComponent(ip || "")}&mikrotik_id=${encodeURIComponent(mikrotikId || '')}&empresa_id=${encodeURIComponent(empresaId || '')}&cliente_id=${encodeURIComponent(clienteId ?? "")}${portalId ? `&portal_id=${encodeURIComponent(portalId)}` : ''}`)}
               className={`w-full text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 ${!btnStyle ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800' : 'hover:opacity-90'}`}
               style={btnStyle}
             >

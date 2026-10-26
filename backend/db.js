@@ -9,7 +9,10 @@ const pool = mysql.createPool({
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // db.query formata o SQL no cliente: sem isso um JSON {"username":1} no lugar de uma string vira
+  // `username` = 1 (sempre verdadeiro) e um DELETE/UPDATE "por usuario" atinge todas as linhas.
+  stringifyObjects: true
 });
 
 module.exports = pool;

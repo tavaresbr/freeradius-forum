@@ -66,7 +66,9 @@ const systemBackupRoutes = require("./src/routes/systemBackupRoutes");
 const systemUpdateRoutes = require("./src/routes/systemUpdateRoutes");
 const logsRoutes = require("./src/routes/logsRoutes");
 const db = require("./db");
+const somentePrimitivos = require("./src/middleware/somentePrimitivos");
 const { detectPortalVendor } = require("./src/utils/portalVendor");
+const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost } = require("./src/utils/entradaSegura");
 const { salvarContextoPortal } = require("./src/gateways/gatewayLiberacao");
 
 // Rotas exclusivas do servidor principal (OTA updates) - não existem nos servidores de alunos
@@ -126,8 +128,8 @@ app.use('/api/auth', authRoutes)            // Auth
 app.use('/api/auth', authTempRoutes)        // Acesso temporário
 app.use("/api/planos-publicos", planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
-app.use("/api/sessao", sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
-app.use("/api/lgpd", lgpdRoutes);             // LGPD login/cadastro são públicos
+app.use("/api/sessao", somentePrimitivos, sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
+app.use("/api/lgpd", somentePrimitivos, lgpdRoutes);             // LGPD login/cadastro são públicos
 app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
@@ -143,12 +145,12 @@ app.use("/api/public/campanha", campanhasPublicRoutes);
 
 // Rota pública para login do portal Lead (sem auth)
 const { leadLogin, capturaPassiva, cadastroCliente } = require("./src/controllers/leadController");
-app.post("/api/lead-portal/login", leadLogin);
-app.post("/api/lead-portal/passivo", capturaPassiva);
-app.post("/api/clientes/cadastro", cadastroCliente);
+app.post("/api/lead-portal/login", somentePrimitivos, leadLogin);
+app.post("/api/lead-portal/passivo", somentePrimitivos, capturaPassiva);
+app.post("/api/clientes/cadastro", somentePrimitivos, cadastroCliente);
 
 // Rota pública para login do portal Wifi/Radius
-app.use("/api/login-portal", loginPortalRoutes);
+app.use("/api/login-portal", somentePrimitivos, loginPortalRoutes);
 
 // --- Rotas protegidas (auth + tenant + permissão) ---
 const checkPermissao = require('./src/middleware/checkPermissao');
@@ -202,16 +204,17 @@ if (updateCheckRoutes) app.use("/api/updates", updateCheckLimiter, updateCheckRo
 // Este HTML é salvo como hotspot/login.html no MikroTik
 // O RouterOS substitui $(mac), $(ip), $(username) etc antes de servir ao cliente
 app.get("/api/hotspot-login/:mikrotikId", async (req, res) => {
-  const { mikrotikId } = req.params;
+  const mikrotikId = normalizarId(req.params.mikrotikId);
+  if (!mikrotikId) return res.status(400).send("<h1>Hotspot invalido</h1>");
   try {
     const [[mikrotik]] = await db.execute(
       `SELECT m.empresa_id, e.slug AS empresa_slug FROM mikrotiks m
        LEFT JOIN empresas e ON m.empresa_id = e.id WHERE m.id = ?`,
       [mikrotikId]
     );
-    const empresaId = mikrotik?.empresa_id || '';
-    const empresaSlug = mikrotik?.empresa_slug || 'default';
-    const systemDomain = process.env.SYSTEM_DOMAIN || req.hostname;
+    const empresaId = normalizarId(mikrotik?.empresa_id) || '';
+    const empresaSlug = normalizarSlug(mikrotik?.empresa_slug || 'default');
+    const systemDomain = normalizarHost(process.env.SYSTEM_DOMAIN || req.hostname);
     const portalUrl = `https://${systemDomain}/hotspot/redirect/${mikrotikId}`;
     const fullUrl = `${portalUrl}?mac=$(mac)&ip=$(ip)&mikrotik_id=${mikrotikId}&empresa_id=${empresaId}&empresa=${empresaSlug}`;
 
@@ -461,11 +464,14 @@ app.get("/api/hotspot-status/:mikrotikId", async (req, res) => {
 
 // Endpoint público: redirect dinâmico do captive portal
 app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
-  const { mikrotikId } = req.params;
+  const mikrotikId = normalizarId(req.params.mikrotikId);
+  if (!mikrotikId) return res.status(400).send("<h1>Hotspot invalido</h1>");
   // Normaliza os params por vendor (MikroTik: mac/ip; Omada: clientMac/apMac;
   // UniFi: id/ap). Sem o tipo do gateway ainda -> deteccao por parametro.
   let portalCtx = detectPortalVendor(req.query);
-  let { mac, ip } = portalCtx;
+  // mac/ip vem da query (publica) e sao refletidos no HTML do portal: so formatos validos passam.
+  let mac = normalizarMac(portalCtx.mac);
+  let ip = normalizarIp(portalCtx.ip);
 
   try {
     // Busca MikroTik com dados da empresa
@@ -484,8 +490,8 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
     // pelo vendor correto (cobre o caso do param nao bater a heuristica).
     if (mikrotik.tipo && mikrotik.tipo !== portalCtx.vendor) {
       portalCtx = detectPortalVendor(req.query, { tipo: mikrotik.tipo });
-      mac = portalCtx.mac;
-      ip = portalCtx.ip;
+      mac = normalizarMac(portalCtx.mac);
+      ip = normalizarIp(portalCtx.ip);
     }
 
     // Gateway nao-MikroTik: persiste o contexto do redirect (apMac, ssidName,
@@ -502,8 +508,8 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
       return res.status(404).send("<h1>Portal não encontrado</h1>");
     }
 
-    const empresaId = mikrotik.empresa_id;
-    const empresaSlug = mikrotik.empresa_slug || 'default';
+    const empresaId = normalizarId(mikrotik.empresa_id) || '';
+    const empresaSlug = normalizarSlug(mikrotik.empresa_slug || 'default');
 
     // Pré-portal: se o portal tem campanha ativa e usuario ainda nao viu, redireciona
     // Frequencia 'sessao'/'diaria': o player grava o cookie cv_<campanha> e o cliente nao ve a campanha de novo.

@@ -1,3 +1,4 @@
+const { urlHttpSegura } = require('../utils/entradaSegura');
 const db = require("../../db");
 const { motivoCampanhaInutilizavel } = require("../utils/campanhaAtiva");
 const { DEFAULT_WHATSAPP_TEMPLATE } = require("../constants/whatsappDefaults");
@@ -96,6 +97,13 @@ exports.atualizarPortal = async (req, res) => {
     }
     if (configuracoesFinal && typeof configuracoesFinal === 'object' && configuracoesFinal.campos !== undefined) {
       configuracoesFinal = { ...configuracoesFinal, campos: normalizarCampos(configuracoesFinal.campos) };
+    }
+    // link_portal_url vai para window.location.href no portal publico: so http(s) ou caminho relativo.
+    if (configuracoesFinal && typeof configuracoesFinal === 'object' && configuracoesFinal.link_portal_url) {
+      const l = String(configuracoesFinal.link_portal_url).trim();
+      if (!(/^\/(?![\/\\])/.test(l) || urlHttpSegura(l))) {
+        return res.status(400).json({ error: 'Link do portal inválido (use http://, https:// ou um caminho do site)' });
+      }
     }
     const configJson = configuracoesFinal
       ? (typeof configuracoesFinal === 'string' ? configuracoesFinal : JSON.stringify(configuracoesFinal))
@@ -264,7 +272,9 @@ exports.previewPortal = async (req, res) => {
       res.setHeader("Content-Type", "text/html");
       // CSP basica: o preview roda no dominio do painel, entao restringimos
       // enquadramento e definimos policy baseline pro HTML controlado pelo tenant.
-      res.setHeader("Content-Security-Policy", "default-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https:");
+      // sandbox sem allow-same-origin: o HTML do tenant roda em origem opaca e nao alcanca o
+      // localStorage (admin_token) do painel, mesmo que um super admin abra o preview.
+      res.setHeader("Content-Security-Policy", "sandbox allow-scripts allow-forms; default-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https:");
       res.setHeader("X-Frame-Options", "DENY");
       res.setHeader("X-Content-Type-Options", "nosniff");
       return res.send(html);
