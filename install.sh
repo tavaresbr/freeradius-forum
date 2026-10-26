@@ -158,6 +158,7 @@ MYSQL_PASS=$(generate_password 24)
 JWT_SECRET=$(generate_password 48)
 EVO_API_KEY=$(generate_password 32)
 WG_PASS=$(generate_password 16)
+ADMIN_PASS=$(generate_password 14)
 POSTGRES_PASS=$(generate_password 24)
 
 echo ""
@@ -398,7 +399,7 @@ JWT_SECRET=${JWT_SECRET}
 SYSTEM_DOMAIN=${DOMAIN_HOTSPOT}
 
 # Evolution API (WhatsApp)
-EVOLUTION_API_URL=http://localhost:8080
+EVOLUTION_API_URL=http://127.0.0.1:8080
 EVOLUTION_API_KEY=${EVO_API_KEY}
 EVOLUTION_INSTANCE=hotspot
 
@@ -410,7 +411,8 @@ WG_PANEL_PORT=${WG_PANEL_PORT}
 # Sistema de Atualizacoes OTA
 UPDATE_SERVER_URL=https://glpi.forumtelecom.com.br
 EOF
-echo "  .env gerado"
+chmod 600 .env
+echo "  .env gerado (permissao 600)"
 
 echo "  Instalando dependencias (npm install)..."
 npm install --production 2>&1 | tail -1
@@ -429,6 +431,16 @@ for migration in $(ls migrations/[0-9][0-9][0-9]_*.js 2>/dev/null | sort); do
   node "$migration" 2>&1 | tail -1 || true
 done
 
+# Senha do super admin: aleatoria (o seed traz admin123, publico). Falhou = mantem o seed e avisa.
+echo "  Definindo senha aleatoria do admin..."
+ADMIN_HASH=$(ADMIN_PASS="$ADMIN_PASS" node -e 'process.stdout.write(require("bcryptjs").hashSync(process.env.ADMIN_PASS, 10))' 2>/dev/null)
+if [ -n "$ADMIN_HASH" ] && mysql -u hotspotuser -p"${MYSQL_PASS}" hotspot -e "UPDATE admins SET password='${ADMIN_HASH}' WHERE email='admin@empresa.com'" 2>/dev/null; then
+  echo "  Senha do admin definida (consta em /root/hotspot-credenciais.txt)"
+else
+  ADMIN_PASS="admin123"
+  echo "  AVISO: nao foi possivel definir a senha do admin; a senha padrao (admin123) continua ativa. TROQUE no primeiro acesso!"
+fi
+
 echo "  Iniciando com PM2..."
 pm2 delete hotspot-api 2>/dev/null || true
 pm2 start server.js --name hotspot-api
@@ -442,8 +454,9 @@ echo "  Backend rodando na porta ${BACKEND_PORT}"
 echo ""
 echo "==> [9/16] Buildando frontend..."
 cd /var/www/hotspot/frontend
-rm -rf node_modules package-lock.json dist
-npm install 2>&1 | tail -1
+# Mantem o package-lock.json (build reprodutivel / sem puxar versao nova nao auditada)
+rm -rf node_modules dist
+if [ -f package-lock.json ]; then npm ci 2>&1 | tail -1; else npm install 2>&1 | tail -1; fi
 NODE_OPTIONS=--max-old-space-size=4096 npm run build 2>&1 | tail -3
 if [ -d "dist" ]; then
   echo "  Frontend buildado com sucesso"
@@ -465,7 +478,7 @@ services:
     container_name: evolution-api
     restart: always
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - SERVER_URL=https://${DOMAIN_EVOLUTION}
       - DOCKER_ENV=true
@@ -631,6 +644,16 @@ fi
 echo ""
 echo "==> [12/16] Configurando Nginx..."
 
+# Cabecalhos de seguranca (snippet incluido nos blocos server e nas locations estaticas, porque
+# add_header numa location descarta os herdados). Mesmos valores do helmet do backend (sem duplicar conflito).
+mkdir -p /etc/nginx/snippets
+cat > /etc/nginx/snippets/hotspot-security.conf <<'SECEOF'
+server_tokens off;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+SECEOF
+
 if [ "$INSTALL_MODE" = "1" ]; then
   cat > /etc/nginx/sites-available/hotspot <<EOF
 server {
@@ -640,16 +663,19 @@ server {
     root /var/www/hotspot/frontend/dist;
     index index.html;
     client_max_body_size 10M;
+    include /etc/nginx/snippets/hotspot-security.conf;
 
     # Assets hasheados do Vite: cache longo e imutavel
     location /assets/ {
         expires 1y;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, immutable, max-age=31536000";
         try_files \$uri =404;
     }
 
     # index.html nunca cacheado (essencial pro sistema de updates)
     location = /index.html {
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         expires off;
@@ -669,6 +695,7 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
         proxy_read_timeout 180s;
         proxy_connect_timeout 30s;
         proxy_send_timeout 180s;
@@ -681,12 +708,14 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
     }
 
     # Uploads de campanhas (pre-portal): servidos pelo backend
     location /uploads/campanhas/ {
         alias /var/www/hotspot/backend/uploads/campanhas/;
         expires 1d;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, max-age=86400";
         try_files \$uri =404;
     }
@@ -694,6 +723,7 @@ server {
     location /uploads/ {
         alias /var/www/hotspot/frontend/dist/uploads/;
         expires 30d;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, immutable";
     }
 }
@@ -705,7 +735,7 @@ server {
     server_name ${DOMAIN_EVOLUTION};
 
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -727,6 +757,7 @@ server {
     root /var/www/hotspot/frontend/dist;
     index index.html;
     client_max_body_size 10M;
+    include /etc/nginx/snippets/hotspot-security.conf;
 
     set_real_ip_from 10.0.0.0/8;
     set_real_ip_from 172.16.0.0/12;
@@ -737,12 +768,14 @@ server {
     # Assets hasheados do Vite: cache longo e imutavel
     location /assets/ {
         expires 1y;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, immutable, max-age=31536000";
         try_files \$uri =404;
     }
 
     # index.html nunca cacheado (essencial pro sistema de updates)
     location = /index.html {
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         expires off;
@@ -762,6 +795,7 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
         proxy_read_timeout 180s;
         proxy_connect_timeout 30s;
         proxy_send_timeout 180s;
@@ -774,12 +808,14 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
     }
 
     # Uploads de campanhas (pre-portal): servidos pelo backend
     location /uploads/campanhas/ {
         alias /var/www/hotspot/backend/uploads/campanhas/;
         expires 1d;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, max-age=86400";
         try_files \$uri =404;
     }
@@ -787,6 +823,7 @@ server {
     location /uploads/ {
         alias /var/www/hotspot/frontend/dist/uploads/;
         expires 30d;
+        include /etc/nginx/snippets/hotspot-security.conf;
         add_header Cache-Control "public, immutable";
     }
 }
@@ -804,7 +841,7 @@ server {
     real_ip_recursive on;
 
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -881,9 +918,18 @@ if [ "$INSTALL_MODE" = "1" ]; then
     fi
     ufw allow 80/tcp     2>/dev/null
     ufw allow 443/tcp    2>/dev/null
-    ufw allow 1812/udp   2>/dev/null
-    ufw allow 1813/udp   2>/dev/null
-    ufw allow 3799/udp   2>/dev/null
+    # RADIUS (1812/1813) e CoA (3799): so da VPN (10.8.0.0/24) por padrao. Gateways com IP publico:
+    #   ufw allow from <IP_DO_GATEWAY> to any port 1812,1813,3799 proto udp
+    # (ou reinstale com RADIUS_ALLOW_FROM=any para abrir para todos — nao recomendado).
+    RADIUS_ALLOW_FROM="${RADIUS_ALLOW_FROM:-10.8.0.0/24}"
+    if [ "$RADIUS_ALLOW_FROM" = "any" ]; then
+      ufw allow 1812/udp   2>/dev/null
+      ufw allow 1813/udp   2>/dev/null
+      ufw allow 3799/udp   2>/dev/null
+    else
+      ufw allow from ${RADIUS_ALLOW_FROM} to any port 1812,1813,3799 proto udp 2>/dev/null
+      echo "  RADIUS/CoA liberados apenas para ${RADIUS_ALLOW_FROM}"
+    fi
     ufw allow ${WG_VPN_PORT}/udp 2>/dev/null
     ufw --force enable   2>/dev/null
     echo "  UFW configurado (SSH em ${SSH_PORT}/tcp liberado)"
@@ -941,7 +987,7 @@ POSTGRESQL (Evolution):
 LOGIN ADMIN:
   URL:   https://${DOMAIN_HOTSPOT}
   Email: admin@empresa.com
-  Senha: admin123
+  Senha: ${ADMIN_PASS}
 
 ============================================================
   MANTENHA ESTE ARQUIVO SEGURO!
@@ -990,7 +1036,7 @@ echo "=========================================================="
 echo ""
 echo "  Modo:           ${MODE_LABEL}"
 echo "  Painel:         https://${DOMAIN_HOTSPOT}"
-echo "  Login:          admin@empresa.com / admin123"
+echo "  Login:          admin@empresa.com / ${ADMIN_PASS}"
 echo "  Evolution API:  https://${DOMAIN_EVOLUTION}"
 echo ""
 if [ "$INSTALL_MODE" = "1" ]; then
