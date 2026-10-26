@@ -87,6 +87,13 @@ function validarGateway(body) {
   };
 }
 
+/** O portal informado pertence a esta empresa? (portal_id vem do corpo: nunca confiar em id alheio) */
+async function portalDaEmpresa(portalId, empresaId) {
+  if (!portalId) return true;
+  const [[p]] = await db.execute("SELECT id FROM portais WHERE id = ? AND empresa_id = ?", [portalId, empresaId]);
+  return !!p;
+}
+
 /** Gateway usa FreeRADIUS (precisa de linha na tabela `nas`)? */
 function usaRadius(dados) {
   // Omada e' SEMPRE External RADIUS — a API do controller (quando configurada
@@ -128,6 +135,10 @@ router.post("/", async (req, res) => {
   try {
     const lim = await checarLimiteSeguro(req.empresa_id, "equipamentos");
     if (!lim.ok) return res.status(403).json({ message: lim.mensagem });
+
+    if (!(await portalDaEmpresa(dados.portal_id, req.empresa_id))) {
+      return res.status(400).json({ message: "Portal inválido." });
+    }
 
     // Verificar se já existe gateway com esse IP na empresa
     const [existente] = await db.query("SELECT id FROM mikrotiks WHERE ip = ? AND empresa_id = ?", [dados.ip, req.empresa_id]);
@@ -264,6 +275,15 @@ router.put("/:id", async (req, res) => {
       dados.verify_tls = atual.verify_tls;
     }
 
+    if (!(await portalDaEmpresa(dados.portal_id, req.empresa_id))) {
+      return res.status(400).json({ message: "Portal inválido." });
+    }
+    // Trocar para o IP que ja e NAS de outra empresa tomaria o NAS (IP + secret) dela.
+    if (usaRadius(dados) && String(dados.ip).trim() !== String(atual.ip || "").trim()) {
+      const [nasDono] = await db.execute("SELECT id FROM nas WHERE nasname = ? LIMIT 1", [dados.ip]);
+      if (nasDono.length > 0) return res.status(400).json({ message: "Já existe um NAS com este IP." });
+    }
+
     await db.execute(
       `UPDATE mikrotiks SET
          nome = ?, ip = ?, usuario = ?, senha = ?, porta = ?, end_hotspot = ?, portal_id = ?,
@@ -280,10 +300,11 @@ router.put("/:id", async (req, res) => {
 
     const ipAntigo = String(atual.ip || "").trim();
     if (usaRadius(dados)) {
-      // Upsert do NAS pelo IP antigo (cobre troca de IP e gateway sem NAS previo)
+      // Upsert do NAS pelo IP antigo (cobre troca de IP e gateway sem NAS previo).
+      // Sempre escopado por empresa: o NAS (IP + secret) de outra empresa nunca pode ser alterado aqui.
       const [upd] = await db.execute(
-        "UPDATE nas SET nasname = ?, shortname = ?, secret = ? WHERE nasname = ?",
-        [dados.ip, dados.nome, dados.senha, ipAntigo]
+        "UPDATE nas SET nasname = ?, shortname = ?, secret = ? WHERE nasname = ? AND (empresa_id = ? OR empresa_id IS NULL)",
+        [dados.ip, dados.nome, dados.senha, ipAntigo, req.empresa_id]
       );
       if (upd.affectedRows === 0) {
         await db.execute(
@@ -294,7 +315,9 @@ router.put("/:id", async (req, res) => {
       reloadFreeRADIUS();
     } else {
       // Gateway que nao usa RADIUS (unifi / omada modo API): remove NAS orfao se existir
-      const [del] = await db.execute("DELETE FROM nas WHERE nasname = ?", [ipAntigo]);
+      const [del] = await db.execute(
+        "DELETE FROM nas WHERE nasname = ? AND (empresa_id = ? OR empresa_id IS NULL)", [ipAntigo, req.empresa_id]
+      );
       if (del.affectedRows > 0) reloadFreeRADIUS();
     }
 
@@ -414,9 +437,11 @@ router.delete("/:id", async (req, res) => {
     await db.execute("DELETE FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
 
     // Verificar se existe NAS com esse IP antes de tentar remover
-    const [nas] = await db.execute("SELECT id FROM nas WHERE nasname = ?", [ip]);
+    const [nas] = await db.execute(
+      "SELECT id FROM nas WHERE nasname = ? AND (empresa_id = ? OR empresa_id IS NULL)", [ip, req.empresa_id]
+    );
     if (nas.length > 0) {
-      await db.execute("DELETE FROM nas WHERE nasname = ?", [ip]);
+      await db.execute("DELETE FROM nas WHERE nasname = ? AND (empresa_id = ? OR empresa_id IS NULL)", [ip, req.empresa_id]);
       console.log(`✅ NAS com IP ${ip} removido.`);
     } else {
       console.warn(`⚠️ Nenhum NAS encontrado com IP ${ip}`);

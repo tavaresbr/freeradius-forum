@@ -14,7 +14,11 @@ module.exports = async (req, res, next) => {
       });
     }
   } catch (err) {
-    if (!tabelaInexistente(err)) console.error("[assinatura] erro no middleware:", err.message);
+    if (!tabelaInexistente(err)) {
+      // Falha fechada: erro de banco nao pode liberar o painel de empresa com assinatura vencida.
+      console.error("[assinatura] erro no middleware:", err.message);
+      return res.status(503).json({ error: "Erro ao verificar a assinatura. Tente novamente." });
+    }
   }
   next();
 };

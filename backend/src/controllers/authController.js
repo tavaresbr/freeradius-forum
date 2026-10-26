@@ -3,15 +3,38 @@ const jwt = require('jsonwebtoken')
 const Admin = require('../models/Admin')
 const { getPermissoesConsolidadas, MODULOS } = require('./grupoPermissaoController')
 
+// Role valida na empresa ativa: super_admin e a role "da casa" (admins.role) valem como estao; em outra
+// empresa vale o papel do vinculo (admin_empresas.role). Antes a role global era levada para qualquer empresa
+// (owner na A virava owner na B mesmo vinculado como operator).
+function roleNaEmpresa(user, empresa) {
+  if (user.role === 'super_admin') return 'super_admin'
+  if (empresa && user.empresa_id && Number(empresa.id) !== Number(user.empresa_id) && empresa.role) return empresa.role
+  return user.role || 'operator'
+}
+exports.roleNaEmpresa = roleNaEmpresa
+
 exports.login = async (req, res) => {
-  const { email, password, senha } = req.body
+  try {
+    return await loginInterno(req, res)
+  } catch (err) {
+    console.error('Erro no login:', err.message)
+    return res.status(500).json({ error: 'Erro interno no servidor' })
+  }
+}
+
+async function loginInterno(req, res) {
+  const { email, password, senha } = req.body || {}
   const pass = password || senha
+  if (typeof email !== 'string' || typeof pass !== 'string' || !email || !pass) {
+    return res.status(401).json({ error: 'Credenciais inválidas' })
+  }
   const user = await Admin.findByEmail(email)
 
-  if (!user) return res.status(401).json({ error: 'Usuário não encontrado' })
+  // Mesma resposta para e-mail inexistente e senha errada (nao enumera usuarios).
+  if (!user) return res.status(401).json({ error: 'Credenciais inválidas' })
 
   const match = await bcrypt.compare(pass, user.password)
-  if (!match) return res.status(401).json({ error: 'Senha incorreta' })
+  if (!match) return res.status(401).json({ error: 'Credenciais inválidas' })
 
   // Buscar todas as empresas do usuário
   const empresas = await Admin.getEmpresas(user.id, user.role);
@@ -30,7 +53,7 @@ exports.login = async (req, res) => {
       empresa_id: empresaAtiva?.id || user.empresa_id,
       empresa_slug: empresaAtiva?.slug || user.empresa_slug || 'default',
       empresa_nome: empresaAtiva?.nome || user.empresa_nome || 'Empresa Padrão',
-      role: user.role || 'operator'
+      role: roleNaEmpresa(user, empresaAtiva)
     },
     process.env.JWT_SECRET,
     { expiresIn: '1d' }
@@ -50,7 +73,7 @@ exports.login = async (req, res) => {
       id: user.id,
       email: user.email,
       nome: user.nome,
-      role: user.role || 'operator',
+      role: roleNaEmpresa(user, empresaAtiva),
       empresa_id: empresaAtiva?.id || user.empresa_id,
       empresa_slug: empresaAtiva?.slug || user.empresa_slug || 'default',
       empresa_nome: empresaAtiva?.nome || user.empresa_nome || 'Empresa Padrão'
@@ -83,6 +106,9 @@ exports.switchEmpresa = async (req, res) => {
       empresaData = emp;
     }
 
+    // Role/empresa "da casa" vem do banco (o token pode ja carregar o papel de outra empresa).
+    const home = await Admin.findById(adminId)
+
     const newToken = jwt.sign(
       {
         id: adminId,
@@ -90,7 +116,7 @@ exports.switchEmpresa = async (req, res) => {
         empresa_id: empresaData.id,
         empresa_slug: empresaData.slug,
         empresa_nome: empresaData.nome,
-        role: req.user.role
+        role: roleNaEmpresa(home || { role: req.user.role }, empresaData)
       },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }

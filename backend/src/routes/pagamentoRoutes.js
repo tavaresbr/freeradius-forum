@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 const tenant = require("../middleware/tenant");
 const exigeAssinatura = require("../middleware/assinatura");
+const checkPermissao = require("../middleware/checkPermissao");
 const {
   gerarPagamento,
   gerarPagamentoCartao,
@@ -26,8 +27,9 @@ router.get("/status", verificarStatusPagamento);
 router.post("/pix-trial", liberarPixTrial);
 
 // Rotas protegidas (admin)
-router.get("/aprovados", auth, tenant, exigeAssinatura, listarPagamentosAprovados);
-router.get("/todos", auth, tenant, exigeAssinatura, listarTodosPagamentos);
-router.post("/liberar/:id", auth, tenant, exigeAssinatura, liberarManual);
+router.get("/aprovados", auth, tenant, exigeAssinatura, checkPermissao("pagamentos"), listarPagamentosAprovados);
+router.get("/todos", auth, tenant, exigeAssinatura, checkPermissao("pagamentos"), listarTodosPagamentos);
+// Libera acesso sem pagamento: exige permissao de CRIAR em pagamentos (POST).
+router.post("/liberar/:id", auth, tenant, exigeAssinatura, checkPermissao("pagamentos"), liberarManual);
 
 module.exports = router;

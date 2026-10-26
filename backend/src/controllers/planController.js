@@ -1,6 +1,14 @@
 const db = require("../../db");
 const { RouterOSAPI } = require("node-routeros");
 
+// mikrotik_id vem do corpo: precisa ser equipamento desta empresa (senao o plano liberaria acesso
+// no roteador de outra empresa). Sem equipamento (null) e permitido (planos gratis padrao).
+async function mikrotikDaEmpresa(mikrotikId, empresaId) {
+  if (mikrotikId === undefined || mikrotikId === null || mikrotikId === "" || Number(mikrotikId) === 0) return true;
+  const [[m]] = await db.execute("SELECT id FROM mikrotiks WHERE id = ? AND empresa_id = ?", [mikrotikId, empresaId]);
+  return !!m;
+}
+
 // Criar plano
 const criarPlano = async (req, res) => {
   try {
@@ -9,6 +17,10 @@ const criarPlano = async (req, res) => {
       velocidade_down, velocidade_up,
       mikrotik_id, address_pool, shared_users, ativo
     } = req.body;
+
+    if (!(await mikrotikDaEmpresa(mikrotik_id, req.empresa_id))) {
+      return res.status(400).json({ message: "Equipamento inválido." });
+    }
 
     await db.execute(`
       INSERT INTO planos (
@@ -57,6 +69,9 @@ async function atualizarPlano(req, res) {
   } = req.body;
 
   try {
+    if (!(await mikrotikDaEmpresa(mikrotik_id, req.empresa_id))) {
+      return res.status(400).json({ message: "Equipamento inválido." });
+    }
     await db.execute(`
       UPDATE planos
       SET nome = ?, descricao = ?, valor = ?, duracao_minutos = ?,

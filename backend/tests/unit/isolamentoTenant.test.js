@@ -57,8 +57,18 @@ test('planos: deletar plano de outra empresa -> 404 e nenhum DELETE', async () =
   assert.strictEqual(res.statusCode, 404); assert.ok(!db.calls.some((c) => /^DELETE/.test(c.sql)));
 });
 test('planos: criar grava empresa_id da req, ignorando body.empresa_id', async () => {
-  const { db } = await exec('src/controllers/planController.js', 'criarPlano', { body: { ...PLANO_BODY, empresa_id: 4242 } });
-  assert.strictEqual(db.calls[0].params[0], EMP); assert.ok(!db.calls[0].params.includes(4242));
+  const { db } = await exec('src/controllers/planController.js', 'criarPlano', { body: { ...PLANO_BODY, empresa_id: 4242 } },
+    async (s) => (/FROM mikrotiks/.test(s) ? [[{ id: 1 }]] : undefined));
+  const ins = db.calls.find((c) => /^INSERT INTO planos/.test(c.sql));
+  assert.strictEqual(ins.params[0], EMP); assert.ok(!ins.params.includes(4242));
+});
+test('planos: criar/atualizar recusam mikrotik_id de outra empresa (400) e nao gravam', async () => {
+  for (const fn of ['criarPlano', 'atualizarPlano']) {
+    const { db, res } = await exec('src/controllers/planController.js', fn,
+      { params: { id: '5' }, body: { ...PLANO_BODY, mikrotik_id: 999 } }, async () => [[]]);
+    assert.strictEqual(res.statusCode, 400, fn);
+    assert.ok(!db.calls.some((c) => /^(INSERT|UPDATE)/.test(c.sql)), fn);
+  }
 });
 
 // ---- leads ----
