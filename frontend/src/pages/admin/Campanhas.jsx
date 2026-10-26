@@ -73,14 +73,26 @@ export default function Campanhas() {
     }
   };
 
-  const handleDeletar = async (id) => {
-    if (!confirm("Deseja realmente excluir esta campanha?")) return;
-    try {
-      const res = await fetch(`/api/campanhas/${id}`, {
+  const handleDeletar = async (c) => {
+    if (!confirm(`Deseja realmente excluir a campanha "${c.nome}"?`)) return;
+    const excluir = (forcar) =>
+      fetch(`/api/campanhas/${c.id}${forcar ? "?forcar=1" : ""}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Erro ao excluir campanha");
+    try {
+      let res = await excluir(false);
+      // Em uso por portal: o servidor avisa (409) e so exclui com confirmacao
+      if (res.status === 409) {
+        const info = await res.json().catch(() => ({}));
+        const nomes = (info.em_uso || []).map((p) => p.nome).join(", ");
+        if (!confirm(`Esta campanha está em uso pelo portal: ${nomes}.\nSe excluir, ele fica sem pré-portal. Excluir mesmo assim?`)) return;
+        res = await excluir(true);
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Erro ao excluir campanha");
+      }
       carregar();
     } catch (err) {
       alert(err.message);
@@ -116,6 +128,7 @@ export default function Campanhas() {
                 <th className="p-2">Descrição</th>
                 <th className="p-2">Itens</th>
                 <th className="p-2">Views</th>
+                <th className="p-2">Em uso em</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Ações</th>
               </tr>
@@ -127,6 +140,9 @@ export default function Campanhas() {
                   <td className="p-2 text-gray-400 text-xs max-w-xs truncate">{c.descricao || "—"}</td>
                   <td className="p-2 text-gray-300">{c.total_itens ?? 0}</td>
                   <td className="p-2 text-gray-300">{c.views ?? 0}</td>
+                  <td className="p-2 text-gray-400 text-xs max-w-[10rem] truncate" title={c.portais_em_uso || ""}>
+                    {c.portais_em_uso || "—"}
+                  </td>
                   <td className="p-2">
                     <button
                       onClick={() => handleToggleAtivo(c)}
@@ -149,7 +165,7 @@ export default function Campanhas() {
                         Editar
                       </Link>
                       <button
-                        onClick={() => handleDeletar(c.id)}
+                        onClick={() => handleDeletar(c)}
                         className="bg-red-500 text-white px-2 py-1 rounded text-xs"
                       >
                         Excluir
