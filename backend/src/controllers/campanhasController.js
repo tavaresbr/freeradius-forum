@@ -378,3 +378,83 @@ exports.reordenar = async (req, res) => {
     res.status(500).json({ error: "Erro ao reordenar itens" });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Metricas (views e cliques por item e por dia)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DIAS_METRICAS = 366;
+
+function ctr(views, cliques) {
+  return views > 0 ? Math.round((cliques / views) * 1000) / 10 : 0; // % com 1 casa
+}
+
+exports.metricas = async (req, res) => {
+  const { id } = req.params;
+  const hoje = new Date();
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const padraoDe = new Date(hoje.getTime() - 29 * 24 * 3600 * 1000);
+  const de = req.query.de || fmt(padraoDe);
+  const ate = req.query.ate || fmt(hoje);
+
+  if (!DIA_RE.test(de) || !DIA_RE.test(ate) || Number.isNaN(Date.parse(de)) || Number.isNaN(Date.parse(ate))) {
+    return res.status(400).json({ error: "Período inválido. Use datas no formato AAAA-MM-DD" });
+  }
+  const dias = (Date.parse(ate) - Date.parse(de)) / (24 * 3600 * 1000) + 1;
+  if (dias < 1 || dias > MAX_DIAS_METRICAS) {
+    return res.status(400).json({ error: `O período deve ter entre 1 e ${MAX_DIAS_METRICAS} dias` });
+  }
+
+  try {
+    const [[campanha]] = await db.execute(
+      "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
+      [id, req.empresa_id]
+    );
+    if (!campanha) return res.status(404).json({ error: "Campanha não encontrada" });
+
+    const [linhas] = await db.execute(
+      `SELECT m.item_id, DATE_FORMAT(m.dia, '%Y-%m-%d') AS dia, m.views, m.cliques
+         FROM campanha_metricas m
+        WHERE m.campanha_id = ? AND m.empresa_id = ? AND m.dia BETWEEN ? AND ?`,
+      [id, req.empresa_id, de, ate]
+    );
+    const [itens] = await db.execute(
+      "SELECT id, titulo, tipo, arquivo_url, ordem FROM campanha_itens WHERE campanha_id = ? AND empresa_id = ? ORDER BY ordem ASC, id ASC",
+      [id, req.empresa_id]
+    );
+
+    // item_id = 0 e' o total da campanha; os demais sao por item
+    const porDia = new Map();
+    const porItem = new Map(itens.map((i) => [i.id, { item_id: i.id, titulo: i.titulo, tipo: i.tipo, arquivo_url: i.arquivo_url, views: 0, cliques: 0, removido: false }]));
+    let views = 0;
+    let cliques = 0;
+    for (const l of linhas) {
+      const v = Number(l.views) || 0;
+      const c = Number(l.cliques) || 0;
+      if (Number(l.item_id) === 0) {
+        views += v; cliques += c;
+        const d = porDia.get(l.dia) || { dia: l.dia, views: 0, cliques: 0 };
+        d.views += v; d.cliques += c;
+        porDia.set(l.dia, d);
+      } else {
+        const it = porItem.get(Number(l.item_id)) || { item_id: Number(l.item_id), titulo: null, tipo: null, arquivo_url: null, views: 0, cliques: 0, removido: true };
+        it.views += v; it.cliques += c;
+        porItem.set(it.item_id, it);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        de, ate,
+        resumo: { views, cliques, ctr: ctr(views, cliques) },
+        por_dia: [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)),
+        por_item: [...porItem.values()].map((i) => ({ ...i, ctr: ctr(i.views, i.cliques) })),
+      },
+    });
+  } catch (err) {
+    console.error("Erro ao obter métricas da campanha:", err);
+    res.status(500).json({ error: "Erro ao obter métricas" });
+  }
+};

@@ -20,6 +20,26 @@ export default function CampanhaPlayer() {
   const [ended, setEnded] = useState(false);
   const [erroPreview, setErroPreview] = useState(null);
 
+  // Id aleatorio da visita (so na aba): o servidor usa para nao contar a mesma view/clique duas vezes
+  const sessaoRef = useRef(null);
+  const slidesContados = useRef(new Set());
+  const getSessao = () => {
+    if (!sessaoRef.current) {
+      const novo = () => (
+        (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`)
+          .replace(/[^A-Za-z0-9_-]/g, "")
+      );
+      try {
+        let s = sessionStorage.getItem("camp_sessao");
+        if (!s) { s = novo(); sessionStorage.setItem("camp_sessao", s); }
+        sessaoRef.current = s;
+      } catch {
+        sessaoRef.current = novo();
+      }
+    }
+    return sessaoRef.current;
+  };
+
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
   const videoRef = useRef(null);
@@ -70,7 +90,7 @@ export default function CampanhaPlayer() {
 
           if (!isPreview) {
             axios
-              .post(`/api/public/campanha/${portalId}/view`)
+              .post(`/api/public/campanha/${portalId}/view`, { sessao: getSessao() })
               .catch(() => {});
           }
         } else if (isPreview) {
@@ -114,6 +134,30 @@ export default function CampanhaPlayer() {
     },
     [advance]
   );
+
+  // Conta a exibicao de cada slide (uma vez por slide e visita; o servidor tambem deduplica)
+  useEffect(() => {
+    if (isPreview || !loaded || currentIndex >= itens.length) return;
+    const id = itens[currentIndex].id;
+    if (slidesContados.current.has(id)) return;
+    slidesContados.current.add(id);
+    axios
+      .post(`/api/public/campanha/${portalId}/view`, { sessao: getSessao(), item_id: id })
+      .catch(() => {});
+  }, [currentIndex, loaded, itens, isPreview, portalId]);
+
+  // Clique em "Saiba mais": avisa o servidor sem atrasar a abertura do link (keepalive sobrevive a navegacao)
+  const registrarClique = useCallback((itemId) => {
+    if (isPreview) return;
+    try {
+      fetch(`/api/public/campanha/${portalId}/clique`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessao: getSessao(), item_id: itemId }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch { /* metrica nunca bloqueia o link */ }
+  }, [isPreview, portalId]);
 
   // Handle item change
   useEffect(() => {
@@ -312,7 +356,7 @@ export default function CampanhaPlayer() {
               href={item.link_destino}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); registrarClique(item.id); }}
               className="inline-block bg-white text-black text-sm font-semibold px-4 py-2 rounded-full shadow hover:bg-gray-100 active:bg-gray-200"
             >
               Saiba mais

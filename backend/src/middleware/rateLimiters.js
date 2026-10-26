@@ -64,6 +64,16 @@ const publicApiLimiter = rateLimit({
   handler: jsonHandler('Muitas requisicoes. Aguarde alguns instantes.'),
 });
 
+// Metricas do pre-portal (view/clique de campanha): publico e disparado pelo navegador de cada cliente,
+// que no hotspot divide o IP do estabelecimento — limite folgado, so contem abuso grosseiro.
+const campanhaMetricaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas requisicoes. Aguarde alguns instantes.'),
+});
+
 // Check de atualizacao dos alunos (valida email Hotmart) - anti-enumeracao.
 const updateCheckLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 min
@@ -123,4 +133,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { loginLimiter, registroLimiter, cnpjLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, campanhaMetricaLimiter, updateCheckLimiter, cpfLookupLimiters };
