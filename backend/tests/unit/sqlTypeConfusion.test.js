@@ -13,7 +13,7 @@ test('db.js liga stringifyObjects (objeto JSON no lugar de string nao vira condi
 
 test('com stringifyObjects, {"username":1} vira texto e nao "`username` = 1"', () => {
   const sql = 'DELETE FROM radcheck WHERE username = ?';
-  assert.match(mysql.format(sql, [{ username: 1 }], false), /`username` = 1/); // o comportamento perigoso
+  // (mysql2 antigo expandia o objeto em "`username` = 1"; o atual ja nao, mas a opcao explicita fica.)
   assert.doesNotMatch(mysql.format(sql, [{ username: 1 }], true), /`username`/);
 });
 
