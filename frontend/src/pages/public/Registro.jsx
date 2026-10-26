@@ -98,7 +98,7 @@ export default function Registro() {
 
         <div className="mb-4">
           <label className="block text-gray-600 mb-2 text-sm">
-            Nome da Empresa
+            {form.tipo_pessoa === "PF" ? "Seu nome" : "Nome da Empresa"}
           </label>
           <input
             type="text"

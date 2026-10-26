@@ -2,7 +2,7 @@ const db = require("../../db");
 const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil, perfilDoAdmin } = require("../utils/perfis");
-const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO } = require("../utils/empresaCadastro");
+const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO, cpfDuplicado, MSG_CPF_DUPLICADO } = require("../utils/empresaCadastro");
 
 function gerarSlug(nome) {
   return nome
@@ -43,6 +43,7 @@ exports.criarEmpresa = async (req, res) => {
     const { dados: emp, erro } = sanitizarEmpresa(req.body);
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(db, emp.cnpj)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
+    if (await cpfDuplicado(db, emp.cpf)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });
 
     let slug = gerarSlug(nome);
 
@@ -53,9 +54,9 @@ exports.criarEmpresa = async (req, res) => {
     }
 
     const [result] = await db.execute(
-      `INSERT INTO empresas (nome, slug, cnpj, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [nome, slug, emp.cnpj, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
+      `INSERT INTO empresas (nome, slug, cnpj, tipo_pessoa, cpf, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nome, slug, emp.cnpj, emp.tipo_pessoa, emp.cpf, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
     );
 
     const empresaId = result.insertId;
@@ -79,12 +80,13 @@ exports.atualizarEmpresa = async (req, res) => {
     const { dados: emp, erro } = sanitizarEmpresa(req.body);
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(db, emp.cnpj, id)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
+    if (await cpfDuplicado(db, emp.cpf, id)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });
 
     await db.execute(
-      `UPDATE empresas SET nome = ?, cnpj = ?, email = ?, telefone = ?, logo_url = ?, ativo = ?,
+      `UPDATE empresas SET nome = ?, cnpj = ?, tipo_pessoa = ?, cpf = ?, email = ?, telefone = ?, logo_url = ?, ativo = ?,
          razao_social = ?, nome_fantasia = ?, cep = ?, logradouro = ?, numero = ?, complemento = ?, bairro = ?, cidade = ?, uf = ?
        WHERE id = ?`,
-      [nome, emp.cnpj, email, emp.telefone, logo_url || null, ativo !== undefined ? ativo : 1,
+      [nome, emp.cnpj, emp.tipo_pessoa, emp.cpf, email, emp.telefone, logo_url || null, ativo !== undefined ? ativo : 1,
        emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf, id]
     );
 

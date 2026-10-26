@@ -1,5 +1,6 @@
 const { formatarTelefone, formatarCep } = require("./importCadastros");
 const { validarCNPJ } = require("./cnpjClient");
+const { validarCPF } = require("./cpf");
 
 const txt = (v, max) => { const s = v == null ? "" : String(v).trim(); return s ? s.slice(0, max) : null; };
 
@@ -8,7 +9,11 @@ const txt = (v, max) => { const s = v == null ? "" : String(v).trim(); return s 
  * @returns {{dados?: Object, erro?: string}} dados sempre com todas as chaves (NULL quando vazio)
  */
 function sanitizarEmpresa(body) {
-  const cnpjNum = String(body.cnpj || "").replace(/\D/g, "");
+  const pf = String(body.tipo_pessoa || "").toUpperCase() === "PF";
+  const cpfNum = pf ? String(body.cpf || "").replace(/\D/g, "") : "";
+  if (pf && !validarCPF(cpfNum)) return { erro: "CPF inválido" };
+  // Pessoa fisica nao tem CNPJ/razao social: ignora o que vier no corpo
+  const cnpjNum = pf ? "" : String(body.cnpj || "").replace(/\D/g, "");
   if (cnpjNum && !validarCNPJ(cnpjNum)) return { erro: "CNPJ inválido" };
   const telCru = txt(body.telefone, 50);
   const telefone = telCru ? formatarTelefone(telCru) : null;
@@ -20,10 +25,12 @@ function sanitizarEmpresa(body) {
   if (ufCru && !/^[A-Za-z]{2}$/.test(ufCru)) return { erro: "UF inválida" };
   return {
     dados: {
+      tipo_pessoa: pf ? "PF" : "PJ",
+      cpf: pf ? cpfNum : null,
       cnpj: cnpjNum || null,
       telefone,
-      razao_social: txt(body.razao_social, 255),
-      nome_fantasia: txt(body.nome_fantasia, 255),
+      razao_social: pf ? null : txt(body.razao_social, 255),
+      nome_fantasia: pf ? null : txt(body.nome_fantasia, 255),
       cep,
       logradouro: txt(body.logradouro, 255),
       numero: txt(body.numero, 20),
@@ -54,4 +61,19 @@ async function cnpjDuplicado(conn, cnpj, ignorarId = null) {
   return rows.length > 0;
 }
 
-module.exports = { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO };
+const MSG_CPF_DUPLICADO = "Já existe uma conta cadastrada com este CPF";
+
+/** Ja existe outra conta de pessoa fisica com esse CPF? (so digitos) */
+async function cpfDuplicado(conn, cpf, ignorarId = null) {
+  if (!cpf) return false;
+  const [rows] = await conn.execute(
+    `SELECT id FROM empresas
+      WHERE tipo_pessoa = 'PF' AND cpf = ?
+        ${ignorarId ? "AND id <> ?" : ""}
+      LIMIT 1`,
+    ignorarId ? [cpf, ignorarId] : [cpf]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO, cpfDuplicado, MSG_CPF_DUPLICADO };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 export const CAMPOS_EMPRESA_VAZIOS = {
+  tipo_pessoa: "PJ", cpf: "",
   razao_social: "", nome_fantasia: "", cep: "", logradouro: "", numero: "",
   complemento: "", bairro: "", cidade: "", uf: "",
 };
@@ -14,6 +15,26 @@ export function mascaraCnpj(v) {
     .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
     .replace(/\.(\d{3})(\d)/, ".$1/$2")
     .replace(/(\d{4})(\d)/, "$1-$2");
+}
+
+export function mascaraCpf(v) {
+  const d = soDigitos(v).slice(0, 11);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
+
+function cpfValido(v) {
+  const n = soDigitos(v);
+  if (n.length !== 11 || /^(\d)\1{10}$/.test(n)) return false;
+  for (const t of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < t; i++) soma += Number(n[i]) * (t + 1 - i);
+    const resto = (soma * 10) % 11 % 10;
+    if (resto !== Number(n[t])) return false;
+  }
+  return true;
 }
 
 function mascaraCep(v) {
@@ -31,6 +52,12 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
   const [aviso, setAviso] = useState(null);
 
   const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+  const pf = form.tipo_pessoa === "PF";
+  const cpfDigitos = soDigitos(form.cpf);
+  const trocarTipo = (tipo) => {
+    setAviso(null);
+    setForm((f) => ({ ...f, tipo_pessoa: tipo }));
+  };
 
   const buscar = async (valorCnpj) => {
     const cnpj = soDigitos(valorCnpj);
@@ -87,8 +114,54 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
     </div>
   );
 
+  const abaCls = (ativa) =>
+    `flex-1 px-3 py-2 text-sm rounded border ${ativa ? "bg-apex-500 border-apex-500 text-white" : "border-gray-300 text-gray-600 hover:bg-apex-50"}`;
+
+  if (pf) {
+    return (
+      <>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => trocarTipo("PJ")} className={abaCls(false)}>Empresa (CNPJ)</button>
+          <button type="button" onClick={() => trocarTipo("PF")} className={abaCls(true)}>Pessoa física (CPF)</button>
+        </div>
+        <div>
+          <label className={labelClass}>CPF</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            name="cpf"
+            value={mascaraCpf(form.cpf)}
+            onChange={(e) => set("cpf", mascaraCpf(e.target.value))}
+            className={inputClass}
+            placeholder="000.000.000-00"
+          />
+          {cpfDigitos.length === 11 && !cpfValido(cpfDigitos) && (
+            <p className="text-xs mt-1 text-red-400">CPF inválido</p>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {campo("CEP", "cep", { mascara: mascaraCep, maxLength: 9 })}
+          {campo("Endereço", "logradouro", { className: "col-span-2" })}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {campo("Número", "numero")}
+          {campo("Complemento", "complemento", { className: "col-span-2" })}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {campo("Bairro", "bairro")}
+          {campo("Cidade", "cidade")}
+          {campo("UF", "uf", { maxLength: 2 })}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => trocarTipo("PJ")} className={abaCls(true)}>Empresa (CNPJ)</button>
+        <button type="button" onClick={() => trocarTipo("PF")} className={abaCls(false)}>Pessoa física (CPF)</button>
+      </div>
       <div>
         <label className={labelClass}>CNPJ</label>
         <div className="flex gap-2">

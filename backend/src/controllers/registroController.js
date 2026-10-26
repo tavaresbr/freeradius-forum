@@ -5,7 +5,7 @@ const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil } = require("../utils/perfis");
 
-const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO } = require("../utils/empresaCadastro");
+const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO, cpfDuplicado, MSG_CPF_DUPLICADO } = require("../utils/empresaCadastro");
 function gerarSlug(nome) {
   return nome
     .toLowerCase()
@@ -29,6 +29,7 @@ exports.registrarEmpresa = async (req, res) => {
     const { dados: emp, erro } = sanitizarEmpresa(req.body);
     if (erro) return res.status(400).json({ message: erro });
     if (await cnpjDuplicado(conn, emp.cnpj)) return res.status(409).json({ message: MSG_CNPJ_DUPLICADO });
+    if (await cpfDuplicado(conn, emp.cpf)) return res.status(409).json({ message: MSG_CPF_DUPLICADO });
 
     // Verificar se email já existe
     const [[existingAdmin]] = await conn.execute(
@@ -53,9 +54,9 @@ exports.registrarEmpresa = async (req, res) => {
 
     // Criar empresa
     const [empresaResult] = await conn.execute(
-      `INSERT INTO empresas (nome, slug, cnpj, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [nome, slug, emp.cnpj, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
+      `INSERT INTO empresas (nome, slug, cnpj, tipo_pessoa, cpf, email, telefone, razao_social, nome_fantasia, cep, logradouro, numero, complemento, bairro, cidade, uf)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nome, slug, emp.cnpj, emp.tipo_pessoa, emp.cpf, email, emp.telefone, emp.razao_social, emp.nome_fantasia, emp.cep, emp.logradouro, emp.numero, emp.complemento, emp.bairro, emp.cidade, emp.uf]
     );
     const empresaId = empresaResult.insertId;
 

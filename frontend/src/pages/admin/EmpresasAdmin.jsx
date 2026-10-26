@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj } from "../../components/CamposEmpresa";
+import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj, mascaraCpf } from "../../components/CamposEmpresa";
 import AdminLayout from "../../components/admin/AdminLayout";
 
 const API = import.meta.env.VITE_API_URL || "";
@@ -214,7 +214,7 @@ export default function EmpresasAdmin() {
                       <p className="font-medium text-white">{e.nome}</p>
                       <p className="text-xs text-gray-500">/{e.slug}</p>
                     </td>
-                    <td className="px-5 py-4 text-gray-400">{e.cnpj || "—"}</td>
+                    <td className="px-5 py-4 text-gray-400">{e.tipo_pessoa === "PF" && e.cpf ? mascaraCpf(e.cpf) : e.cnpj || "—"}</td>
                     <td className="px-5 py-4">
                       <p className="text-gray-300 text-xs">{e.email}</p>
                       {e.telefone && <p className="text-gray-500 text-xs">{e.telefone}</p>}

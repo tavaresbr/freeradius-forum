@@ -107,3 +107,54 @@ test('CNPJ duplicado: criar e editar (outra empresa) recusam com 409; a propria 
   assert.strictEqual(res.statusCode, 200);
   assert.ok(db.calls.some((c) => /UPDATE empresas/.test(c.sql)));
 });
+
+// ---- Conta de pessoa fisica (CPF) ----
+const CPF_OK = '529.982.247-25';
+
+test('sanitizarEmpresa PF: exige CPF valido, grava so digitos e ignora CNPJ/razao social', () => {
+  const { sanitizarEmpresa } = require(path.join(ROOT, 'src/utils/empresaCadastro.js'));
+  assert.strictEqual(sanitizarEmpresa({ tipo_pessoa: 'PF', cpf: '111.111.111-11' }).erro, 'CPF inválido');
+  assert.strictEqual(sanitizarEmpresa({ tipo_pessoa: 'PF', cpf: '' }).erro, 'CPF inválido');
+  const { dados } = sanitizarEmpresa({ tipo_pessoa: 'PF', cpf: CPF_OK, cnpj: CNPJ_OK, razao_social: 'X LTDA', nome_fantasia: 'X' });
+  assert.strictEqual(dados.tipo_pessoa, 'PF');
+  assert.strictEqual(dados.cpf, '52998224725');
+  assert.strictEqual(dados.cnpj, null);
+  assert.strictEqual(dados.razao_social, null);
+  assert.strictEqual(dados.nome_fantasia, null);
+  // PJ continua como antes (sem CPF)
+  const pj = sanitizarEmpresa({ cnpj: CNPJ_OK, cpf: CPF_OK }).dados;
+  assert.strictEqual(pj.tipo_pessoa, 'PJ');
+  assert.strictEqual(pj.cpf, null);
+  assert.strictEqual(pj.cnpj, '11222333000181');
+});
+
+test('criarEmpresa PF grava tipo_pessoa e CPF; CPF invalido e duplicado recusam sem gravar', async () => {
+  const restaura = silencia();
+  try {
+    let db = criarDb(async (sql) => (/INSERT INTO empresas/.test(sql) ? [{ insertId: 9 }] : undefined));
+    let res = criarRes();
+    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    assert.strictEqual(res.statusCode, 201);
+    const ins = db.calls.find((c) => /INSERT INTO empresas/.test(c.sql));
+    assert.ok(ins.params.includes('PF') && ins.params.includes('52998224725'));
+
+    db = criarDb();
+    res = criarRes();
+    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: '12345678900' } }), res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.ok(!db.calls.some((c) => /INSERT|UPDATE/.test(c.sql)));
+
+    const dup = (sql) => (/tipo_pessoa = 'PF' AND cpf = \?/.test(sql) ? [[{ id: 5 }]] : undefined);
+    db = criarDb(dup);
+    res = criarRes();
+    await ctrlEmpresa(db).criarEmpresa(criarReq({ body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    assert.strictEqual(res.statusCode, 409);
+    assert.ok(!db.calls.some((c) => /INSERT INTO empresas/.test(c.sql)));
+
+    db = criarDb(dup);
+    res = criarRes();
+    await ctrlEmpresa(db).atualizarEmpresa(criarReq({ params: { id: 7 }, body: { nome: 'Joao', email: 'j@b.com', tipo_pessoa: 'PF', cpf: CPF_OK } }), res);
+    assert.strictEqual(res.statusCode, 409);
+    assert.ok(!db.calls.some((c) => /UPDATE empresas/.test(c.sql)));
+  } finally { restaura(); }
+});
