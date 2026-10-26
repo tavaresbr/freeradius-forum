@@ -4,6 +4,11 @@ const db   = require("../../db");
 const { ALLOWED_MIMES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ROOT } = require("../middleware/uploadCampanha");
 const v = require("../utils/campanhaValidacao");
 
+// Colunas da migration 038 ausentes: o servidor foi atualizado mas a migration nao rodou.
+const MSG_MIGRATION_038 = "Atualização do banco pendente: rode a migration 038 (node migrations/038_campanhas_metricas_agenda.js) e reinicie o hotspot-api";
+const faltaMigration038 = (err) =>
+  err && err.code === "ER_BAD_FIELD_ERROR" && /data_inicio|data_fim|frequencia/.test(String(err.sqlMessage || err.message || ""));
+
 // DATE do MySQL chega como Date (fuso do servidor): devolve 'AAAA-MM-DD' para o painel nao deslocar o dia.
 const comDatas = (c) => (c ? { ...c, data_inicio: v.dataISO(c.data_inicio), data_fim: v.dataISO(c.data_fim) } : c);
 
@@ -55,7 +60,7 @@ exports.criar = async (req, res) => {
     res.status(201).json({ success: true, data: comDatas(campanha) });
   } catch (err) {
     console.error("Erro ao criar campanha:", err);
-    res.status(500).json({ error: "Erro ao criar campanha" });
+    res.status(500).json({ error: faltaMigration038(err) ? MSG_MIGRATION_038 : "Erro ao criar campanha" });
   }
 };
 
@@ -140,7 +145,7 @@ exports.atualizar = async (req, res) => {
     res.json({ success: true, data: comDatas(campanha) });
   } catch (err) {
     console.error("Erro ao atualizar campanha:", err);
-    res.status(500).json({ error: "Erro ao atualizar campanha" });
+    res.status(500).json({ error: faltaMigration038(err) ? MSG_MIGRATION_038 : "Erro ao atualizar campanha" });
   }
 };
 

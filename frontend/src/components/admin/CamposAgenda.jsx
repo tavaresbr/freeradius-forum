@@ -6,6 +6,10 @@ const FREQUENCIAS = [
   ["diaria", "Uma vez por dia (24 h)"],
 ];
 
+// Limita o ano a 4 digitos (digitar 22026 gerava "22026-01-01", recusado pelo servidor)
+const DATA_MIN = "2020-01-01";
+const DATA_MAX = "2099-12-31";
+
 const inputCls =
   "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
 
@@ -17,11 +21,11 @@ export default function CamposAgenda({ valor, onChange }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Início (opcional)</label>
-          <input type="date" aria-label="Data de início" className={inputCls} value={valor.data_inicio || ""} onChange={set("data_inicio")} />
+          <input type="date" min={DATA_MIN} max={DATA_MAX} aria-label="Data de início" className={inputCls} value={valor.data_inicio || ""} onChange={set("data_inicio")} />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Término (opcional)</label>
-          <input type="date" aria-label="Data de término" className={inputCls} value={valor.data_fim || ""} onChange={set("data_fim")} />
+          <input type="date" min={DATA_MIN} max={DATA_MAX} aria-label="Data de término" className={inputCls} value={valor.data_fim || ""} onChange={set("data_fim")} />
         </div>
       </div>
       <div>

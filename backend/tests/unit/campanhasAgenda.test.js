@@ -89,3 +89,15 @@ test('atualizar: data nova e conferida com a que ja estava gravada; vazio limpa'
   assert.match(up.sql, /frequencia = \?/);
   assert.deepStrictEqual(up.params.slice(0, 2), [null, 'diaria']);
 });
+
+test('criar/atualizar: coluna da migration 038 ausente => mensagem clara em vez de erro generico', async () => {
+  const erro = Object.assign(new Error("Unknown column 'data_inicio' in 'field list'"), { code: 'ER_BAD_FIELD_ERROR', sqlMessage: "Unknown column 'data_inicio' in 'field list'" });
+  const { ctrl } = ctrlCom((sql) => { if (/^INSERT|^SELECT id.* FROM campanhas|^UPDATE/.test(sql)) throw erro; return [[]]; });
+  let res = criarRes();
+  await ctrl.criar(req({ body: { nome: 'A' } }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.match(res.body.error, /migration 038/);
+  res = criarRes();
+  await ctrl.atualizar(req({ params: { id: '3' }, body: { frequencia: 'diaria' } }), res);
+  assert.match(res.body.error, /migration 038/);
+});
