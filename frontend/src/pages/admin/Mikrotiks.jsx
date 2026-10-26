@@ -119,7 +119,7 @@ export default function Mikrotiks() {
   const [scanData, setScanData] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [wizardConfig, setWizardConfig] = useState({
-    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO
+    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: ""
   });
 
   const abrirWizard = async (id) => {
@@ -128,7 +128,7 @@ export default function Mikrotiks() {
     setScanData(null);
     setShowWizard(true);
     setWizardStep(0);
-    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO });
+    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "" });
 
     try {
       const res = await fetch(`/api/mikrotiks/${id}/scan`, {
@@ -653,6 +653,21 @@ const carregarMikrotiks = async () => {
                     <p key={a.address} className="text-xs text-green-500 mt-1">IP atual: {a.address}</p>
                   ))}
                 </div>
+
+                {/* SSID (so para interface Wi-Fi) */}
+                {/^wlan|^wifi/i.test(wizardConfig.interface || "") && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Nome do Wi-Fi (SSID)</label>
+                    <input
+                      className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                      value={wizardConfig.wifiSsid}
+                      onChange={(e) => setWizardConfig({ ...wizardConfig, wifiSsid: e.target.value })}
+                      placeholder="Ex.: Wi-Fi Grátis"
+                      maxLength={32}
+                    />
+                    <p className="text-xs text-gray-600 mt-1">Coloca o rádio em modo AP com este nome. Vazio = não altera o Wi-Fi.</p>
+                  </div>
+                )}
 
                 {/* Local Address */}
                 <div>

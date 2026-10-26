@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot } = require('../../src/utils/hotspotSetup');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -62,4 +62,30 @@ test('o assistente do hotspot usa as mesmas constantes (novos equipamentos nasce
   for (const trecho of ['=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}', '=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}', '=idle-timeout=${HOTSPOT_PADROES.idleTimeout}', '=timeout=${HOTSPOT_PADROES.radiusTimeout}']) {
     assert.ok(src.includes(trecho), trecho);
   }
+});
+
+test('configurarWifiAP poe o rotador em ap-bridge com o SSID e confirma', async () => {
+  const estado = { name: 'wlan1', mode: 'station', ssid: 'MikroTik' };
+  const escritas = [];
+  const r = await configurarWifiAP({
+    ifName: 'wlan1', ssid: ' Meu Wifi ',
+    print: async () => [estado],
+    write: async (c, a) => { escritas.push({ c, a }); estado.mode = 'ap-bridge'; estado.ssid = 'Meu Wifi'; return []; },
+  });
+  assert.strictEqual(r.status, 'ok');
+  assert.deepStrictEqual(escritas[0].a, ['=numbers=wlan1', '=mode=ap-bridge', '=ssid=Meu Wifi', '=security-profile=default', '=disabled=no']);
+});
+
+test('configurarWifiAP: SSID invalido, pacote sem wireless e erro viram aviso sem escrever/lancar', async () => {
+  let escreveu = false;
+  const write = async () => { escreveu = true; return []; };
+  assert.strictEqual((await configurarWifiAP({ ifName: 'wlan1', ssid: 'x'.repeat(33), print: async () => [], write })).status, 'aviso');
+  assert.strictEqual((await configurarWifiAP({ ifName: 'wlan1', ssid: 'ok', print: async () => [], write })).status, 'aviso');
+  assert.strictEqual((await configurarWifiAP({ ifName: 'wlan1', ssid: 'ok', print: async () => { throw new Error('boom'); }, write })).status, 'aviso');
+  assert.strictEqual(escreveu, false);
+});
+
+test('ehInterfaceWifi reconhece wlan/wifi e ignora ether', () => {
+  assert.ok(ehInterfaceWifi('wlan1')); assert.ok(ehInterfaceWifi('x', 'wlan'));
+  assert.ok(!ehInterfaceWifi('ether2', 'ether'));
 });

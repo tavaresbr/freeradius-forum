@@ -1,6 +1,37 @@
 const { RouterOSAPI } = require("node-routeros");
 const { HOTSPOT_PADROES } = require("../constants/hotspotDefaults");
 
+const ehInterfaceWifi = (nome = "", tipo = "") => /^wlan|^wifi/i.test(nome) || /^(wlan|wireless)/i.test(tipo);
+
+/**
+ * Coloca a interface Wi-Fi em modo AP com o SSID informado (pacote wireless legado).
+ * `print`/`write` sao os helpers do assistente (safePrint/safeWrite). Nunca lanca:
+ * devolve { status: "ok" | "aviso", message } para virar um step.
+ */
+async function configurarWifiAP({ ifName, ssid, print, write }) {
+  const nome = String(ssid || "").trim();
+  if (!nome || nome.length > 32 || /[\x00-\x1f]/.test(nome)) {
+    return { status: "aviso", message: "Nome do Wi-Fi (SSID) invalido (1 a 32 caracteres); Wi-Fi nao alterado." };
+  }
+  try {
+    const lista = await print("/interface/wireless/print");
+    const atual = lista.find((w) => w.name === ifName);
+    if (!atual) {
+      return { status: "aviso", message: `Este roteador nao usa o pacote wireless legado (ou ${ifName} nao e Wi-Fi). Configure o SSID manualmente em /interface wifi.` };
+    }
+    await write("/interface/wireless/set", [
+      `=numbers=${ifName}`, "=mode=ap-bridge", `=ssid=${nome}`, "=security-profile=default", "=disabled=no",
+    ]);
+    const depois = (await print("/interface/wireless/print")).find((w) => w.name === ifName);
+    if (depois && depois.mode === "ap-bridge" && depois.ssid === nome) {
+      return { status: "ok", message: `Wi-Fi ${ifName}: modo AP, SSID "${nome}"` };
+    }
+    return { status: "aviso", message: `Sem confirmacao do Wi-Fi. Confira: /interface wireless set ${ifName} mode=ap-bridge ssid="${nome}" disabled=no` };
+  } catch (e) {
+    return { status: "aviso", message: `Wi-Fi nao configurado: ${e.message}` };
+  }
+}
+
 /**
  * Configura hotspot completo no MikroTik via API com streaming de steps.
  * Cada step é enviado em tempo real via callback onStep(step).
@@ -32,6 +63,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   const poolName = config.poolName || "hs-pool";
   const poolRange = config.poolRange || "10.5.50.2-10.5.50.254";
   const dnsName = config.dnsName || "";
+  const wifiSsid = (config.wifiSsid || "").trim();
   const radiusServerIp = config.radiusServerIp || "10.8.0.1";
   const radiusSecret = config.radiusSecret || mikrotik.senha;
 
@@ -119,6 +151,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         `A interface ${ifName} e a WAN (uplink de internet) deste roteador. Escolha a interface da rede local/Wi-Fi.`);
       try { await conn.close(); } catch (e) {}
       return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
+    }
+
+    // === 0c. Wi-Fi: modo AP + SSID (so se a interface for Wi-Fi e o SSID foi informado) ===
+    if (wifiSsid && ehInterfaceWifi(ifName)) {
+      const w = await configurarWifiAP({ ifName, ssid: wifiSsid, print: safePrint, write: safeWrite });
+      addStep("wifi", w.status, w.message);
     }
 
     // === 1. IP na interface ===
@@ -538,4 +576,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
