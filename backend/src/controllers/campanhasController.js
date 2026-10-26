@@ -2,6 +2,7 @@ const path = require("path");
 const fs   = require("fs");
 const db   = require("../../db");
 const { ALLOWED_MIMES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ROOT } = require("../middleware/uploadCampanha");
+const v = require("../utils/campanhaValidacao");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CRUD Campanhas
@@ -25,18 +26,18 @@ exports.listar = async (req, res) => {
 };
 
 exports.criar = async (req, res) => {
-  const { nome, descricao } = req.body;
-  if (!nome || !nome.trim()) {
-    return res.status(400).json({ error: "O campo nome é obrigatório" });
-  }
+  const nome = v.validarNome(req.body?.nome);
+  if (!nome.ok) return res.status(400).json({ error: nome.erro });
+  const descricao = v.validarDescricao(req.body?.descricao);
+  if (!descricao.ok) return res.status(400).json({ error: descricao.erro });
   try {
     const [result] = await db.execute(
       `INSERT INTO campanhas (empresa_id, nome, descricao) VALUES (?, ?, ?)`,
-      [req.empresa_id, nome.trim(), descricao || null]
+      [req.empresa_id, nome.valor, descricao.valor]
     );
     const [[campanha]] = await db.execute(
-      "SELECT * FROM campanhas WHERE id = ?",
-      [result.insertId]
+      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
+      [result.insertId, req.empresa_id]
     );
     res.status(201).json({ success: true, data: campanha });
   } catch (err) {
@@ -55,8 +56,8 @@ exports.obter = async (req, res) => {
     if (!campanha) return res.status(404).json({ error: "Campanha não encontrada" });
 
     const [itens] = await db.execute(
-      "SELECT * FROM campanha_itens WHERE campanha_id = ? ORDER BY ordem ASC, id ASC",
-      [id]
+      "SELECT * FROM campanha_itens WHERE campanha_id = ? AND empresa_id = ? ORDER BY ordem ASC, id ASC",
+      [id, req.empresa_id]
     );
     res.json({ success: true, data: { ...campanha, itens } });
   } catch (err) {
@@ -67,32 +68,41 @@ exports.obter = async (req, res) => {
 
 exports.atualizar = async (req, res) => {
   const { id } = req.params;
-  const { nome, descricao, ativo } = req.body;
+  const body = req.body || {};
+
+  // So altera o que veio no corpo; descricao vazia/null LIMPA o campo (antes COALESCE impedia limpar).
+  const sets = [];
+  const params = [];
+  if (v.temCampo(body, "nome")) {
+    const nome = v.validarNome(body.nome);
+    if (!nome.ok) return res.status(400).json({ error: nome.erro });
+    sets.push("nome = ?"); params.push(nome.valor);
+  }
+  if (v.temCampo(body, "descricao")) {
+    const descricao = v.validarDescricao(body.descricao);
+    if (!descricao.ok) return res.status(400).json({ error: descricao.erro });
+    sets.push("descricao = ?"); params.push(descricao.valor);
+  }
+  if (v.temCampo(body, "ativo") && body.ativo !== null) {
+    sets.push("ativo = ?"); params.push(body.ativo ? 1 : 0);
+  }
+
   try {
     const [[existing]] = await db.execute(
-      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
+      "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
       [id, req.empresa_id]
     );
     if (!existing) return res.status(404).json({ error: "Campanha não encontrada" });
 
-    await db.execute(
-      `UPDATE campanhas
-         SET nome        = COALESCE(?, nome),
-             descricao   = COALESCE(?, descricao),
-             ativo       = COALESCE(?, ativo),
-             atualizado_em = NOW()
-       WHERE id = ? AND empresa_id = ?`,
-      [
-        nome !== undefined ? nome.trim() : null,
-        descricao !== undefined ? descricao : null,
-        ativo !== undefined ? (ativo ? 1 : 0) : null,
-        id,
-        req.empresa_id,
-      ]
-    );
+    if (sets.length) {
+      await db.execute(
+        `UPDATE campanhas SET ${sets.join(", ")}, atualizado_em = NOW() WHERE id = ? AND empresa_id = ?`,
+        [...params, id, req.empresa_id]
+      );
+    }
     const [[campanha]] = await db.execute(
-      "SELECT * FROM campanhas WHERE id = ?",
-      [id]
+      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
+      [id, req.empresa_id]
     );
     res.json({ success: true, data: campanha });
   } catch (err) {
@@ -105,21 +115,34 @@ exports.deletar = async (req, res) => {
   const { id } = req.params;
   try {
     const [[campanha]] = await db.execute(
-      "SELECT * FROM campanhas WHERE id = ? AND empresa_id = ?",
+      "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
       [id, req.empresa_id]
     );
     if (!campanha) return res.status(404).json({ error: "Campanha não encontrada" });
 
-    // Remove physical files before deleting from DB
-    const dir = path.join(UPLOAD_ROOT, String(req.empresa_id), String(id));
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
+    // Campanha em uso: excluir zera o pre-portal desses portais (FK SET NULL). Pede confirmacao (?forcar=1).
+    const [emUso] = await db.execute(
+      "SELECT id, nome FROM portais WHERE campanha_ativa_id = ? AND empresa_id = ?",
+      [id, req.empresa_id]
+    );
+    if (emUso.length && req.query?.forcar !== "1") {
+      return res.status(409).json({
+        error: "Esta campanha está em uso por um ou mais portais. Ao excluir, eles ficam sem pré-portal.",
+        em_uso: emUso,
+      });
     }
 
+    // Banco primeiro: se o DELETE falhar os arquivos continuam la; so depois apaga a pasta.
     await db.execute(
       "DELETE FROM campanhas WHERE id = ? AND empresa_id = ?",
       [id, req.empresa_id]
     );
+    const dir = path.join(UPLOAD_ROOT, String(req.empresa_id), String(id));
+    try {
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    } catch (e) {
+      console.error("Erro ao remover pasta da campanha:", e);
+    }
     res.json({ success: true, message: "Campanha removida com sucesso" });
   } catch (err) {
     console.error("Erro ao deletar campanha:", err);
@@ -144,10 +167,16 @@ async function getCampanhaOuFalha(req, res) {
   return campanha;
 }
 
+function removerArquivoUpload(file) {
+  if (file && file.path) {
+    try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (_) { /* ignora */ }
+  }
+}
+
 exports.uploadItem = async (req, res) => {
   try {
     const campanha = await getCampanhaOuFalha(req, res);
-    if (!campanha) return;
+    if (!campanha) { removerArquivoUpload(req.file); return; }
 
     if (!req.file) {
       return res.status(400).json({ error: "Nenhum arquivo enviado" });
@@ -155,18 +184,33 @@ exports.uploadItem = async (req, res) => {
 
     const meta = ALLOWED_MIMES[req.file.mimetype];
     if (!meta) {
-      fs.unlinkSync(req.file.path);
+      removerArquivoUpload(req.file);
       return res.status(400).json({ error: "Tipo de arquivo não permitido" });
+    }
+
+    // O mimetype vem do cliente: confere a assinatura real do arquivo
+    if (!v.arquivoConfere(req.file.path, req.file.mimetype)) {
+      removerArquivoUpload(req.file);
+      return res.status(400).json({ error: "O conteúdo do arquivo não corresponde ao tipo informado" });
     }
 
     // Per-type size validation
     if (meta.tipo === "imagem" && req.file.size > MAX_IMAGE_BYTES) {
-      fs.unlinkSync(req.file.path);
+      removerArquivoUpload(req.file);
       return res.status(400).json({ error: "Imagem excede o limite de 10 MB" });
     }
     if (meta.tipo === "video" && req.file.size > MAX_VIDEO_BYTES) {
-      fs.unlinkSync(req.file.path);
+      removerArquivoUpload(req.file);
       return res.status(400).json({ error: "Vídeo excede o limite de 50 MB" });
+    }
+
+    const duracao = v.validarDuracao(req.body?.duracao_segundos, { padrao: v.DURACAO_PADRAO });
+    const titulo = v.validarTitulo(req.body?.titulo);
+    const link = v.validarLink(req.body?.link_destino);
+    const invalido = [duracao, titulo, link].find((r) => !r.ok);
+    if (invalido) {
+      removerArquivoUpload(req.file);
+      return res.status(400).json({ error: invalido.erro });
     }
 
     // Compute next ordem
@@ -176,34 +220,22 @@ exports.uploadItem = async (req, res) => {
     );
     const ordem = ordemRow.proxima;
 
-    const { duracao_segundos, titulo, link_destino } = req.body;
     const arquivo_url = `/uploads/campanhas/${req.empresa_id}/${campanha.id}/${req.file.filename}`;
 
     const [result] = await db.execute(
       `INSERT INTO campanha_itens
          (campanha_id, empresa_id, tipo, arquivo_url, ordem, duracao_segundos, titulo, link_destino)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        campanha.id,
-        req.empresa_id,
-        meta.tipo,
-        arquivo_url,
-        ordem,
-        duracao_segundos ? parseInt(duracao_segundos, 10) : 5,
-        titulo || null,
-        link_destino || null,
-      ]
+      [campanha.id, req.empresa_id, meta.tipo, arquivo_url, ordem, duracao.valor, titulo.valor, link.valor]
     );
     const [[item]] = await db.execute(
-      "SELECT * FROM campanha_itens WHERE id = ?",
-      [result.insertId]
+      "SELECT * FROM campanha_itens WHERE id = ? AND empresa_id = ?",
+      [result.insertId, req.empresa_id]
     );
     res.status(201).json({ success: true, data: item });
   } catch (err) {
     console.error("Erro ao fazer upload de item:", err);
-    if (req.file && fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch (_) {}
-    }
+    removerArquivoUpload(req.file);
     res.status(500).json({ error: "Erro ao fazer upload de item" });
   }
 };
@@ -211,30 +243,42 @@ exports.uploadItem = async (req, res) => {
 exports.atualizarItem = async (req, res) => {
   const { itemId } = req.params;
   const campanhaId = req.params.id;
-  const { titulo, duracao_segundos, link_destino } = req.body;
+  const body = req.body || {};
+
+  // So altera o que veio no corpo; titulo/link vazios LIMPAM o campo.
+  const sets = [];
+  const params = [];
+  if (v.temCampo(body, "titulo")) {
+    const r = v.validarTitulo(body.titulo);
+    if (!r.ok) return res.status(400).json({ error: r.erro });
+    sets.push("ci.titulo = ?"); params.push(r.valor);
+  }
+  if (v.temCampo(body, "duracao_segundos")) {
+    const r = v.validarDuracao(body.duracao_segundos);
+    if (!r.ok) return res.status(400).json({ error: r.erro });
+    sets.push("ci.duracao_segundos = ?"); params.push(r.valor);
+  }
+  if (v.temCampo(body, "link_destino")) {
+    const r = v.validarLink(body.link_destino);
+    if (!r.ok) return res.status(400).json({ error: r.erro });
+    sets.push("ci.link_destino = ?"); params.push(r.valor);
+  }
+  if (!sets.length) return res.status(400).json({ error: "Nada para atualizar" });
+
   try {
     const [result] = await db.execute(
       `UPDATE campanha_itens ci
          JOIN campanhas c ON c.id = ci.campanha_id
-         SET ci.titulo            = COALESCE(?, ci.titulo),
-             ci.duracao_segundos  = COALESCE(?, ci.duracao_segundos),
-             ci.link_destino      = COALESCE(?, ci.link_destino)
+         SET ${sets.join(", ")}
        WHERE ci.id = ? AND ci.campanha_id = ? AND c.empresa_id = ?`,
-      [
-        titulo !== undefined ? titulo : null,
-        duracao_segundos !== undefined ? parseInt(duracao_segundos, 10) : null,
-        link_destino !== undefined ? link_destino : null,
-        itemId,
-        campanhaId,
-        req.empresa_id,
-      ]
+      [...params, itemId, campanhaId, req.empresa_id]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Item não encontrado" });
     }
     const [[item]] = await db.execute(
-      "SELECT * FROM campanha_itens WHERE id = ?",
-      [itemId]
+      "SELECT * FROM campanha_itens WHERE id = ? AND empresa_id = ?",
+      [itemId, req.empresa_id]
     );
     res.json({ success: true, data: item });
   } catch (err) {
@@ -256,15 +300,18 @@ exports.deletarItem = async (req, res) => {
     );
     if (!item) return res.status(404).json({ error: "Item não encontrado" });
 
-    // Remove physical file
+    // Banco primeiro (se falhar, o arquivo continua la); depois o arquivo, so dentro da pasta de uploads.
+    await db.execute(
+      "DELETE FROM campanha_itens WHERE id = ? AND empresa_id = ?",
+      [itemId, req.empresa_id]
+    );
     const filePath = path.join(__dirname, "../.." + item.arquivo_url);
-    if (fs.existsSync(filePath)) {
+    if (filePath.startsWith(UPLOAD_ROOT + path.sep) && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) {
         console.error("Erro ao remover arquivo físico:", e);
       }
     }
 
-    await db.execute("DELETE FROM campanha_itens WHERE id = ?", [itemId]);
     res.json({ success: true, message: "Item removido com sucesso" });
   } catch (err) {
     console.error("Erro ao deletar item:", err);
@@ -274,10 +321,15 @@ exports.deletarItem = async (req, res) => {
 
 exports.reordenar = async (req, res) => {
   const campanhaId = req.params.id;
-  const { ordens } = req.body; // [{id, ordem}, ...]
+  const { ordens } = req.body || {}; // [{id, ordem}, ...]
 
   if (!Array.isArray(ordens) || ordens.length === 0) {
     return res.status(400).json({ error: "Campo ordens deve ser um array não vazio" });
+  }
+  const valido = ordens.every((o) => o && Number.isInteger(Number(o.id)) && Number(o.id) > 0
+    && Number.isInteger(Number(o.ordem)) && Number(o.ordem) >= 0);
+  if (!valido) {
+    return res.status(400).json({ error: "Cada item deve ter id e ordem numéricos" });
   }
 
   const conn = await db.getConnection();
@@ -295,10 +347,22 @@ exports.reordenar = async (req, res) => {
       return res.status(404).json({ error: "Campanha não encontrada" });
     }
 
+    // Todos os ids precisam ser itens desta campanha (antes os de fora eram ignorados em silencio)
+    const [itens] = await conn.execute(
+      "SELECT id FROM campanha_itens WHERE campanha_id = ? AND empresa_id = ?",
+      [campanhaId, req.empresa_id]
+    );
+    const doGrupo = new Set(itens.map((i) => Number(i.id)));
+    if (!ordens.every((o) => doGrupo.has(Number(o.id)))) {
+      await conn.rollback();
+      conn.release();
+      return res.status(400).json({ error: "Há itens que não pertencem a esta campanha" });
+    }
+
     for (const { id, ordem } of ordens) {
       await conn.execute(
-        "UPDATE campanha_itens SET ordem = ? WHERE id = ? AND campanha_id = ?",
-        [ordem, id, campanhaId]
+        "UPDATE campanha_itens SET ordem = ? WHERE id = ? AND campanha_id = ? AND empresa_id = ?",
+        [Number(ordem), Number(id), campanhaId, req.empresa_id]
       );
     }
 
@@ -306,7 +370,7 @@ exports.reordenar = async (req, res) => {
     conn.release();
     res.json({ success: true, message: "Itens reordenados com sucesso" });
   } catch (err) {
-    await conn.rollback();
+    try { await conn.rollback(); } catch (_) { /* ignora */ }
     conn.release();
     console.error("Erro ao reordenar itens:", err);
     res.status(500).json({ error: "Erro ao reordenar itens" });

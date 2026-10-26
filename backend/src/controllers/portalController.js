@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { motivoCampanhaInutilizavel } = require("../utils/campanhaAtiva");
 const { DEFAULT_WHATSAPP_TEMPLATE } = require("../constants/whatsappDefaults");
 const { normalizarCampos } = require("../utils/camposPortal");
 
@@ -319,11 +320,12 @@ exports.vincularCampanha = async (req, res) => {
     if (!portal) return res.status(404).json({ message: "Portal não encontrado" });
 
     if (campanha_ativa_id) {
-      const [[campanha]] = await db.query(
-        "SELECT id FROM campanhas WHERE id = ? AND empresa_id = ?",
-        [campanha_ativa_id, req.empresa_id]
-      );
-      if (!campanha) return res.status(400).json({ message: "Campanha não encontrada" });
+      // So vincula campanha que o portal consegue mostrar (ativa e com itens): senao o cliente seria
+      // redirecionado ao pre-portal e voltaria sem ver nada.
+      const motivo = await motivoCampanhaInutilizavel(campanha_ativa_id, req.empresa_id);
+      if (motivo === "nao_encontrada") return res.status(400).json({ message: "Campanha não encontrada" });
+      if (motivo === "inativa") return res.status(400).json({ message: "Campanha inativa. Ative a campanha antes de vincular ao portal." });
+      if (motivo === "sem_itens") return res.status(400).json({ message: "Campanha sem itens. Adicione ao menos uma imagem ou vídeo antes de vincular." });
     }
 
     await db.execute(
