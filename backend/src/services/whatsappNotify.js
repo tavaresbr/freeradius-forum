@@ -309,6 +309,8 @@ async function notificarLiberacao(ctx) {
 
 module.exports = {
   notificarLiberacao,
+  normalizarTelefone,
+  gravarLog,
   renderTemplate,
   resolvePortalByMikrotik,
   getPortalNotifConfig,

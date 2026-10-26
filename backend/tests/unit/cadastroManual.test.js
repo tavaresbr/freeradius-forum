@@ -82,3 +82,22 @@ test('atualizarLead permite editar outros campos de cadastro com dono', async ()
   await ctrl(db).atualizarLead(criarReq({ empresa_id: 5, params: { id: 3 }, body: { nome: 'Novo Nome' } }), res);
   assert.strictEqual(res.statusCode, 200);
 });
+
+test('atualizarLead: marcar "nao quer promocoes" nao exige cadastro completo e grava a data do opt-out', async () => {
+  // cadastro legado incompleto (sem telefone/nascimento): so o opt-out nao pode ser barrado por isso
+  const db = dbAtualizar({ atual: { ...LEAD, telefone: null, data_nascimento: null, email: null } });
+  const res = criarRes();
+  await ctrl(db).atualizarLead(criarReq({ empresa_id: 5, params: { id: 3 }, body: { whatsapp_optout: true } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const up = db.calls.find((x) => /UPDATE leads/.test(x.sql));
+  assert.match(up.sql, /whatsapp_optout = \?/);
+  assert.match(up.sql, /whatsapp_optout_em = \?/);
+  assert.strictEqual(up.params[0], 1);
+  assert.ok(up.params[1] instanceof Date);
+
+  const db2 = dbAtualizar({ atual: LEAD });
+  const res2 = criarRes();
+  await ctrl(db2).atualizarLead(criarReq({ empresa_id: 5, params: { id: 3 }, body: { whatsapp_optout: false } }), res2);
+  const up2 = db2.calls.find((x) => /UPDATE leads/.test(x.sql));
+  assert.deepStrictEqual(up2.params.slice(0, 2), [0, null]);
+});
