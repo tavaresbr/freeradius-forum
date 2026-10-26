@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { validarCPF, mascaraCPF } from "../../utils/cpfUtils";
 
+import { urlSegura } from "../../utils/urlSegura";
 export default function CadastroLeadPassivo() {
   const [form, setForm] = useState({
     nome: "",
@@ -90,8 +91,8 @@ export default function CadastroLeadPassivo() {
           if (remaining <= 0) {
             clearInterval(interval);
             const params = new URLSearchParams(window.location.search);
-            const targetUrl = data.redirect_url + "?" + params.toString();
-            window.location.href = targetUrl;
+            const destino = urlSegura(data.redirect_url);
+            if (destino) window.location.href = destino + (destino.includes("?") ? "&" : "?") + params.toString();
           }
         }, 1000);
       }

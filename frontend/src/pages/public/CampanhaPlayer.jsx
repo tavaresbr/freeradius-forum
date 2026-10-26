@@ -50,7 +50,7 @@ export default function CampanhaPlayer() {
   const buildRedirectUrl = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("campanha_vista", "1");
-    return `/hotspot/redirect/${mikrotikId}?${params.toString()}`;
+    return `/hotspot/redirect/${encodeURIComponent(mikrotikId || "")}?${params.toString()}`;
   }, [searchParams, mikrotikId]);
 
   const doRedirect = useCallback(() => {

@@ -232,7 +232,7 @@ export default function Pagamento() {
 
     const interval = setInterval(async () => {
       try {
-        const url = `/api/pagamentos/status?pagamento_id=${mpPagamentoId}&mac=${mac}&ip=${ip}`;
+        const url = `/api/pagamentos/status?pagamento_id=${mpPagamentoId}&mac=${encodeURIComponent(mac || "")}&ip=${encodeURIComponent(ip || "")}`;
         const res = await fetch(url);
         const data = await res.json();
         if (data.status === "approved" && data.gateway && data.username) {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { redirecionarHotspot } from "../../utils/hotspotRedirect";
 import SessaoAtivaAviso from "../../components/public/SessaoAtivaAviso";
 
+import { urlSegura } from "../../utils/urlSegura";
 export default function LoginHotspot() {
   const [form, setForm] = useState({
     username: "",
@@ -206,7 +207,8 @@ export default function LoginHotspot() {
                     if (cfg.link_portal_id) {
                       params.set("portal_id", cfg.link_portal_id);
                     }
-                    window.location.href = cfg.link_portal_url + "?" + params.toString();
+                    const destino = urlSegura(cfg.link_portal_url);
+                    if (destino) window.location.href = destino + (destino.includes("?") ? "&" : "?") + params.toString();
                   }}
                 >
                   {cfg.link_texto_link}

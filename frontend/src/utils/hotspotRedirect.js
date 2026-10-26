@@ -23,6 +23,8 @@
  * @param {{voltarPara?: string}} [opcoes] - `voltarPara`: URL para onde o hotspot MikroTik devolve o cliente
  *   apos o login (`dst`); usado pelo acesso gratis do PIX para voltar a tela com o codigo. Outros vendors ignoram.
  */
+import { urlSegura } from "./urlSegura";
+
 export function redirecionarHotspot(gateway, username, password, delayMs = 0, gatewayInfo = null, opcoes = {}) {
   const tipo = gatewayInfo?.tipo || "mikrotik";
 
@@ -34,9 +36,9 @@ export function redirecionarHotspot(gateway, username, password, delayMs = 0, ga
       if (gatewayInfo?.ok === false) {
         console.error("Liberacao no gateway falhou:", gatewayInfo?.erro);
       }
-      const redirect = gatewayInfo?.redirect_url || "http://neverssl.com";
+      const redirect = urlSegura(gatewayInfo?.redirect_url, "http://neverssl.com");
       if (gatewayInfo?.gwn_login_url && username) {
-        const url = new URL(gatewayInfo.gwn_login_url);
+        const url = new URL(urlSegura(gatewayInfo.gwn_login_url, "http://neverssl.com"));
         url.searchParams.set("username", username);
         url.searchParams.set("password", password || username);
         url.searchParams.set("redirect", redirect);
@@ -60,7 +62,7 @@ export function redirecionarHotspot(gateway, username, password, delayMs = 0, ga
       }
       // Destino original do cliente ou um endereco http simples que confirma
       // a saida do walled garden (fecha o mini-browser do captive portal).
-      window.location.href = gatewayInfo?.redirect_url || "http://neverssl.com";
+      window.location.href = urlSegura(gatewayInfo?.redirect_url, "http://neverssl.com");
       return;
     }
 

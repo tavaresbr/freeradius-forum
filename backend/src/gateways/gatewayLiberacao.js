@@ -35,6 +35,7 @@
  */
 const db = require("../../db");
 const { getDriver } = require("./index");
+const { urlHttpSegura, hostPermitidoGateway } = require("../utils/entradaSegura");
 
 const CONTEXTO_TTL_HORAS = 48;
 
@@ -117,13 +118,20 @@ async function carregarContextoPortal(mikrotikId, mac) {
  * @param {Object} ctx - portalCtx salvo no redirect (usa .raw do vendor)
  * @returns {{url:string, fields:Object}|null}
  */
-function montarBrowserauthOmada(ctx) {
+function montarBrowserauthOmada(ctx, gw = {}) {
   const raw = ctx?.raw || {};
   const target = raw.target || raw.Target || null;
   if (!target) return null; // sem target nao ha como montar o POST
+  // O form leva usuario/senha: o destino vem da query publica do redirect, entao so vale se for
+  // o controller cadastrado ou um IP da rede local (senao enviaria a credencial a um host do atacante).
+  if (!/^[A-Za-z0-9.\-]+$/.test(String(target)) || !hostPermitidoGateway(target, gw)) {
+    console.warn("[gatewayLiberacao] target do Omada fora do gateway cadastrado, ignorado");
+    return null;
+  }
 
-  const scheme = raw.scheme || "http";
-  const targetPort = raw.targetPort || raw.targetport || (scheme === "https" ? "8043" : "8088");
+  const scheme = raw.scheme === "https" ? "https" : "http";
+  const portaOk = (p) => (/^\d{2,5}$/.test(String(p || "")) ? String(p) : null);
+  const targetPort = portaOk(raw.targetPort || raw.targetport) || (scheme === "https" ? "8043" : "8088");
 
   const fields = {
     clientMac: raw.clientMac || raw.clientmac || ctx.mac || "",
@@ -134,7 +142,7 @@ function montarBrowserauthOmada(ctx) {
     radioId: raw.radioId || raw.radioid || "",
     vid: raw.vid || "",
     authType: 2, // 2 = RADIUS (doc 13025)
-    originUrl: raw.originUrl || raw.originalUrl || raw.redirectUrl || ctx.redirectUrl || "",
+    originUrl: urlHttpSegura(raw.originUrl || raw.originalUrl || raw.redirectUrl || ctx.redirectUrl || "") || "",
   };
   // Campos vazios sao removidos (wired nao tem apMac; wireless nao tem vid)
   Object.keys(fields).forEach((k) => {
@@ -145,7 +153,7 @@ function montarBrowserauthOmada(ctx) {
   // portal (sem UI pra aceitar cert invalido). O redirect do Omada informa a
   // porta HTTP do portal em serverPort (8088) — preferimos http nela; fallback
   // pro scheme/targetPort originais quando serverPort nao vier.
-  const serverPort = raw.serverPort || raw.serverport || null;
+  const serverPort = portaOk(raw.serverPort || raw.serverport);
   const url = serverPort
     ? `http://${target}:${serverPort}/portal/radius/browserauth`
     : `${scheme}://${target}:${targetPort}/portal/radius/browserauth`;
@@ -231,7 +239,7 @@ async function montarGatewayInfo({ mikrotik_id, empresa_id, mac, username, durac
     }
 
     const ctx = await carregarContextoPortal(mikrotik_id, mac);
-    const redirectUrl = ctx?.redirectUrl || ctx?.raw?.redirectUrl || ctx?.raw?.originUrl || null;
+    const redirectUrl = urlHttpSegura(ctx?.redirectUrl || ctx?.raw?.redirectUrl || ctx?.raw?.originUrl || "") || null;
 
     if (gw.tipo === "grandstream") {
       // External Web Portal + External RADIUS: o RADIUS ja foi provisionado por
@@ -249,7 +257,10 @@ async function montarGatewayInfo({ mikrotik_id, empresa_id, mac, username, durac
       return {
         tipo: "grandstream",
         ok: true,
-        gwn_login_url: ctx?.raw?.login_url || ctx?.raw?.loginUrl || null,
+        gwn_login_url: (() => {
+          const u = urlHttpSegura(ctx?.raw?.login_url || ctx?.raw?.loginUrl || "");
+          return u && hostPermitidoGateway(u, gw) ? u : null;
+        })(),
         client_mac: ctx?.raw?.client_mac || ctx?.raw?.clientMac || ctx?.mac || mac,
         ap_mac: ctx?.apMac || ctx?.raw?.ap_mac || null,
         redirect_url: redirectUrl || "http://neverssl.com",
@@ -261,7 +272,7 @@ async function montarGatewayInfo({ mikrotik_id, empresa_id, mac, username, durac
       // navegador do cliente via browserauth no controller — o backend so
       // monta o form. controller_url preenchido NAO muda este fluxo (a API
       // do controller e' so' captura de dados — services/omadaApNames).
-      const browserauth = ctx ? montarBrowserauthOmada(ctx) : null;
+      const browserauth = ctx ? montarBrowserauthOmada(ctx, gw) : null;
       return {
         tipo: "omada",
         modo: "external-radius",
