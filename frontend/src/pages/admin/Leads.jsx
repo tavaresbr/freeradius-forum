@@ -80,6 +80,9 @@ export default function Leads() {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [cepMsg, setCepMsg] = useState("");
+  const [selecionados, setSelecionados] = useState(() => new Set());
+  const [statusMassa, setStatusMassa] = useState("");
+  const [massaOcupada, setMassaOcupada] = useState(false);
   const cepAtual = useRef("");
   const numeroRef = useRef(null);
 
@@ -129,6 +132,49 @@ export default function Leads() {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  // a selecao vale para a lista que esta na tela: mudou filtro/busca, recomeca
+  useEffect(() => {
+    setSelecionados(new Set());
+  }, [statusFilter, search]);
+
+  const todosMarcados = leads.length > 0 && leads.every((l) => selecionados.has(l.id));
+  const algunsMarcados = leads.some((l) => selecionados.has(l.id));
+  const alternarTodos = () => setSelecionados(todosMarcados ? new Set() : new Set(leads.map((l) => l.id)));
+  const alternarUm = (id) =>
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id); else novo.add(id);
+      return novo;
+    });
+
+  // Acao em massa: PUT /api/leads/massa (status / opt-out) ou DELETE /api/leads/massa
+  const executarMassa = async (metodo, extra, confirmacao) => {
+    const ids = leads.filter((l) => selecionados.has(l.id)).map((l) => l.id);
+    if (ids.length === 0) return;
+    if (confirmacao && !confirm(confirmacao.replace("{n}", ids.length))) return;
+    setMassaOcupada(true);
+    try {
+      const res = await fetch(`${API}/api/leads/massa`, {
+        method: metodo,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids, ...extra }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.message || data.error || "Não foi possível concluir a ação");
+        return;
+      }
+      setSelecionados(new Set());
+      setStatusMassa("");
+      fetchLeads();
+    } catch (err) {
+      console.error("Erro na ação em massa:", err);
+      alert("Erro de conexão. Tente novamente.");
+    } finally {
+      setMassaOcupada(false);
+    }
+  };
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -343,12 +389,73 @@ export default function Leads() {
           </svg>
         </div>
 
+        {/* Ações em massa */}
+        {selecionados.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 bg-blue-900/20 border border-blue-800/50 rounded-xl px-4 py-3 text-sm">
+            <span className="text-blue-300 font-medium">{selecionados.size} selecionado(s)</span>
+            <select
+              value={statusMassa}
+              onChange={(e) => setStatusMassa(e.target.value)}
+              className="px-2 py-1.5 bg-[#1a1d27] border border-gray-700 rounded-md text-gray-300 text-xs"
+            >
+              <option value="">Alterar status para...</option>
+              {Object.entries(statusLabels).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+            <button
+              disabled={!statusMassa || massaOcupada}
+              onClick={() => executarMassa("PUT", { status: statusMassa })}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs hover:bg-blue-700 disabled:opacity-40 cursor-pointer"
+            >
+              Aplicar
+            </button>
+            <button
+              disabled={massaOcupada}
+              onClick={() => executarMassa("PUT", { whatsapp_optout: true }, "Marcar {n} cliente(s) como 'não quer promoções'?")}
+              className="px-3 py-1.5 text-yellow-400 border border-yellow-800/50 rounded-md text-xs hover:bg-yellow-900/20 disabled:opacity-40 cursor-pointer"
+            >
+              Não quer promoções
+            </button>
+            <button
+              disabled={massaOcupada}
+              onClick={() => executarMassa("PUT", { whatsapp_optout: false }, "Voltar a enviar promoções para {n} cliente(s)?")}
+              className="px-3 py-1.5 text-gray-300 border border-gray-700 rounded-md text-xs hover:bg-gray-800 disabled:opacity-40 cursor-pointer"
+            >
+              Voltar a receber promoções
+            </button>
+            <button
+              disabled={massaOcupada}
+              onClick={() => executarMassa("DELETE", {}, "Excluir {n} cadastro(s)? Esta ação não pode ser desfeita.")}
+              className="px-3 py-1.5 text-red-400 border border-red-800/50 rounded-md text-xs hover:bg-red-900/20 disabled:opacity-40 cursor-pointer"
+            >
+              Excluir selecionados
+            </button>
+            <button
+              onClick={() => setSelecionados(new Set())}
+              className="ml-auto text-gray-400 hover:text-gray-200 text-xs cursor-pointer"
+            >
+              Limpar seleção
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         <div className="bg-[#1a1d27] border border-gray-800 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
+                  <th className="px-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos"
+                      checked={todosMarcados}
+                      ref={(el) => { if (el) el.indeterminate = !todosMarcados && algunsMarcados; }}
+                      onChange={alternarTodos}
+                      className="cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Nome</th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Email</th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium hidden md:table-cell">Telefone</th>
@@ -363,19 +470,28 @@ export default function Leads() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="9" className="text-center py-8 text-gray-500">
+                    <td colSpan="10" className="text-center py-8 text-gray-500">
                       Carregando...
                     </td>
                   </tr>
                 ) : leads.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="text-center py-8 text-gray-500">
+                    <td colSpan="10" className="text-center py-8 text-gray-500">
                       Nenhum cadastro encontrado
                     </td>
                   </tr>
                 ) : (
                   leads.map((lead) => (
                     <tr key={lead.id} className="border-b border-gray-800/50 hover:bg-[#252b3b]/30">
+                      <td className="px-4 py-3 w-8">
+                        <input
+                          type="checkbox"
+                          aria-label={`Selecionar ${lead.nome || lead.id}`}
+                          checked={selecionados.has(lead.id)}
+                          onChange={() => alternarUm(lead.id)}
+                          className="cursor-pointer"
+                        />
+                      </td>
                       <td className="px-4 py-3 text-gray-200">
                         {lead.nome || "-"}
                         {Number(lead.whatsapp_optout) === 1 && (

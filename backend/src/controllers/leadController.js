@@ -523,6 +523,62 @@ exports.atualizarLead = async (req, res) => {
   }
 };
 
+const MAX_MASSA = 1000;
+
+// ids vindos do corpo: array de inteiros positivos, sem repetidos, 1..MAX_MASSA
+function idsDaMassa(body) {
+  const bruto = body && body.ids;
+  if (!Array.isArray(bruto) || bruto.length === 0) return { erro: "Selecione ao menos um cadastro" };
+  if (bruto.length > MAX_MASSA) return { erro: `Selecione no máximo ${MAX_MASSA} cadastros por vez` };
+  const ids = [];
+  for (const v of bruto) {
+    const n = typeof v === "number" ? v : /^\d+$/.test(String(v)) ? Number(v) : NaN;
+    if (!Number.isSafeInteger(n) || n <= 0) return { erro: "Lista de cadastros inválida" };
+    ids.push(n);
+  }
+  return { ids: [...new Set(ids)] };
+}
+
+// PUT /api/leads/massa { ids, status?, whatsapp_optout? } (permissao 'editar')
+exports.atualizarLeadsEmMassa = async (req, res) => {
+  try {
+    const { ids, erro: erroIds } = idsDaMassa(req.body);
+    if (erroIds) return res.status(400).json({ message: erroIds });
+    const corpo = {};
+    if (req.body.status !== undefined) corpo.status = req.body.status;
+    if (req.body.whatsapp_optout !== undefined) corpo.whatsapp_optout = req.body.whatsapp_optout;
+    const { dados, erro } = sanitizarCadastro(corpo);
+    if (erro) return res.status(400).json({ message: erro });
+    const chaves = Object.keys(dados);
+    if (chaves.length === 0) return res.status(400).json({ message: "Nenhuma alteração informada" });
+
+    const [result] = await db.execute(
+      `UPDATE leads SET ${chaves.map((k) => `${k} = ?`).join(", ")} WHERE empresa_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
+      [...chaves.map((k) => dados[k]), req.empresa_id, ...ids]
+    );
+    res.json({ afetados: result.affectedRows, message: "Cadastros atualizados" });
+  } catch (err) {
+    console.error("Erro ao atualizar leads em massa:", err);
+    res.status(500).json({ message: "Erro ao atualizar cadastros" });
+  }
+};
+
+// DELETE /api/leads/massa { ids } (permissao 'excluir')
+exports.deletarLeadsEmMassa = async (req, res) => {
+  try {
+    const { ids, erro } = idsDaMassa(req.body);
+    if (erro) return res.status(400).json({ message: erro });
+    const [result] = await db.execute(
+      `DELETE FROM leads WHERE empresa_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
+      [req.empresa_id, ...ids]
+    );
+    res.json({ afetados: result.affectedRows, message: "Cadastros excluídos" });
+  } catch (err) {
+    console.error("Erro ao excluir leads em massa:", err);
+    res.status(500).json({ message: "Erro ao excluir cadastros" });
+  }
+};
+
 exports.deletarLead = async (req, res) => {
   try {
     const { id } = req.params;
