@@ -148,12 +148,24 @@ export default function Leads() {
       return novo;
     });
 
-  // Acao em massa: PUT /api/leads/massa (status / opt-out) ou DELETE /api/leads/massa
-  const executarMassa = async (metodo, extra, confirmacao) => {
+  // Acao em massa: PUT /api/leads/massa (status / opt-out) ou DELETE /api/leads/massa.
+  // Confirmacao e resultado ficam NA PAGINA (confirm()/alert() podem estar bloqueados pelo navegador e
+  // a acao parecia "nao fazer nada").
+  const [pendenteMassa, setPendenteMassa] = useState(null); // { metodo, extra, texto }
+  const [msgMassa, setMsgMassa] = useState(null); // { ok, texto }
+
+  const pedirMassa = (metodo, extra, texto) => {
+    setMsgMassa(null);
+    if (texto) setPendenteMassa({ metodo, extra, texto: texto.replace("{n}", selecionados.size) });
+    else executarMassa(metodo, extra);
+  };
+
+  const executarMassa = async (metodo, extra) => {
     const ids = leads.filter((l) => selecionados.has(l.id)).map((l) => l.id);
+    setPendenteMassa(null);
     if (ids.length === 0) return;
-    if (confirmacao && !confirm(confirmacao.replace("{n}", ids.length))) return;
     setMassaOcupada(true);
+    setMsgMassa({ ok: true, texto: "Aplicando..." });
     try {
       const res = await fetch(`${API}/api/leads/massa`, {
         method: metodo,
@@ -162,15 +174,16 @@ export default function Leads() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.message || data.error || "Não foi possível concluir a ação");
+        setMsgMassa({ ok: false, texto: `${data.message || data.error || "Não foi possível concluir a ação"} (HTTP ${res.status})` });
         return;
       }
       setSelecionados(new Set());
       setStatusMassa("");
+      setMsgMassa({ ok: true, texto: `${data.afetados ?? ids.length} cadastro(s) atualizado(s).` });
       fetchLeads();
     } catch (err) {
       console.error("Erro na ação em massa:", err);
-      alert("Erro de conexão. Tente novamente.");
+      setMsgMassa({ ok: false, texto: "Erro de conexão com o servidor. Tente novamente." });
     } finally {
       setMassaOcupada(false);
     }
@@ -389,6 +402,26 @@ export default function Leads() {
           </svg>
         </div>
 
+        {msgMassa && (
+          <div className={`rounded-lg px-4 py-2 text-sm border ${msgMassa.ok ? "bg-green-900/20 border-green-800/50 text-green-300" : "bg-red-900/20 border-red-800/50 text-red-300"}`}>
+            {msgMassa.texto}
+          </div>
+        )}
+        {pendenteMassa && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg px-4 py-3 text-sm border border-yellow-800/50 bg-yellow-900/20 text-yellow-200">
+            <span>{pendenteMassa.texto}</span>
+            <button
+              onClick={() => executarMassa(pendenteMassa.metodo, pendenteMassa.extra)}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs hover:bg-blue-700 cursor-pointer"
+            >
+              Confirmar
+            </button>
+            <button onClick={() => setPendenteMassa(null)} className="px-3 py-1.5 text-gray-300 border border-gray-700 rounded-md text-xs hover:bg-gray-800 cursor-pointer">
+              Cancelar
+            </button>
+          </div>
+        )}
+
         {/* Ações em massa */}
         {selecionados.size > 0 && (
           <div className="flex flex-wrap items-center gap-3 bg-blue-900/20 border border-blue-800/50 rounded-xl px-4 py-3 text-sm">
@@ -405,28 +438,28 @@ export default function Leads() {
             </select>
             <button
               disabled={!statusMassa || massaOcupada}
-              onClick={() => executarMassa("PUT", { status: statusMassa })}
+              onClick={() => pedirMassa("PUT", { status: statusMassa })}
               className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs hover:bg-blue-700 disabled:opacity-40 cursor-pointer"
             >
               Aplicar
             </button>
             <button
               disabled={massaOcupada}
-              onClick={() => executarMassa("PUT", { whatsapp_optout: true }, "Marcar {n} cliente(s) como 'não quer promoções'?")}
+              onClick={() => pedirMassa("PUT", { whatsapp_optout: true }, "Marcar {n} cliente(s) como 'não quer promoções'?")}
               className="px-3 py-1.5 text-yellow-400 border border-yellow-800/50 rounded-md text-xs hover:bg-yellow-900/20 disabled:opacity-40 cursor-pointer"
             >
               Não quer promoções
             </button>
             <button
               disabled={massaOcupada}
-              onClick={() => executarMassa("PUT", { whatsapp_optout: false }, "Voltar a enviar promoções para {n} cliente(s)?")}
+              onClick={() => pedirMassa("PUT", { whatsapp_optout: false }, "Voltar a enviar promoções para {n} cliente(s)?")}
               className="px-3 py-1.5 text-gray-300 border border-gray-700 rounded-md text-xs hover:bg-gray-800 disabled:opacity-40 cursor-pointer"
             >
               Voltar a receber promoções
             </button>
             <button
               disabled={massaOcupada}
-              onClick={() => executarMassa("DELETE", {}, "Excluir {n} cadastro(s)? Esta ação não pode ser desfeita.")}
+              onClick={() => pedirMassa("DELETE", {}, "Excluir {n} cadastro(s)? Esta ação não pode ser desfeita.")}
               className="px-3 py-1.5 text-red-400 border border-red-800/50 rounded-md text-xs hover:bg-red-900/20 disabled:opacity-40 cursor-pointer"
             >
               Excluir selecionados
