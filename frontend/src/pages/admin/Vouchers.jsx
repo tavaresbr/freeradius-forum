@@ -211,7 +211,7 @@ export default function Vouchers() {
           <form onSubmit={imprimir} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md space-y-3">
             <h2 className="text-lg font-bold text-white">Imprimir cartões</h2>
             <p className="text-sm text-gray-400">
-              Imprime os vouchers <b>disponíveis</b>{filtro.lote ? <> do lote <b>{filtro.lote}</b></> : " (todos os lotes)"}{filtro.q ? <>, com a busca “{filtro.q}”</> : ""}, 8 cartões por folha A4.
+              Imprime os vouchers <b>disponíveis</b>{filtro.lote ? <> do lote <b>{filtro.lote}</b></> : " (todos os lotes)"}{filtro.q ? <>, com a busca “{filtro.q}”</> : ""}, 30 cartões por folha A4.
             </p>
             <div>
               <label className="block text-xs text-gray-400 mb-1">Nome da rede Wi-Fi (opcional, aparece no cartão)</label>
