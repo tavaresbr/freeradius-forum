@@ -23,7 +23,7 @@ exports.listar = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
     const [rows] = await db.query(
-      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, m.nome AS equipamento_nome,
+      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, m.nome AS equipamento_nome,
               mu.nome AS usado_equipamento, v.lote, v.status, v.valido_ate,
               v.usado_em, v.usado_mac, v.criado_em
          FROM vouchers v
