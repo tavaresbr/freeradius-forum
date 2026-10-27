@@ -18,6 +18,9 @@ export default function Voucher() {
     setMac(params.get("mac") || "");
     setIp(params.get("ip") || "");
     setMikrotikId(params.get("mikrotik_id") || "");
+    // Codigo vindo do QR do cartao impresso (so letras/numeros)
+    const cod = (params.get("codigo") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+    if (cod) setCodigo(cod);
     const empId = params.get("empresa_id");
     if (empId) {
       fetch(`/api/portal-config/voucher?empresa_id=${encodeURIComponent(empId)}`)

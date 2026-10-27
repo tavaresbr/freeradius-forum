@@ -20,6 +20,7 @@ export default function Vouchers() {
   const [dados, setDados] = useState({ data: [], total: 0, contadores: {}, lotes: [] });
   const [planos, setPlanos] = useState([]);
   const [equipamentos, setEquipamentos] = useState({});
+  const [empresaId, setEmpresaId] = useState("");
   const [filtro, setFiltro] = useState({ status: "", lote: "", q: "" });
   const [page, setPage] = useState(1);
   const [msg, setMsg] = useState(null);
@@ -41,7 +42,9 @@ export default function Vouchers() {
     try {
       const qs = new URLSearchParams({ page, limit: 50 });
       Object.entries(filtro).forEach(([k, v]) => v && qs.set(k, v));
-      setDados(await chamar(`/api/vouchers?${qs}`));
+      const d = await chamar(`/api/vouchers?${qs}`);
+      setDados(d);
+      if (d.empresa_id) setEmpresaId(d.empresa_id);
     } catch (e) { setMsg({ tipo: "erro", texto: e.message }); }
   }, [chamar, filtro, page]);
 
@@ -100,16 +103,19 @@ export default function Vouchers() {
     setImpressao((i) => ({ ...i, imprimindo: true }));
     try {
       let todos = [];
+      let emp = empresaId;
       for (let pg = 1; pg <= 10; pg++) {
         const qs = new URLSearchParams({ page: pg, limit: 200, status: "disponivel" });
         if (filtro.lote) qs.set("lote", filtro.lote);
         if (filtro.q) qs.set("q", filtro.q);
         const d = await chamar(`/api/vouchers?${qs}`);
         todos = todos.concat(d.data || []);
+        if (d.empresa_id) emp = d.empresa_id;
         if (todos.length >= d.total) break;
       }
       if (!todos.length) throw new Error("Não há vouchers disponíveis neste filtro para imprimir");
-      escreverCartoes(janela, todos, { rede: impressao.rede });
+      const comQr = impressao.qr && emp;
+      escreverCartoes(janela, todos, { rede: impressao.rede, ...(comQr ? { origem: window.location.origin, empresaId: emp, equipamentoPadrao: impressao.equipamento } : {}) });
       setImpressao(null);
     } catch (err) {
       janela.close(); setMsg({ tipo: "erro", texto: err.message }); setImpressao((i) => (i ? { ...i, imprimindo: false } : i)); }
@@ -128,7 +134,7 @@ export default function Vouchers() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button className={btnSecundario} onClick={exportar}>Exportar CSV</button>
-          <button className={btnSecundario} onClick={() => setImpressao({ rede: "", imprimindo: false })}>Imprimir cartões</button>
+          <button className={btnSecundario} onClick={() => setImpressao({ rede: "", qr: true, equipamento: "", imprimindo: false })}>Imprimir cartões</button>
           <button className={btnPrimario} onClick={() => setModal(true)}>Gerar vouchers</button>
         </div>
       </div>
@@ -211,6 +217,19 @@ export default function Vouchers() {
               <label className="block text-xs text-gray-400 mb-1">Nome da rede Wi-Fi (opcional, aparece no cartão)</label>
               <input className={inputCls} maxLength={40} value={impressao.rede} onChange={(e) => setImpressao({ ...impressao, rede: e.target.value })} />
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" checked={impressao.qr} onChange={(e) => setImpressao({ ...impressao, qr: e.target.checked })} />
+              Incluir QR code que abre o portal com o código preenchido
+            </label>
+            {impressao.qr && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Equipamento do QR para planos sem equipamento próprio</label>
+                <select className={inputCls} value={impressao.equipamento} onChange={(e) => setImpressao({ ...impressao, equipamento: e.target.value })}>
+                  <option value="">Sem QR nesses cartões</option>
+                  {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex gap-2 justify-end pt-2">
               <button type="button" className={btnSecundario} onClick={() => setImpressao(null)}>Cancelar</button>
               <button type="submit" className={btnPrimario} disabled={impressao.imprimindo}>{impressao.imprimindo ? "Preparando..." : "Imprimir"}</button>
