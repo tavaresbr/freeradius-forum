@@ -259,7 +259,7 @@ export default function Assinatura() {
                   <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
                   <li>✓ {limite(p.max_admins)} administradores</li>
                   {p.max_portais !== undefined && <li>✓ {limite(p.max_portais)} portais</li>}
-                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"]].map(([k, r]) => (
+                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     p[k] !== undefined && <li key={k} className={p[k] ? "" : "opacity-50"}>{p[k] ? "✓" : "—"} {r}</li>
                   ))}
                 </ul>

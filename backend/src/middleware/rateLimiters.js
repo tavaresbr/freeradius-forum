@@ -112,6 +112,15 @@ const promocaoLimiter = rateLimit({
   handler: jsonHandler('Muitas operações de promoção. Tente novamente mais tarde.'),
 });
 
+// Dominio proprio (salvar/verificar/ativar): certbot e lento e tem limite de tentativas no Let's Encrypt.
+const dominioLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas operações de domínio. Tente novamente mais tarde.'),
+});
+
 // Cartao da assinatura SaaS: limita tentativas (card testing) por IP.
 const cartaoAssinaturaLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -219,4 +228,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };

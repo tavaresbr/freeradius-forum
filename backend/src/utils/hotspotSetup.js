@@ -47,7 +47,9 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
  * 8. Masquerade (NAT)
  * 9. Login page (download via /tool/fetch)
  */
-async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, empresa = {}, onStep = null) {
+async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, empresa = {}, onStep = null, portalHost = null) {
+  // Dominio proprio do portal (SaaS): redirect do login.html e walled garden passam a incluir o dominio da empresa.
+  const dominiosLiberados = [...new Set([systemDomain, portalHost].filter(Boolean))];
   const conn = new RouterOSAPI({
     host: mikrotik.ip,
     user: mikrotik.usuario,
@@ -343,15 +345,17 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     if (systemDomain) {
       try {
         const wg = await safePrint("/ip/hotspot/walled-garden/print");
-        const exists = wg && wg.find(w => w["dst-host"] && w["dst-host"].includes(systemDomain));
-        if (!exists) {
-          await safeWrite("/ip/hotspot/walled-garden/add", [
-            `=dst-host=*${systemDomain}*`,
-            "=action=allow",
-          ]);
-          addStep("walled_garden", "ok", `Dominio liberado: ${systemDomain}`);
-        } else {
-          addStep("walled_garden", "ok", `Walled garden ja tem ${systemDomain}`);
+        for (const dominio of dominiosLiberados) {
+          const exists = wg && wg.find(w => w["dst-host"] && w["dst-host"].includes(dominio));
+          if (!exists) {
+            await safeWrite("/ip/hotspot/walled-garden/add", [
+              `=dst-host=*${dominio}*`,
+              "=action=allow",
+            ]);
+            addStep("walled_garden", "ok", `Dominio liberado: ${dominio}`);
+          } else {
+            addStep("walled_garden", "ok", `Walled garden ja tem ${dominio}`);
+          }
         }
         // Dominios do Mercado Pago SDK (necessario para pagamento com cartao)
         // www.mercadopago.com hospeda o security.js (device fingerprint anti-fraude).
@@ -463,7 +467,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
 
       if (!ok) {
-        const fullUrl = `https://${systemDomain}/hotspot/redirect/${mikrotik.id}?mac=$(mac)&ip=$(ip)&mikrotik_id=${mikrotik.id}&empresa_id=${empresaId}&empresa=${empresaSlug}`;
+        const fullUrl = `https://${portalHost || systemDomain}/hotspot/redirect/${mikrotik.id}?mac=$(mac)&ip=$(ip)&mikrotik_id=${mikrotik.id}&empresa_id=${empresaId}&empresa=${empresaSlug}`;
         addStep("login_page", "aviso",
           `Nao conseguiu baixar automaticamente (${motivos.join(' | ') || 'sem detalhe'}). Verifique DNS/rota do MikroTik ate ${systemDomain}. Substitua ${dstLogin} manualmente com redirect para: ${fullUrl}`
         );

@@ -30,12 +30,12 @@ const recursoMw = (ass, db) => {
 test('recursos: plano que inclui, adicional vigente, nenhum dos dois', async () => {
   let { ass } = montar({ plano: PLANO({ inclui_whatsapp: 1 }) });
   let st = await ass.obterStatus(1);
-  assert.deepStrictEqual(st.recursos, { whatsapp: true, campanhas: false, exportacao: false });
+  assert.deepStrictEqual(st.recursos, { whatsapp: true, campanhas: false, exportacao: false, dominio: true });
 
   ({ ass } = montar({ adicionais: [ADIC('campanhas')] }));
   st = await ass.obterStatus(1);
-  assert.deepStrictEqual(st.recursos, { whatsapp: false, campanhas: true, exportacao: false });
-  assert.deepStrictEqual(st.plano_recursos, { whatsapp: false, campanhas: false, exportacao: false });
+  assert.deepStrictEqual(st.recursos, { whatsapp: false, campanhas: true, exportacao: false, dominio: true });
+  assert.deepStrictEqual(st.plano_recursos, { whatsapp: false, campanhas: false, exportacao: false, dominio: true });
 
   ({ ass } = montar());
   assert.strictEqual(await ass.temRecurso(1, 'exportacao'), false);
@@ -43,7 +43,7 @@ test('recursos: plano que inclui, adicional vigente, nenhum dos dois', async () 
 
 test('recursos: sem a migration 043 (colunas ausentes) nada e bloqueado', async () => {
   const { ass } = montar({ plano: { plano_id: 2, status: 'ativa', vence_em: futuro(), carencia_dias: 3, nome: 'Start', valor: 59.9, max_equipamentos: 2, max_admins: 1 } });
-  assert.deepStrictEqual((await ass.obterStatus(1)).recursos, { whatsapp: true, campanhas: true, exportacao: true });
+  assert.deepStrictEqual((await ass.obterStatus(1)).recursos, { whatsapp: true, campanhas: true, exportacao: true, dominio: true });
 });
 
 test('max_portais efetivo soma adicionais; NULL continua ilimitado; checarLimite conta portais', async () => {

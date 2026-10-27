@@ -85,6 +85,8 @@ async function obterStatus(empresaId) {
     whatsapp: !migrado || !!row.inclui_whatsapp || tem("whatsapp"),
     campanhas: !migrado || !!row.inclui_campanhas || tem("campanhas"),
     exportacao: !migrado || !!row.inclui_exportacao || tem("exportacao"),
+    // Dominio proprio vem da migration 046 (coluna propria): sem ela nao bloqueia.
+    dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio || tem("dominio"),
   };
   const v = { ...calcularEstado(row), plano_nome: row?.plano_nome || null, plano_valor: row?.plano_valor ?? null,
               plano_max_equipamentos: row?.max_equipamentos ?? null, plano_max_admins: row?.max_admins ?? null,
@@ -93,7 +95,7 @@ async function obterStatus(empresaId) {
               max_portais: limiteEfetivo(row?.max_portais ?? null, extras.portais),
               plano_max_portais: row?.max_portais ?? null,
               recursos, extras,
-              plano_recursos: { whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao },
+              plano_recursos: { whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao, dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio },
               adicionais: vigentes.map((a) => ({
                 id: a.id, adicional_id: a.adicional_id, nome: a.nome, tipo: a.tipo, quantidade: a.quantidade,
                 valor: Number(a.valor), vence_em: a.vence_em,

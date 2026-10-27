@@ -398,6 +398,9 @@ JWT_SECRET=${JWT_SECRET}
 # Dominio do sistema (usado nos redirects do hotspot/MikroTik)
 SYSTEM_DOMAIN=${DOMAIN_HOTSPOT}
 
+# Email do Let's Encrypt (dominio proprio de empresas, emitido pelo painel via certbot)
+SSL_EMAIL=${SSL_EMAIL}
+
 # Evolution API (WhatsApp)
 EVOLUTION_API_URL=http://127.0.0.1:8080
 EVOLUTION_API_KEY=${EVO_API_KEY}

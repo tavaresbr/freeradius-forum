@@ -1,6 +1,6 @@
 const { temRecurso } = require("../utils/assinatura");
 
-const ROTULOS = { whatsapp: "WhatsApp", campanhas: "Campanhas", exportacao: "Exportação da base" };
+const ROTULOS = { whatsapp: "WhatsApp", campanhas: "Campanhas", exportacao: "Exportação da base", dominio: "Domínio próprio" };
 
 // Usar depois de `tenant`: bloqueia (403) empresa cujo plano/adicionais nao incluem o recurso.
 // super_admin nunca e' bloqueado; erro de banco falha fechado (503); migration ausente libera.
