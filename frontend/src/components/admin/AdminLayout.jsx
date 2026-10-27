@@ -145,6 +145,7 @@ export default function AdminLayout({ children }) {
       title: "Marketing",
       children: [
         { key: "campanhas", title: "Campanhas", path: `${basePath}/campanhas` },
+        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
       ],
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +185,6 @@ export default function AdminLayout({ children }) {
         { key: "clientes", title: "Cadastro LGPD", path: `${basePath}/lgpd` },
         { key: "leads", title: "Clientes / Leads", path: `${basePath}/leads` },
         { key: "leads", title: "Importar clientes", path: `${basePath}/importar-clientes` },
-        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
       ]
     },
     {
