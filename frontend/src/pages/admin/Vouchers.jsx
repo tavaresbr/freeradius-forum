@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { abrirJanelaImpressao, escreverCartoes } from "../../utils/imprimirVouchers";
+import VouchersRelatorio from "../../components/admin/VouchersRelatorio";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
 const btnPrimario = "bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 disabled:opacity-50 cursor-pointer";
@@ -29,6 +30,7 @@ export default function Vouchers() {
   const [impressao, setImpressao] = useState(null); // { rede, qr, equipamento, eq, lote, quantidade, pular, marcados, imprimindo }
   const [sel, setSel] = useState([]); // ids marcados na lista (so da pagina atual)
   const [contagem, setContagem] = useState(null);
+  const [aba, setAba] = useState("lista"); // lista | relatorio
   const [novo, setNovo] = useState({ plano_id: "", mikrotik_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
   const [gerados, setGerados] = useState(null);
 
@@ -169,17 +171,28 @@ export default function Vouchers() {
           <h1 className="text-2xl font-bold text-white">Vouchers</h1>
           <p className="text-sm text-gray-400">Códigos de acesso Wi-Fi para o portal “Acesso por Voucher”.</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className={`flex gap-2 flex-wrap ${aba === "lista" ? "" : "hidden"}`}>
           <button className={btnSecundario} onClick={exportar}>Exportar CSV</button>
           <button className={btnSecundario} onClick={abrirImpressao}>Imprimir cartões{sel.length > 0 ? ` (${sel.length})` : ""}</button>
           <button className={btnPrimario} onClick={() => setModal(true)}>Gerar vouchers</button>
         </div>
       </div>
 
+      <div className="flex gap-2 mb-4 border-b border-gray-800">
+        {[["lista", "Lista"], ["relatorio", "Relatório de usados"]].map(([k, t]) => (
+          <button key={k} onClick={() => setAba(k)}
+            className={`px-4 py-2 text-sm -mb-px border-b-2 cursor-pointer ${aba === k ? "border-blue-500 text-white" : "border-transparent text-gray-400 hover:text-gray-200"}`}>{t}</button>
+        ))}
+      </div>
+
+      {aba === "relatorio" && <VouchersRelatorio chamar={chamar} token={token} equipamentos={equipamentos} lotes={dados.lotes} />}
+
       {msg && (
         <div className={`mb-4 p-3 rounded text-sm ${msg.tipo === "erro" ? "bg-red-900/30 text-red-300" : "bg-green-900/30 text-green-300"}`}>{msg.texto}</div>
       )}
 
+      {aba === "lista" && (
+      <>
       <div className="grid grid-cols-3 gap-3 mb-1">
         {Object.entries(STATUS).map(([k, [r, cls]]) => (
           <div key={k} className="bg-[#1a1d27] border border-gray-800 rounded p-3">
@@ -265,6 +278,9 @@ export default function Vouchers() {
           <span>{page} / {paginas}</span>
           <button className={btnSecundario} disabled={page >= paginas} onClick={() => setPage(page + 1)}>Próxima</button>
         </div>
+      )}
+
+      </>
       )}
 
       {impressao && (
