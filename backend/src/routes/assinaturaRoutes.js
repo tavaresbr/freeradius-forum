@@ -4,6 +4,7 @@ const auth = require("../middleware/auth");
 const tenant = require("../middleware/tenant");
 const authorize = require("../middleware/authorize");
 const c = require("../controllers/assinaturaController");
+const exigeDonoPlataforma = require("../middleware/exigeDonoPlataforma");
 
 // Publico
 router.get("/planos", c.planosPublicos);
@@ -17,7 +18,8 @@ router.post("/cartao", auth, tenant, authorize("owner", "super_admin"), c.pagarC
 router.get("/cobranca/:id", auth, tenant, authorize("owner", "super_admin"), c.consultarCobranca);
 
 // Super admin
-const sa = [auth, authorize("super_admin")];
+// Planos, adicionais, assinatura de cada empresa e Mercado Pago da plataforma: so o dono da plataforma
+const sa = [auth, exigeDonoPlataforma];
 router.get("/admin/planos", ...sa, c.listarPlanosAdmin);
 router.post("/admin/planos", ...sa, c.criarPlano);
 router.put("/admin/planos/:id", ...sa, c.atualizarPlano);
