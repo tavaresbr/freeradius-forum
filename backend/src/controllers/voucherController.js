@@ -6,6 +6,8 @@ const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { gerarCodigo, normalizarCodigo, codigoPersonalizadoValido, quantidadeValida, validarValidade, celulaCsv } = require("../utils/voucher");
 const { normalizarMac, normalizarIp, normalizarId } = require("../utils/entradaSegura");
 
+const MAX_IMPRESSOS = 1000;
+const MSG_PENDENTE_045 = "Atualização do banco pendente: rode a migration 045 (node migrations/045_vouchers_impresso.js).";
 const MSG_INVALIDO = "Código inválido, já utilizado ou de outro local.";
 
 // ---------- Admin (tudo filtrado por empresa_id) ----------
@@ -15,7 +17,9 @@ exports.listar = async (req, res) => {
     const empresaId = req.empresa_id;
     const where = ["v.empresa_id = ?"];
     const params = [empresaId];
-    const { status, lote, q, equipamento } = req.query;
+    const { status, lote, q, equipamento, impresso } = req.query;
+    if (impresso === "nao") where.push("v.impresso_em IS NULL");
+    else if (impresso === "sim") where.push("v.impresso_em IS NOT NULL");
     if (normalizarId(equipamento)) { where.push("v.mikrotik_id = ?"); params.push(Number(equipamento)); }
     if (["disponivel", "usado", "cancelado"].includes(status)) { where.push("v.status = ?"); params.push(status); }
     if (typeof lote === "string" && lote) { where.push("v.lote = ?"); params.push(lote.slice(0, 60)); }
@@ -26,13 +30,13 @@ exports.listar = async (req, res) => {
     const [rows] = await db.query(
       `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, v.mikrotik_id AS equipamento_id, m.nome AS equipamento_nome,
               mu.nome AS usado_equipamento, v.lote, v.status, v.valido_ate,
-              v.usado_em, v.usado_mac, v.criado_em
+              v.usado_em, v.usado_mac, v.impresso_em, v.criado_em
          FROM vouchers v
          LEFT JOIN planos p ON p.id = v.plano_id
          LEFT JOIN mikrotiks m ON m.id = v.mikrotik_id AND m.empresa_id = v.empresa_id
          LEFT JOIN radius_users ru ON ru.username = v.username AND ru.empresa_id = v.empresa_id
          LEFT JOIN mikrotiks mu ON mu.id = ru.nas_id AND mu.empresa_id = v.empresa_id
-        WHERE ${where.join(" AND ")} ORDER BY v.id DESC LIMIT ? OFFSET ?`,
+        WHERE ${where.join(" AND ")} ORDER BY v.id ${req.query.ordem === "asc" ? "ASC" : "DESC"} LIMIT ? OFFSET ?`,
       [...params, limit, (page - 1) * limit]
     );
     const [[tot]] = await db.query(`SELECT COUNT(*) AS total FROM vouchers v WHERE ${where.join(" AND ")}`, params);
@@ -40,10 +44,13 @@ exports.listar = async (req, res) => {
     const [lotes] = await db.query("SELECT DISTINCT lote FROM vouchers WHERE empresa_id = ? AND lote IS NOT NULL ORDER BY lote", [empresaId]);
     const contadores = { disponivel: 0, usado: 0, cancelado: 0 };
     cont.forEach((c) => { contadores[c.status] = c.n; });
+    const [[nImp]] = await db.query("SELECT COUNT(*) AS n FROM vouchers WHERE empresa_id = ? AND status = 'disponivel' AND impresso_em IS NULL", [empresaId]);
+    contadores.nao_impressos = nImp?.n || 0;
     res.json({ success: true, empresa_id: empresaId, data: rows, total: tot.total, page, limit, contadores, lotes: lotes.map((l) => l.lote) });
   } catch (err) {
     console.error("[vouchers] listar:", err.message);
     if (err.code === "ER_NO_SUCH_TABLE") return res.status(500).json({ error: "Atualização do banco pendente: rode a migration 043 (node migrations/043_vouchers.js)." });
+    if (err.code === "ER_BAD_FIELD_ERROR") return res.status(500).json({ error: MSG_PENDENTE_045 });
     res.status(500).json({ error: "Erro ao listar vouchers" });
   }
 };
@@ -103,6 +110,31 @@ exports.criarLote = async (req, res) => {
   }
 };
 
+// POST /api/vouchers/impressos { ids }: marca como impressos (so os DISPONIVEIS da propria empresa).
+exports.marcarImpressos = async (req, res) => {
+  try {
+    const bruto = req.body && req.body.ids;
+    if (!Array.isArray(bruto) || bruto.length === 0) return res.status(400).json({ error: "Nenhum voucher informado" });
+    if (bruto.length > MAX_IMPRESSOS) return res.status(400).json({ error: `No máximo ${MAX_IMPRESSOS} vouchers por vez` });
+    const ids = [];
+    for (const v of bruto) {
+      const n = typeof v === "number" ? v : /^\d+$/.test(String(v)) ? Number(v) : NaN;
+      if (!Number.isSafeInteger(n) || n <= 0) return res.status(400).json({ error: "Lista de vouchers inválida" });
+      ids.push(n);
+    }
+    const unicos = [...new Set(ids)];
+    const [r] = await db.execute(
+      `UPDATE vouchers SET impresso_em = NOW() WHERE empresa_id = ? AND status = 'disponivel' AND id IN (${unicos.map(() => "?").join(",")})`,
+      [req.empresa_id, ...unicos]
+    );
+    res.json({ success: true, afetados: r.affectedRows });
+  } catch (err) {
+    console.error("[vouchers] marcarImpressos:", err.message);
+    if (err.code === "ER_BAD_FIELD_ERROR") return res.status(500).json({ error: MSG_PENDENTE_045 });
+    res.status(500).json({ error: "Erro ao marcar vouchers como impressos" });
+  }
+};
+
 exports.cancelar = async (req, res) => {
   try {
     const [r] = await db.execute(
@@ -140,7 +172,7 @@ exports.exportarCSV = async (req, res) => {
     if (normalizarId(req.query.equipamento)) { filtro += " AND v.mikrotik_id = ?"; params.push(Number(req.query.equipamento)); }
     const [rows] = await db.query(
       `SELECT v.codigo, p.nome AS plano, m.nome AS equipamento, mu.nome AS usado_equipamento,
-              v.lote, v.status, v.valido_ate, v.usado_em
+              v.lote, v.status, v.valido_ate, v.usado_em, v.impresso_em
          FROM vouchers v
          LEFT JOIN planos p ON p.id = v.plano_id
          LEFT JOIN mikrotiks m ON m.id = v.mikrotik_id AND m.empresa_id = v.empresa_id
@@ -150,8 +182,8 @@ exports.exportarCSV = async (req, res) => {
       params
     );
     const dia = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-    const linhas = [["Codigo", "Plano", "Equipamento", "Lote", "Status", "Valido ate", "Usado em", "Usado no equipamento"].join(";")];
-    rows.forEach((r) => linhas.push([r.codigo, r.plano, r.equipamento, r.lote, r.status, dia(r.valido_ate), r.usado_em ? new Date(r.usado_em).toISOString() : "", r.usado_equipamento].map(celulaCsv).join(";")));
+    const linhas = [["Codigo", "Plano", "Equipamento", "Lote", "Status", "Valido ate", "Usado em", "Usado no equipamento", "Impresso em"].join(";")];
+    rows.forEach((r) => linhas.push([r.codigo, r.plano, r.equipamento, r.lote, r.status, dia(r.valido_ate), r.usado_em ? new Date(r.usado_em).toISOString() : "", r.usado_equipamento, r.impresso_em ? new Date(r.impresso_em).toISOString() : ""].map(celulaCsv).join(";")));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="vouchers.csv"');
     res.send("﻿" + linhas.join("\n"));

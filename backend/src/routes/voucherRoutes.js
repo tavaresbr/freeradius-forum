@@ -6,6 +6,7 @@ const { promocaoLimiter } = require("../middleware/rateLimiters");
 router.get("/", c.listar);
 router.get("/export", c.exportarCSV);
 router.post("/", promocaoLimiter, c.criarLote);
+router.post("/impressos", c.marcarImpressos);
 router.post("/:id/cancelar", c.cancelar);
 router.delete("/:id", c.excluir);
 

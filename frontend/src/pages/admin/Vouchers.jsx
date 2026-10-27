@@ -21,12 +21,14 @@ export default function Vouchers() {
   const [planos, setPlanos] = useState([]);
   const [equipamentos, setEquipamentos] = useState({});
   const [empresaId, setEmpresaId] = useState("");
-  const [filtro, setFiltro] = useState({ status: "", lote: "", q: "", equipamento: "" });
+  const [filtro, setFiltro] = useState({ status: "", lote: "", q: "", equipamento: "", impresso: "" });
   const [page, setPage] = useState(1);
   const [msg, setMsg] = useState(null);
   const [modal, setModal] = useState(false);
   const [ocupado, setOcupado] = useState(false);
-  const [impressao, setImpressao] = useState(null); // { rede, imprimindo }
+  const [impressao, setImpressao] = useState(null); // { rede, qr, equipamento, eq, lote, quantidade, pular, marcados, imprimindo }
+  const [sel, setSel] = useState([]); // ids marcados na lista (so da pagina atual)
+  const [contagem, setContagem] = useState(null);
   const [novo, setNovo] = useState({ plano_id: "", mikrotik_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
   const [gerados, setGerados] = useState(null);
 
@@ -49,6 +51,7 @@ export default function Vouchers() {
   }, [chamar, filtro, page]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { setSel([]); }, [filtro, page]);
   useEffect(() => {
     chamar("/api/planos").then((d) => setPlanos(Array.isArray(d) ? d : d.data || [])).catch(() => {});
     chamar("/api/mikrotiks").then((d) => {
@@ -95,7 +98,31 @@ export default function Vouchers() {
     } catch (e) { setMsg({ tipo: "erro", texto: e.message }); }
   };
 
-  // Imprime so os vouchers DISPONIVEIS do filtro atual (lote/busca), todas as paginas.
+  // Contagem ao vivo do dialogo de impressao (sem marcados): quantos cartoes saem com estes filtros.
+  const consultaImpressao = useCallback((i) => {
+    const qs = new URLSearchParams({ page: 1, limit: 1, status: "disponivel" });
+    if (i.lote) qs.set("lote", i.lote);
+    if (i.eq) qs.set("equipamento", i.eq);
+    if (i.pular) qs.set("impresso", "nao");
+    if (filtro.q) qs.set("q", filtro.q);
+    return qs;
+  }, [filtro.q]);
+
+  useEffect(() => {
+    if (!impressao || impressao.marcados) { setContagem(null); return; }
+    let vivo = true;
+    chamar(`/api/vouchers?${consultaImpressao(impressao)}`)
+      .then((d) => { if (vivo) setContagem(d.total); })
+      .catch(() => { if (vivo) setContagem(null); });
+    return () => { vivo = false; };
+  }, [impressao?.lote, impressao?.eq, impressao?.pular, impressao?.marcados, consultaImpressao, chamar]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const abrirImpressao = () => setImpressao({
+    rede: "", qr: true, equipamento: "", eq: filtro.equipamento, lote: filtro.lote, quantidade: "",
+    pular: true, marcados: sel.length > 0, imprimindo: false,
+  });
+
+  // Imprime os marcados na lista OU os DISPONIVEIS dos filtros do dialogo (mais antigos primeiro, ate a quantidade).
   const imprimir = async (e) => {
     e.preventDefault();
     setMsg(null);
@@ -103,21 +130,29 @@ export default function Vouchers() {
     if (!janela) { setMsg({ tipo: "erro", texto: "O navegador bloqueou a janela de impressão. Permita pop-ups para este site." }); return; }
     setImpressao((i) => ({ ...i, imprimindo: true }));
     try {
-      let todos = [];
+      let lista = [];
       let emp = empresaId;
-      for (let pg = 1; pg <= 10; pg++) {
-        const qs = new URLSearchParams({ page: pg, limit: 200, status: "disponivel" });
-        if (filtro.lote) qs.set("lote", filtro.lote);
-        if (filtro.q) qs.set("q", filtro.q);
-        if (filtro.equipamento) qs.set("equipamento", filtro.equipamento);
-        const d = await chamar(`/api/vouchers?${qs}`);
-        todos = todos.concat(d.data || []);
-        if (d.empresa_id) emp = d.empresa_id;
-        if (todos.length >= d.total) break;
+      if (impressao.marcados) {
+        lista = dados.data.filter((v) => sel.includes(v.id) && v.status === "disponivel");
+      } else {
+        const max = impressao.quantidade ? Math.max(1, Math.min(Number(impressao.quantidade) || 0, 5000)) : Infinity;
+        for (let pg = 1; pg <= 25 && lista.length < max; pg++) {
+          const qs = consultaImpressao(impressao);
+          qs.set("page", pg); qs.set("limit", 200); qs.set("ordem", "asc");
+          const d = await chamar(`/api/vouchers?${qs}`);
+          lista = lista.concat(d.data || []);
+          if (d.empresa_id) emp = d.empresa_id;
+          if (lista.length >= d.total) break;
+        }
+        if (max !== Infinity) lista = lista.slice(0, max);
       }
-      if (!todos.length) throw new Error("Não há vouchers disponíveis neste filtro para imprimir");
+      if (!lista.length) throw new Error("Não há vouchers para imprimir com esta seleção");
       const comQr = impressao.qr && emp;
-      escreverCartoes(janela, todos, { rede: impressao.rede, ...(comQr ? { origem: window.location.origin, empresaId: emp, equipamentoPadrao: impressao.equipamento } : {}) });
+      escreverCartoes(janela, lista, { rede: impressao.rede, ...(comQr ? { origem: window.location.origin, empresaId: emp, equipamentoPadrao: impressao.equipamento } : {}) });
+      // Marca como impresso (nao bloqueia a impressao se falhar)
+      chamar("/api/vouchers/impressos", { method: "POST", body: JSON.stringify({ ids: lista.map((v) => v.id).slice(0, 1000) }) })
+        .then(() => carregar()).catch(() => {});
+      setSel([]);
       setImpressao(null);
     } catch (err) {
       janela.close(); setMsg({ tipo: "erro", texto: err.message }); setImpressao((i) => (i ? { ...i, imprimindo: false } : i)); }
@@ -136,7 +171,7 @@ export default function Vouchers() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button className={btnSecundario} onClick={exportar}>Exportar CSV</button>
-          <button className={btnSecundario} onClick={() => setImpressao({ rede: "", qr: true, equipamento: "", imprimindo: false })}>Imprimir cartões</button>
+          <button className={btnSecundario} onClick={abrirImpressao}>Imprimir cartões{sel.length > 0 ? ` (${sel.length})` : ""}</button>
           <button className={btnPrimario} onClick={() => setModal(true)}>Gerar vouchers</button>
         </div>
       </div>
@@ -145,11 +180,12 @@ export default function Vouchers() {
         <div className={`mb-4 p-3 rounded text-sm ${msg.tipo === "erro" ? "bg-red-900/30 text-red-300" : "bg-green-900/30 text-green-300"}`}>{msg.texto}</div>
       )}
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-3 gap-3 mb-1">
         {Object.entries(STATUS).map(([k, [r, cls]]) => (
           <div key={k} className="bg-[#1a1d27] border border-gray-800 rounded p-3">
             <span className={`text-xs px-2 py-1 rounded-full ${cls}`}>{r}</span>
             <p className="text-2xl font-bold text-white mt-2">{c[k] || 0}</p>
+            {k === "disponivel" && <p className="text-xs text-gray-500">{c.nao_impressos || 0} ainda não impressos</p>}
           </div>
         ))}
       </div>
@@ -164,6 +200,11 @@ export default function Vouchers() {
           <option value="">Todos os equipamentos</option>
           {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
         </select>
+        <select className={`${inputCls} !w-44`} value={filtro.impresso} onChange={(e) => { setPage(1); setFiltro({ ...filtro, impresso: e.target.value }); }}>
+          <option value="">Impressos e não</option>
+          <option value="nao">Não impressos</option>
+          <option value="sim">Já impressos</option>
+        </select>
         <select className={`${inputCls} !w-40`} value={filtro.lote} onChange={(e) => { setPage(1); setFiltro({ ...filtro, lote: e.target.value }); }}>
           <option value="">Todos os lotes</option>
           {(dados.lotes || []).map((l) => <option key={l} value={l}>{l}</option>)}
@@ -174,15 +215,29 @@ export default function Vouchers() {
         <table className="w-full text-sm text-gray-300">
           <thead className="text-xs text-gray-500 uppercase">
             <tr>
+              <th className="p-3 w-8">
+                <input type="checkbox" aria-label="Selecionar todos da página"
+                  checked={dados.data.filter((v) => v.status === "disponivel").length > 0 && dados.data.filter((v) => v.status === "disponivel").every((v) => sel.includes(v.id))}
+                  onChange={(e) => setSel(e.target.checked ? dados.data.filter((v) => v.status === "disponivel").map((v) => v.id) : [])} />
+              </th>
               <th className="text-left p-3">Código</th><th className="text-left p-3">Plano</th><th className="text-left p-3">Lote</th>
               <th className="text-left p-3">Status</th><th className="text-left p-3">Válido até</th><th className="text-left p-3">Usado em</th><th className="p-3" />
             </tr>
           </thead>
           <tbody>
-            {dados.data.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-gray-500">Nenhum voucher encontrado.</td></tr>}
+            {dados.data.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-gray-500">Nenhum voucher encontrado.</td></tr>}
             {dados.data.map((v) => (
               <tr key={v.id} className="border-t border-gray-800">
-                <td className="p-3 font-mono tracking-wider text-white">{v.codigo}</td>
+                <td className="p-3">
+                  {v.status === "disponivel" && (
+                    <input type="checkbox" aria-label={`Selecionar ${v.codigo}`} checked={sel.includes(v.id)}
+                      onChange={(e) => setSel(e.target.checked ? [...sel, v.id] : sel.filter((x) => x !== v.id))} />
+                  )}
+                </td>
+                <td className="p-3 font-mono tracking-wider text-white">
+                  {v.codigo}
+                  {v.impresso_em && <div className="text-xs text-gray-500 font-sans tracking-normal">impresso {fmt(v.impresso_em)}</div>}
+                </td>
                 <td className="p-3">
                   {v.plano_nome || "-"}
                   <div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div>
@@ -214,11 +269,42 @@ export default function Vouchers() {
 
       {impressao && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <form onSubmit={imprimir} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md space-y-3">
+          <form onSubmit={imprimir} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3">
             <h2 className="text-lg font-bold text-white">Imprimir cartões</h2>
-            <p className="text-sm text-gray-400">
-              Imprime os vouchers <b>disponíveis</b>{filtro.lote ? <> do lote <b>{filtro.lote}</b></> : " (todos os lotes)"}{filtro.q ? <>, com a busca “{filtro.q}”</> : ""}, 30 cartões por folha A4.
-            </p>
+            {impressao.marcados ? (
+              <p className="text-sm text-gray-400">Serão impressos os <b>{sel.length}</b> voucher(s) marcados na lista, 30 cartões por folha A4.</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-400">Imprime vouchers <b>disponíveis</b> (os mais antigos primeiro), 30 cartões por folha A4.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Equipamento</label>
+                    <select className={inputCls} value={impressao.eq} onChange={(e) => setImpressao({ ...impressao, eq: e.target.value })}>
+                      <option value="">Todos</option>
+                      {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Lote</label>
+                    <select className={inputCls} value={impressao.lote} onChange={(e) => setImpressao({ ...impressao, lote: e.target.value })}>
+                      <option value="">Todos</option>
+                      {(dados.lotes || []).map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Quantidade (vazio = todos)</label>
+                  <input type="number" min="1" max="5000" className={inputCls} value={impressao.quantidade} onChange={(e) => setImpressao({ ...impressao, quantidade: e.target.value })} />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input type="checkbox" checked={impressao.pular} onChange={(e) => setImpressao({ ...impressao, pular: e.target.checked })} />
+                  Pular os já impressos
+                </label>
+                <p className="text-sm text-white">
+                  {contagem === null ? "Contando..." : `${impressao.quantidade ? Math.min(contagem, Number(impressao.quantidade) || contagem) : contagem} cartão(ões) serão impressos`}
+                </p>
+              </>
+            )}
             <div>
               <label className="block text-xs text-gray-400 mb-1">Nome da rede Wi-Fi (opcional, aparece no cartão)</label>
               <input className={inputCls} maxLength={40} value={impressao.rede} onChange={(e) => setImpressao({ ...impressao, rede: e.target.value })} />
@@ -238,7 +324,7 @@ export default function Vouchers() {
             )}
             <div className="flex gap-2 justify-end pt-2">
               <button type="button" className={btnSecundario} onClick={() => setImpressao(null)}>Cancelar</button>
-              <button type="submit" className={btnPrimario} disabled={impressao.imprimindo}>{impressao.imprimindo ? "Preparando..." : "Imprimir"}</button>
+              <button type="submit" className={btnPrimario} disabled={impressao.imprimindo || (!impressao.marcados && contagem === 0)}>{impressao.imprimindo ? "Preparando..." : "Imprimir"}</button>
             </div>
           </form>
         </div>
