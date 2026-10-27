@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj, mascaraCpf } from "../../components/CamposEmpresa";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function Empresas() {
   const { isSuperAdmin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -23,6 +24,15 @@ export default function Empresas() {
     }
     fetchEmpresas();
   }, []);
+
+  // /super/empresas?editar=<id> (link "Cadastro" do painel) abre direto o cadastro da empresa
+  useEffect(() => {
+    const id = searchParams.get("editar");
+    if (!id || loading) return;
+    const empresa = empresas.find((e) => String(e.id) === id);
+    if (empresa) handleEdit(empresa);
+    setSearchParams({}, { replace: true });
+  }, [loading, empresas]);
 
   const fetchEmpresas = async () => {
     try {

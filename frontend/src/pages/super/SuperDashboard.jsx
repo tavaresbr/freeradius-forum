@@ -126,7 +126,13 @@ export default function SuperDashboard() {
                         {e.ativo ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-4 text-center whitespace-nowrap">
+                      <Link
+                        to={`/super/empresas?editar=${e.id}`}
+                        className="text-yellow-400 hover:text-yellow-300 text-sm mr-4"
+                      >
+                        Cadastro
+                      </Link>
                       <button
                         onClick={async () => {
                           try {
