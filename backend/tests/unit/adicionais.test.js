@@ -234,7 +234,7 @@ test('adicionaisEmpresa: lista o catalogo com disponivel/motivo e as compras', a
   respostas = [
     { re: /FROM saas_adicionais a LEFT JOIN saas_planos pm/, out: [[
       { id: 1, nome: '+1 equipamento', descricao: null, tipo: 'equipamentos', incremento: 1, valor: '29.90', ciclo_dias: 30, plano_minimo_id: 2, plano_minimo_nome: 'Start', plano_minimo_ordem: 2 },
-      { id: 8, nome: 'Dominio', descricao: null, tipo: 'dominio', incremento: 1, valor: '39.90', ciclo_dias: 30, plano_minimo_id: 4, plano_minimo_nome: 'Business', plano_minimo_ordem: 4 },
+      { id: 8, nome: 'Dominio', descricao: null, tipo: 'sem_marca', incremento: 1, valor: '39.90', ciclo_dias: 30, plano_minimo_id: 4, plano_minimo_nome: 'Business', plano_minimo_ordem: 4 },
     ]] },
     { re: /SELECT ordem FROM saas_planos/, out: [[{ ordem: 2 }]] },
     ...baseStatus(),

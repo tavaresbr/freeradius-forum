@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, ativo: true, ordem: 0 };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, ativo: true, ordem: 0 };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
   ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
   ["exportacao", "Exportação da base"], ["sem_marca", "Remover marca Apex"], ["dominio", "Domínio próprio"],
 ];
-const TIPOS_ATIVOS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao"]; // sem_marca e dominio ainda nao tem efeito: so inativos
+const TIPOS_ATIVOS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "dominio"]; // sem_marca ainda nao tem efeito: so inativo
 const VAZIO_AD = { nome: "", descricao: "", tipo: "equipamentos", incremento: 1, valor: "", ciclo_dias: 30, plano_minimo_id: "", ativo: true, ordem: 0 };
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm";
 
@@ -99,9 +99,9 @@ export default function PlanosSaas() {
   const duplicar = (p) => {
     setEditId(null);
     setCopiaDe(p.nome);
-    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, ativo: false, ordem: (p.ordem ?? 0) + 1 });
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, ativo: false, ordem: (p.ordem ?? 0) + 1 });
   };
-  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, ativo: !!p.ativo }); };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, ativo: !!p.ativo }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -256,7 +256,7 @@ export default function PlanosSaas() {
                 <div><label className="block text-sm text-gray-400 mb-1">Máx. portais</label><input type="number" min="0" placeholder="ilimitado" className={inputCls} value={form.max_portais} onChange={campo("max_portais")} /></div>
                 <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2" data-testid="recursos-plano">
                   <span className="w-full text-sm text-gray-400">Recursos incluídos</span>
-                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"]].map(([k, r]) => (
+                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     <label key={k} className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={!!form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} /> {r}</label>
                   ))}
                 </div>

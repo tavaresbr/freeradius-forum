@@ -17,8 +17,8 @@ const mascarar = (v) => (v ? `${String(v).slice(0, 8)}...` : "");
 
 // Adicionais que o sistema ja sabe aplicar (Fase 1): sobem o limite de equipamentos/admins.
 const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
-const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao"];
-const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao"]; // quantidade fixa 1; o plano pode ja incluir
+const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "dominio"];
+const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao", "dominio"]; // quantidade fixa 1; o plano pode ja incluir
 const MAX_QUANTIDADE = 20;
 const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins", portais: "plano_max_portais" };
 
@@ -436,6 +436,7 @@ function dadosPlano(b) {
     b.inclui_campanhas ? 1 : 0,
     b.inclui_exportacao ? 1 : 0,
     nulo(b.max_portais),
+    b.inclui_dominio ? 1 : 0,
   ];
 }
 
@@ -443,7 +444,7 @@ exports.criarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   const [r] = await db.execute(
-    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
+    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais, inclui_dominio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
   invalidar();
   res.status(201).json({ id: r.insertId });
 };
@@ -452,7 +453,7 @@ exports.atualizarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   await db.execute(
-    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=? WHERE id=?",
+    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=?, inclui_dominio=? WHERE id=?",
     [...d, req.params.id]);
   invalidar();
   res.json({ message: "Plano atualizado" });

@@ -605,8 +605,10 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
       sendEvent({ type: "step", ...step });
     };
 
+    const { portalHostDaEmpresa } = require("../utils/dominioPortal");
+    const portalHost = await portalHostDaEmpresa(req.empresa_id).catch(() => null);
     const result = await configurarHotspot(
-      mikrotik, portal, systemDomain.replace(/:\d+$/, ""), config, empresa || {}, onStep
+      mikrotik, portal, systemDomain.replace(/:\d+$/, ""), config, empresa || {}, onStep, portalHost
     );
 
     // Atualizar end_hotspot

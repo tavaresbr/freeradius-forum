@@ -44,7 +44,8 @@ export default function AdminLayout({ children }) {
   // SaaS Fase 2: tela de recurso que o plano/adicionais nao incluem (super admin nunca e' bloqueado).
   const rota = location.pathname.slice(basePath.length);
   const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
-    : /^\/campanhas(\/|$)/.test(rota) ? ["campanhas", "Campanhas"] : null;
+    : /^\/campanhas(\/|$)/.test(rota) ? ["campanhas", "Campanhas"]
+    : /^\/dominio(\/|$)/.test(rota) ? ["dominio", "Domínio próprio"] : null;
   const recursoBloqueado = !isSuperAdmin && recursoDaRota && assinatura?.recursos?.[recursoDaRota[0]] === false ? recursoDaRota[1] : null;
   useEffect(() => {
     if (assinatura?.bloqueada && !naTelaAssinatura) navigate(`${basePath}/assinatura`, { replace: true });
@@ -251,6 +252,7 @@ export default function AdminLayout({ children }) {
       children: [
         { key: "configuracoes", title: "Configurações", path: `${basePath}/configuracoes` },
         { key: "configuracoes", title: "Integrações", path: `${basePath}/integracoes` },
+        { key: "configuracoes", title: "Domínio próprio", path: `${basePath}/dominio` },
         { key: "usuarios", title: "Usuários", path: `${basePath}/usuarios` },
         ...(isSuperAdmin ? [{ key: "grupos-permissao", title: "Permissões", path: `${basePath}/grupos-permissao` }] : []),
       ]

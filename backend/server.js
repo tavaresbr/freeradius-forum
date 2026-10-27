@@ -56,6 +56,7 @@ const importacaoRoutes = require("./src/routes/importacaoRoutes");
 const integracaoRoutes = require("./src/routes/integracaoRoutes");
 const complianceRoutes = require("./src/routes/complianceRoutes");
 const empresaRoutes = require("./src/routes/empresaRoutes");
+const { portalHostDaEmpresa } = require("./src/utils/dominioPortal");
 const plataformaRoutes = require("./src/routes/plataformaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
 const registroRoutes = require("./src/routes/registroRoutes");
@@ -104,6 +105,7 @@ const corsOptions = {
 }
 app.use(cors(corsOptions))
 app.use(express.json({ limit: '1mb' }))
+app.use(require('./src/middleware/hostPortal'))  // dominio proprio de empresa: so o portal (sem login/registro do painel)
 
 // Servir arquivos de campanhas (publicos, com cache de 1 dia)
 app.use('/uploads/campanhas',
@@ -191,6 +193,7 @@ app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sesso
 app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
 app.use("/api/wireguard", auth, tenant, exigeAssinatura, checkPermissao('vpn'), wireguardRoutes);
 app.use("/api/portais", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalRoutes);
+app.use("/api/dominio", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('dominio'), require("./src/routes/dominioRoutes"));
 app.use("/api/campanhas", auth, tenant, exigeAssinatura, checkPermissao('portais'), exigeRecurso('campanhas'), campanhasRoutes);
 app.use("/api/portal-templates", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalTemplateRoutes);
 app.use("/api/leads", auth, tenant, exigeAssinatura, checkPermissao('leads'), leadRoutes);
@@ -228,7 +231,9 @@ app.get("/api/hotspot-login/:mikrotikId", async (req, res) => {
     const empresaId = normalizarId(mikrotik?.empresa_id) || '';
     const empresaSlug = normalizarSlug(mikrotik?.empresa_slug || 'default');
     const systemDomain = normalizarHost(process.env.SYSTEM_DOMAIN || req.hostname);
-    const portalUrl = `https://${systemDomain}/hotspot/redirect/${mikrotikId}`;
+    // Dominio proprio da empresa (se ativo e o plano inclui); senao o da plataforma. O roteador continua baixando este HTML da plataforma.
+    const portalHost = normalizarHost(await portalHostDaEmpresa(mikrotik?.empresa_id).catch(() => systemDomain)) || systemDomain;
+    const portalUrl = `https://${portalHost}/hotspot/redirect/${mikrotikId}`;
     const fullUrl = `${portalUrl}?mac=$(mac)&ip=$(ip)&mikrotik_id=${mikrotikId}&empresa_id=${empresaId}&empresa=${empresaSlug}`;
 
     // HTML no padrão MikroTik hotspot login.html
