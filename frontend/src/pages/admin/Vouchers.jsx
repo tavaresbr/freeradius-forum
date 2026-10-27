@@ -107,7 +107,7 @@ export default function Vouchers() {
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         {Object.entries(STATUS).map(([k, [r, cls]]) => (
-          <div key={k} className="bg-[#161b27] border border-gray-800 rounded p-3">
+          <div key={k} className="bg-[#1a1d27] border border-gray-800 rounded p-3">
             <span className={`text-xs px-2 py-1 rounded-full ${cls}`}>{r}</span>
             <p className="text-2xl font-bold text-white mt-2">{c[k] || 0}</p>
           </div>
@@ -126,7 +126,7 @@ export default function Vouchers() {
         </select>
       </div>
 
-      <div className="bg-[#161b27] border border-gray-800 rounded">
+      <div className="bg-[#1a1d27] border border-gray-800 rounded">
         <table className="w-full text-sm text-gray-300">
           <thead className="text-xs text-gray-500 uppercase">
             <tr>
@@ -164,7 +164,7 @@ export default function Vouchers() {
 
       {modal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#161b27] border border-gray-700 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-white mb-4">Gerar vouchers</h2>
             {gerados ? (
               <div>
