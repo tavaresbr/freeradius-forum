@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../contexts/AuthContext";
+import { avisoUpgrade } from "../../utils/upgradeAviso";
 
 const ROTULO = { trial: "Período de teste", ativa: "Ativa", vencida: "Vencida", cancelada: "Cancelada", sem_assinatura: "Sem assinatura" };
 const COR = {
@@ -15,6 +16,8 @@ export default function Assinatura() {
   const podePagar = isSuperAdmin || user?.role === "owner"; // mesma regra do backend (authorize owner/super_admin)
   const [st, setSt] = useState(null);
   const [planos, setPlanos] = useState([]);
+  const [adic, setAdic] = useState({ catalogo: [], minhas: [] });
+  const [qtds, setQtds] = useState({}); // quantidade escolhida por adicional
   const [cobranca, setCobranca] = useState(null);
   const [gerando, setGerando] = useState(null);
   const [erro, setErro] = useState("");
@@ -30,12 +33,14 @@ export default function Assinatura() {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   const carregar = useCallback(async () => {
-    const [a, b] = await Promise.all([
+    const [a, b, c] = await Promise.all([
       fetch("/api/assinatura/status", { headers }),
       fetch("/api/assinatura/planos"),
+      fetch("/api/assinatura/adicionais", { headers }),
     ]);
     if (a.ok) setSt(await a.json());
     if (b.ok) setPlanos(await b.json());
+    if (c.ok) setAdic(await c.json());
   }, []);
 
   useEffect(() => { carregar().catch(() => {}); return () => clearInterval(timer.current); }, [carregar]);
@@ -68,7 +73,7 @@ export default function Assinatura() {
       const d = await r.json();
       if (d.status === "aprovada") {
         clearInterval(timer.current);
-        setCobranca((c) => ({ ...(c || {}), pago: true, plano: c?.plano || escolhido?.nome }));
+        setCobranca((c) => ({ ...(c || {}), pago: true, plano: c?.plano || escolhido?.rotulo }));
         setEscolhido(null);
         carregar();
       } else if (d.status === "recusada") {
@@ -89,7 +94,7 @@ export default function Assinatura() {
       const res = await fetch("/api/assinatura/cartao", {
         method: "POST", headers,
         body: JSON.stringify({
-          plano_id: escolhido.id, card_number: cartao.numero, cardholder_name: cartao.nome,
+          ...escolhido.payload, card_number: cartao.numero, cardholder_name: cartao.nome,
           expiration_month: mm, expiration_year: aa, security_code: cartao.cvv,
           identification_number: cartao.cpf, device_session_id: window.MP_DEVICE_SESSION_ID,
         }),
@@ -98,11 +103,11 @@ export default function Assinatura() {
       if (!res.ok) throw new Error(d.message || d.error || "Pagamento recusado.");
       setCartao({ numero: "", nome: "", validade: "", cvv: "", cpf: "" });
       if (d.status === "approved") {
-        setCobranca({ pago: true, plano: escolhido.nome });
+        setCobranca({ pago: true, plano: escolhido.rotulo });
         setEscolhido(null);
         carregar();
       } else {
-        setCobranca({ aguardandoCartao: true, plano: escolhido.nome });
+        setCobranca({ aguardandoCartao: true, plano: escolhido.rotulo });
         setEscolhido(null);
         aguardarConfirmacao(d.id);
       }
@@ -113,13 +118,25 @@ export default function Assinatura() {
     }
   };
 
+  // Itens a pagar: plano ou adicional. `payload` e' o que o servidor recebe (o valor e' recalculado la).
+  const itemPlano = (p) => ({ chave: `p${p.id}`, nome: p.nome, rotulo: `Assinatura ${p.nome}`, valor: Number(p.valor), payload: { plano_id: p.id } });
+  const itemAdicional = (a, qtd) => ({
+    chave: `a${a.id}`, nome: a.nome, rotulo: `Adicional ${a.nome}${qtd > 1 ? ` x${qtd}` : ""}`,
+    valor: Math.round(a.valor * qtd * 100) / 100, payload: { adicional_id: a.id, quantidade: qtd }, extra: Math.round(a.valor * qtd * 100) / 100,
+  });
+  const itemRenovacao = (m) => ({
+    chave: `r${m.id}`, nome: m.nome, rotulo: `Renovação ${m.nome}${m.quantidade > 1 ? ` x${m.quantidade}` : ""}`,
+    valor: Math.round(m.valor * m.quantidade * 100) / 100, payload: { renovar_adicional_id: m.id },
+  });
+  const escolher = (item) => { setEscolhido(item); setMetodo("pix"); setErro(""); };
+
   const pagar = async (plano) => {
-    setErro(""); setGerando(plano.id);
+    setErro(""); setGerando(plano.chave);
     try {
-      const res = await fetch("/api/assinatura/cobranca", { method: "POST", headers, body: JSON.stringify({ plano_id: plano.id }) });
+      const res = await fetch("/api/assinatura/cobranca", { method: "POST", headers, body: JSON.stringify(plano.payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "Erro ao gerar cobrança");
-      setCobranca({ ...data, plano: plano.nome });
+      setCobranca({ ...data, plano: plano.rotulo });
       aguardarConfirmacao(data.id);
     } catch (e) {
       setErro(e.message);
@@ -132,6 +149,15 @@ export default function Assinatura() {
     try { await navigator.clipboard.writeText(cobranca.copia_cola); setCopiado(true); setTimeout(() => setCopiado(false), 2000); } catch { /* ignora */ }
   };
 
+  const vigentes = adic.minhas.filter((m) => m.vigente);
+  const adicionaisValor = vigentes.reduce((t, m) => t + m.valor * m.quantidade, 0);
+  const aviso = (extra = 0) => avisoUpgrade({ planos, planoAtualId: st?.plano_id, adicionaisValor, extra });
+  const textoAviso = (a) => (a.tipo === "economiza"
+    ? `O plano ${a.plano.nome} (${brl(a.plano.valor)}) custa ${brl(a.diferenca)} a menos que a sua soma atual e inclui mais. Vale fazer upgrade.`
+    : `Por ${brl(a.diferenca)} a mais você leva o plano ${a.plano.nome} completo.`);
+  const caixaAviso = (a) => a && (
+    <p className="text-sm text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3" data-testid="aviso-upgrade">💡 {textoAviso(a)}</p>
+  );
   const fim = st?.fim ? new Date(st.fim).toLocaleDateString("pt-BR") : "—";
 
   return (
@@ -159,8 +185,8 @@ export default function Assinatura() {
             <div><p className="text-gray-500">{st.status === "trial" ? "Teste até" : "Vencimento"}</p><p className="text-white mt-1">{fim}</p></div>
             <div>
               <p className="text-gray-500">Uso</p>
-              <p className="text-white mt-1">{st.uso?.equipamentos ?? 0}/{limite(st.max_equipamentos)} equipamentos</p>
-              <p className="text-white">{st.uso?.admins ?? 0}/{limite(st.max_admins)} administradores</p>
+              <p className="text-white mt-1">{st.uso?.equipamentos ?? 0}/{limite(st.max_equipamentos)} equipamentos{st.extras?.equipamentos > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_equipamentos)} do plano + {st.extras.equipamentos})</span>}</p>
+              <p className="text-white">{st.uso?.admins ?? 0}/{limite(st.max_admins)} administradores{st.extras?.admins > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_admins)} do plano + {st.extras.admins})</span>}</p>
             </div>
           </div>
         )}
@@ -169,15 +195,16 @@ export default function Assinatura() {
 
         {escolhido && !cobranca ? (
           <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 max-w-lg">
-            <h2 className="text-lg font-bold text-white">{escolhido.nome} – {brl(escolhido.valor)}</h2>
+            <h2 className="text-lg font-bold text-white">{escolhido.rotulo} – {brl(escolhido.valor)}</h2>
+            {escolhido.extra > 0 && <div className="mt-3">{caixaAviso(aviso(escolhido.extra))}</div>}
             <div className="flex gap-2 mt-4">
               {[["pix", "PIX"], ["cartao", "Cartão de crédito"]].map(([k, r]) => (
                 <button key={k} onClick={() => { setMetodo(k); setErro(""); }} className={`px-4 py-2 rounded-lg text-sm ${metodo === k ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-300"}`}>{r}</button>
               ))}
             </div>
             {metodo === "pix" ? (
-              <button disabled={gerando === escolhido.id} onClick={() => pagar(escolhido)} className="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">
-                {gerando === escolhido.id ? "Gerando PIX..." : "Gerar QR Code PIX"}
+              <button disabled={gerando === escolhido.chave} onClick={() => pagar(escolhido)} className="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">
+                {gerando === escolhido.chave ? "Gerando PIX..." : "Gerar QR Code PIX"}
               </button>
             ) : fp === "loading" ? (
               <p className="mt-4 text-sm text-gray-400">Preparando ambiente seguro...</p>
@@ -195,16 +222,16 @@ export default function Assinatura() {
                 <button disabled={pagandoCartao} className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">{pagandoCartao ? "Processando..." : `Pagar ${brl(escolhido.valor)}`}</button>
               </form>
             )}
-            <button onClick={() => { setEscolhido(null); setErro(""); }} className="mt-3 text-sm text-gray-400 underline">Escolher outro plano</button>
+            <button onClick={() => { setEscolhido(null); setErro(""); }} className="mt-3 text-sm text-gray-400 underline">Voltar</button>
           </div>
         ) : cobranca ? (
           <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 text-center">
             {cobranca.aguardandoCartao ? (
-              <p className="text-gray-300">Pagamento do plano {cobranca.plano} em análise... a tela atualiza sozinha.</p>
+              <p className="text-gray-300">Pagamento de {cobranca.plano} em análise... a tela atualiza sozinha.</p>
             ) : cobranca.pago ? (
               <>
                 <p className="text-2xl text-green-400 font-bold">Pagamento confirmado!</p>
-                <p className="text-gray-400 mt-2">Assinatura {cobranca.plano} ativada.</p>
+                <p className="text-gray-400 mt-2">{cobranca.plano} ativado.</p>
                 <button onClick={() => setCobranca(null)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Voltar</button>
               </>
             ) : (
@@ -231,12 +258,66 @@ export default function Assinatura() {
                   <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
                   <li>✓ {limite(p.max_admins)} administradores</li>
                 </ul>
-                <button disabled={!podePagar} onClick={() => { setEscolhido(p); setMetodo("pix"); setErro(""); }} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium">
+                <button disabled={!podePagar} onClick={() => escolher(itemPlano(p))} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium">
                   {p.id === st?.plano_id && st?.status === "ativa" ? "Renovar" : "Assinar"}
                 </button>
               </div>
             ))}
           </div>
+        )}
+
+        {!escolhido && !cobranca && (adic.catalogo.length > 0 || adic.minhas.length > 0) && (
+          <section className="space-y-4" data-testid="secao-adicionais">
+            <div>
+              <h2 className="text-xl font-bold text-white">Adicionais</h2>
+              <p className="text-sm text-gray-400 mt-1">Fique no seu plano e compre só o que precisa. Cada adicional vale 30 dias e pode ser renovado.</p>
+            </div>
+            {caixaAviso(aviso())}
+
+            {adic.minhas.length > 0 && (
+              <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5">
+                <h3 className="text-sm font-semibold text-white mb-3">Seus adicionais</h3>
+                <ul className="divide-y divide-gray-800">
+                  {adic.minhas.map((m) => (
+                    <li key={m.id} className="py-2 flex flex-wrap items-center gap-3 text-sm">
+                      <span className="text-white flex-1 min-w-[10rem]">{m.nome}{m.quantidade > 1 && ` x${m.quantidade}`}</span>
+                      <span className={m.vigente ? "text-green-400" : "text-red-400"}>
+                        {m.vigente ? `vence em ${new Date(m.vence_em).toLocaleDateString("pt-BR")}` : `venceu em ${new Date(m.vence_em).toLocaleDateString("pt-BR")}`}
+                      </span>
+                      <button disabled={!podePagar} onClick={() => escolher(itemRenovacao(m))} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg text-xs">Renovar</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {adic.catalogo.map((a) => {
+                const qtd = Math.min(20, Math.max(1, qtds[a.id] || 1));
+                const item = itemAdicional(a, qtd);
+                return (
+                  <div key={a.id} className={`bg-[#1a1d27] border border-gray-800 rounded-xl p-5 flex flex-col ${a.disponivel ? "" : "opacity-60"}`}>
+                    <h3 className="text-lg font-bold text-white">{a.nome}</h3>
+                    <p className="text-sm text-gray-500">{a.descricao}</p>
+                    <p className="mt-3 text-2xl font-extrabold text-white">{brl(a.valor)}<span className="text-sm text-gray-500 font-normal"> / {a.ciclo_dias} dias</span></p>
+                    {a.plano_minimo_nome && <p className="text-xs text-gray-500 mt-1">A partir do plano {a.plano_minimo_nome}</p>}
+                    {a.disponivel ? (
+                      <>
+                        <label className="mt-3 text-xs text-gray-400 flex items-center gap-2">Quantidade
+                          <input type="number" min="1" max="20" value={qtd} onChange={(e) => setQtds({ ...qtds, [a.id]: parseInt(e.target.value, 10) || 1 })} className="w-16 bg-[#0d1117] border border-gray-700 text-white rounded px-2 py-1 text-sm" />
+                        </label>
+                        {qtd > 1 && <p className="text-xs text-gray-400 mt-1">Total: {brl(item.valor)}</p>}
+                        {(() => { const av = aviso(item.extra); return av ? <p className="text-xs text-yellow-300 mt-2">💡 {textoAviso(av)}</p> : null; })()}
+                        <button disabled={!podePagar} onClick={() => escolher(item)} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium">Comprar</button>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-xs text-gray-400 flex-1">{a.motivo}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
       </div>
     </AdminLayout>
