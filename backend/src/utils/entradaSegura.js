@@ -32,6 +32,14 @@ function urlHttpSegura(v) {
   }
 }
 
+/** Destino de portal: caminho relativo do proprio site ("/cadastro", nao "//host" nem "/\\host") ou http(s) absoluto. */
+function urlPortalSegura(v) {
+  if (!v || typeof v !== "string") return null;
+  const t = v.trim();
+  if (/^\/(?![\/\\])/.test(t) && !/[\x00-\x1f]/.test(t)) return t;
+  return urlHttpSegura(t);
+}
+
 /** IPv4 privado/loopback/link-local (rede local do cliente, onde ficam os controllers). */
 function ipPrivado(host) {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(host || ""));
@@ -64,5 +72,5 @@ function hostPermitidoGateway(host, gw = {}) {
 
 module.exports = {
   escapeHtml, normalizarMac, normalizarIp, normalizarId, normalizarSlug, normalizarHost,
-  urlHttpSegura, ipPrivado, hostDe, hostPermitidoGateway,
+  urlHttpSegura, urlPortalSegura, ipPrivado, hostDe, hostPermitidoGateway,
 };
