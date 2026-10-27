@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require("uuid");
 const { baseUrlPublica } = require("../utils/baseUrl");
 const db = require("../../db");
 const { validarAssinaturaWebhook } = require("../utils/mpSignature");
-const { obterStatus, invalidar } = require("../utils/assinatura");
+const { obterStatus, invalidar, tabelaInexistente } = require("../utils/assinatura");
 
 // ---------- helpers ----------
 
@@ -15,6 +15,90 @@ async function getPlataformaMp() {
 
 const mascarar = (v) => (v ? `${String(v).slice(0, 8)}...` : "");
 
+// Adicionais que o sistema ja sabe aplicar (Fase 1): sobem o limite de equipamentos/admins.
+const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
+const TIPOS_APLICAVEIS = ["equipamentos", "admins"];
+const MAX_QUANTIDADE = 20;
+const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins" };
+
+/** Por que a empresa NAO pode comprar este adicional agora (null = pode). Funcao pura. */
+function motivoIndisponivel(adicional, st, ordemAtual, ordemMinimo) {
+  if (!TIPOS_APLICAVEIS.includes(adicional.tipo)) return "Recurso ainda não disponível.";
+  if (!st || !["trial", "ativa"].includes(st.status)) return "Renove o plano antes de comprar adicionais.";
+  if (adicional.plano_minimo_id != null && (ordemAtual == null || ordemMinimo == null || ordemAtual < ordemMinimo)) {
+    return `Disponível a partir do plano ${adicional.plano_minimo_nome || "superior"}.`;
+  }
+  if (st[TIPO_PLANO_MAX[adicional.tipo]] == null) return "Seu plano já é ilimitado neste recurso.";
+  return null;
+}
+
+async function ordemDoPlano(planoId) {
+  if (planoId == null) return null;
+  const [[p]] = await db.execute("SELECT ordem FROM saas_planos WHERE id = ?", [planoId]);
+  return p ? Number(p.ordem) : null;
+}
+
+/**
+ * Item a cobrar: plano (`plano_id`), adicional novo (`adicional_id` + `quantidade`) ou renovacao
+ * (`renovar_adicional_id`). Valor SEMPRE calculado aqui, nunca vem do cliente.
+ * @returns {{erro?: {status:number, message:string}, item?: Object}}
+ */
+async function resolverItem(b, empresaId) {
+  const renovarId = parseInt(b.renovar_adicional_id, 10);
+  const adicionalId = parseInt(b.adicional_id, 10);
+  if (!renovarId && !adicionalId) {
+    const planoId = parseInt(b.plano_id, 10);
+    const [[plano]] = await db.execute("SELECT id, nome, valor FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
+    if (!plano) return { erro: { status: 404, message: "Plano não encontrado." } };
+    return { item: { tipo: "plano", id: plano.id, valor: Number(plano.valor), titulo: `Assinatura ${plano.nome}`, nome: plano.nome, cobranca: { plano_id: plano.id } } };
+  }
+
+  let quantidade = Math.floor(Number(b.quantidade) || 1);
+  let compraId = null;
+  let idAdicional = adicionalId;
+  if (renovarId) {
+    const [[compra]] = await db.execute("SELECT id, adicional_id, quantidade FROM assinatura_adicionais WHERE id = ? AND empresa_id = ?", [renovarId, empresaId]);
+    if (!compra) return { erro: { status: 404, message: "Adicional não encontrado." } };
+    compraId = compra.id; idAdicional = compra.adicional_id; quantidade = compra.quantidade;
+  }
+  if (quantidade < 1 || quantidade > MAX_QUANTIDADE) return { erro: { status: 400, message: `Quantidade deve ser de 1 a ${MAX_QUANTIDADE}.` } };
+
+  const [[ad]] = await db.execute(
+    `SELECT a.id, a.nome, a.tipo, a.valor, a.plano_minimo_id, pm.nome AS plano_minimo_nome, pm.ordem AS plano_minimo_ordem
+       FROM saas_adicionais a LEFT JOIN saas_planos pm ON pm.id = a.plano_minimo_id
+      WHERE a.id = ? AND a.ativo = 1`,
+    [idAdicional]
+  );
+  if (!ad) return { erro: { status: 404, message: "Adicional não encontrado." } };
+  const st = await obterStatus(empresaId);
+  const motivo = motivoIndisponivel(ad, st, await ordemDoPlano(st.plano_id), ad.plano_minimo_ordem == null ? null : Number(ad.plano_minimo_ordem));
+  if (motivo) return { erro: { status: 409, message: motivo } };
+  return {
+    item: {
+      tipo: "adicional", id: ad.id, valor: Math.round(Number(ad.valor) * quantidade * 100) / 100,
+      titulo: `Adicional ${ad.nome}${quantidade > 1 ? ` x${quantidade}` : ""}`, nome: ad.nome,
+      cobranca: { adicional_id: ad.id, quantidade, assinatura_adicional_id: compraId },
+    },
+  };
+}
+
+/** INSERT da cobranca. Plano usa o INSERT original (funciona mesmo sem a migration 041). */
+async function inserirCobranca(empresaId, item, metodo) {
+  const c = item.cobranca;
+  if (item.tipo === "plano") {
+    const [r] = await db.execute(
+      "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status) VALUES (?, ?, ?, ?, 'aguardando')",
+      [empresaId, c.plano_id, item.valor, metodo]
+    );
+    return r.insertId;
+  }
+  const [r] = await db.execute(
+    "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status, adicional_id, quantidade, assinatura_adicional_id) VALUES (?, NULL, ?, ?, 'aguardando', ?, ?, ?)",
+    [empresaId, item.valor, metodo, c.adicional_id, c.quantidade, c.assinatura_adicional_id || null]
+  );
+  return r.insertId;
+}
+
 /** Aplica um pagamento aprovado: marca a cobranca (atomico) e estende a assinatura. */
 async function ativarPorCobranca(cobranca) {
   // Idempotencia: so quem transiciona aguardando->aprovada estende o periodo.
@@ -23,6 +107,24 @@ async function ativarPorCobranca(cobranca) {
     [cobranca.id]
   );
   if (r.affectedRows !== 1) return false;
+
+  if (cobranca.adicional_id) {
+    const [[ad]] = await db.execute("SELECT ciclo_dias FROM saas_adicionais WHERE id = ?", [cobranca.adicional_id]);
+    const cicloAd = ad?.ciclo_dias || 30;
+    if (cobranca.assinatura_adicional_id) {
+      await db.execute(
+        "UPDATE assinatura_adicionais SET vence_em = DATE_ADD(GREATEST(NOW(), vence_em), INTERVAL ? DAY) WHERE id = ? AND empresa_id = ?",
+        [cicloAd, cobranca.assinatura_adicional_id, cobranca.empresa_id]
+      );
+    } else {
+      await db.execute(
+        "INSERT INTO assinatura_adicionais (empresa_id, adicional_id, quantidade, vence_em) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))",
+        [cobranca.empresa_id, cobranca.adicional_id, cobranca.quantidade || 1, cicloAd]
+      );
+    }
+    invalidar(cobranca.empresa_id);
+    return true;
+  }
 
   const [[plano]] = await db.execute("SELECT ciclo_dias FROM saas_planos WHERE id = ?", [cobranca.plano_id]);
   const ciclo = plano?.ciclo_dias || 30;
@@ -74,7 +176,6 @@ exports.pagarCartao = async (req, res) => {
   const mes = parseInt(b.expiration_month, 10);
   const anoRaw = parseInt(b.expiration_year, 10);
   const ano = anoRaw < 100 ? 2000 + anoRaw : anoRaw;
-  const planoId = parseInt(b.plano_id, 10);
 
   if (cardDigits.length < 13 || cardDigits.length > 19) return res.status(400).json({ message: "Número do cartão inválido." });
   if (cvv.length < 3 || cvv.length > 4) return res.status(400).json({ message: "CVV inválido." });
@@ -86,21 +187,17 @@ exports.pagarCartao = async (req, res) => {
 
   let cobrancaId = null;
   try {
-    const [[plano]] = await db.execute("SELECT id, nome, valor FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
-    if (!plano) return res.status(404).json({ message: "Plano não encontrado." });
+    const { erro, item } = await resolverItem(b, req.empresa_id);
+    if (erro) return res.status(erro.status).json({ message: erro.message });
 
     const cfg = await getPlataformaMp();
     if (!cfg?.access_token || !cfg?.public_key) return res.status(503).json({ message: "Pagamento indisponível no momento. Fale com o suporte." });
 
     const empresaId = req.empresa_id;
     const [[empresa]] = await db.execute("SELECT email FROM empresas WHERE id = ?", [empresaId]);
-    const valor = Number(plano.valor);
+    const valor = item.valor;
 
-    const [ins] = await db.execute(
-      "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status) VALUES (?, ?, ?, 'cartao', 'aguardando')",
-      [empresaId, plano.id, plano.valor]
-    );
-    cobrancaId = ins.insertId;
+    cobrancaId = await inserirCobranca(empresaId, item, "cartao");
 
     let bin;
     try { bin = await lookupBin(cardDigits.slice(0, 6), valor, cfg.public_key); }
@@ -127,7 +224,7 @@ exports.pagarCartao = async (req, res) => {
       {
         transaction_amount: valor,
         token,
-        description: `Assinatura ${plano.nome}`,
+        description: item.titulo,
         installments: 1,
         payment_method_id: bin.payment_method_id,
         issuer_id: bin.issuer_id || undefined,
@@ -138,7 +235,7 @@ exports.pagarCartao = async (req, res) => {
         binary_mode: false,
         metadata: { device_session_id: b.device_session_id },
         payer: { email: (empresa?.email || cfg.email_pagador || "").trim() },
-        additional_info: { items: [{ id: String(plano.id), title: `Assinatura ${plano.nome}`, category_id: "services", quantity: 1, unit_price: valor }] },
+        additional_info: { items: [{ id: `${item.tipo}_${item.id}`, title: item.titulo, category_id: "services", quantity: 1, unit_price: valor }] },
       },
       { headers: { Authorization: `Bearer ${cfg.access_token}`, "Content-Type": "application/json", "X-Idempotency-Key": uuidv4(), "X-meli-session-id": b.device_session_id }, timeout: 30000 }
     );
@@ -190,11 +287,45 @@ exports.status = async (req, res) => {
   }
 };
 
+// Catalogo de adicionais ativos + o que a empresa ja comprou (vigentes e vencidos ha <= 30 dias, para renovar).
+exports.adicionaisEmpresa = async (req, res) => {
+  try {
+    const st = await obterStatus(req.empresa_id);
+    const ordemAtual = await ordemDoPlano(st.plano_id);
+    const [cat] = await db.execute(
+      `SELECT a.id, a.nome, a.descricao, a.tipo, a.incremento, a.valor, a.ciclo_dias, a.plano_minimo_id,
+              pm.nome AS plano_minimo_nome, pm.ordem AS plano_minimo_ordem
+         FROM saas_adicionais a LEFT JOIN saas_planos pm ON pm.id = a.plano_minimo_id
+        WHERE a.ativo = 1 ORDER BY a.ordem, a.id`
+    );
+    const catalogo = cat.map((a) => {
+      const motivo = motivoIndisponivel(a, st, ordemAtual, a.plano_minimo_ordem == null ? null : Number(a.plano_minimo_ordem));
+      return { id: a.id, nome: a.nome, descricao: a.descricao, tipo: a.tipo, incremento: a.incremento, valor: Number(a.valor),
+               ciclo_dias: a.ciclo_dias, plano_minimo_nome: a.plano_minimo_nome || null, disponivel: !motivo, motivo };
+    });
+    const [minhas] = await db.execute(
+      `SELECT aa.id, aa.adicional_id, aa.quantidade, aa.vence_em, a.nome, a.tipo, a.valor
+         FROM assinatura_adicionais aa JOIN saas_adicionais a ON a.id = aa.adicional_id
+        WHERE aa.empresa_id = ? AND aa.vence_em >= DATE_SUB(NOW(), INTERVAL 30 DAY) ORDER BY aa.vence_em DESC`,
+      [req.empresa_id]
+    );
+    const agora = Date.now();
+    res.json({
+      catalogo,
+      minhas: minhas.map((m) => ({ id: m.id, adicional_id: m.adicional_id, nome: m.nome, tipo: m.tipo, quantidade: m.quantidade,
+        valor: Number(m.valor), vence_em: m.vence_em, vigente: new Date(m.vence_em).getTime() >= agora })),
+    });
+  } catch (err) {
+    if (tabelaInexistente(err)) return res.json({ catalogo: [], minhas: [] }); // migration 041 ainda nao rodou
+    console.error("Erro ao listar adicionais:", err.message);
+    res.status(500).json({ message: "Erro ao listar adicionais" });
+  }
+};
+
 exports.criarCobranca = async (req, res) => {
   try {
-    const planoId = parseInt(req.body.plano_id, 10);
-    const [[plano]] = await db.execute("SELECT id, nome, valor FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
-    if (!plano) return res.status(404).json({ message: "Plano não encontrado." });
+    const { erro, item } = await resolverItem(req.body || {}, req.empresa_id);
+    if (erro) return res.status(erro.status).json({ message: erro.message });
 
     const cfg = await getPlataformaMp();
     if (!cfg?.access_token) return res.status(503).json({ message: "Pagamento indisponível no momento. Fale com o suporte." });
@@ -202,18 +333,14 @@ exports.criarCobranca = async (req, res) => {
     const empresaId = req.empresa_id;
     const [[empresa]] = await db.execute("SELECT email FROM empresas WHERE id = ?", [empresaId]);
 
-    const [ins] = await db.execute(
-      "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status) VALUES (?, ?, ?, 'pix', 'aguardando')",
-      [empresaId, plano.id, plano.valor]
-    );
-    const cobrancaId = ins.insertId;
+    const cobrancaId = await inserirCobranca(empresaId, item, "pix");
 
     const baseUrl = baseUrlPublica(req);
     const { data } = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
-        transaction_amount: Number(plano.valor),
-        description: `Assinatura ${plano.nome}`,
+        transaction_amount: item.valor,
+        description: item.titulo,
         payment_method_id: "pix",
         external_reference: `ass_${cobrancaId}_emp_${empresaId}`,
         notification_url: `${baseUrl}/api/assinatura/webhook`,
@@ -226,7 +353,7 @@ exports.criarCobranca = async (req, res) => {
       "UPDATE assinatura_cobrancas SET mp_pagamento_id = ?, copia_cola = ?, qr_code_base64 = ? WHERE id = ?",
       [String(data.id), td.qr_code, td.qr_code_base64, cobrancaId]
     );
-    res.status(201).json({ id: cobrancaId, valor: plano.valor, copia_cola: td.qr_code, qr_code_base64: td.qr_code_base64 });
+    res.status(201).json({ id: cobrancaId, valor: item.valor, copia_cola: td.qr_code, qr_code_base64: td.qr_code_base64 });
   } catch (err) {
     console.error("Erro ao gerar cobrança de assinatura:", err.response?.data || err.message);
     res.status(500).json({ message: "Erro ao gerar cobrança." });
@@ -328,6 +455,74 @@ exports.removerPlano = async (req, res) => {
   res.json({ message: "Plano removido" });
 };
 
+// ---------- super admin: catalogo de adicionais ----------
+
+exports.listarAdicionaisAdmin = async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT a.*, pm.nome AS plano_minimo_nome FROM saas_adicionais a
+         LEFT JOIN saas_planos pm ON pm.id = a.plano_minimo_id ORDER BY a.ordem, a.id`
+    );
+    res.json(rows);
+  } catch (err) {
+    if (tabelaInexistente(err)) return res.json([]);
+    res.status(500).json({ message: "Erro ao listar adicionais" });
+  }
+};
+
+/** Valida o corpo; devolve { erro } ou { d: [valores na ordem do INSERT] }. */
+async function dadosAdicional(b) {
+  const nome = String(b.nome || "").trim().slice(0, 100);
+  if (!nome) return { erro: "Nome é obrigatório" };
+  if (!TIPOS_ADICIONAL.includes(b.tipo)) return { erro: "Tipo inválido" };
+  const incremento = Math.floor(Number(b.incremento) || 1);
+  if (incremento < 1 || incremento > 1000) return { erro: "Incremento deve ser de 1 a 1000" };
+  const valor = Number(b.valor);
+  if (!Number.isFinite(valor) || valor < 0) return { erro: "Valor inválido" };
+  const ativo = b.ativo === false || b.ativo === 0 ? 0 : 1;
+  if (ativo && !TIPOS_APLICAVEIS.includes(b.tipo)) {
+    return { erro: "Este tipo ainda não pode ser ativado: só equipamentos e administradores têm efeito no sistema." };
+  }
+  let planoMinimo = null;
+  if (b.plano_minimo_id !== "" && b.plano_minimo_id != null) {
+    planoMinimo = parseInt(b.plano_minimo_id, 10);
+    const [[p]] = await db.execute("SELECT id FROM saas_planos WHERE id = ?", [planoMinimo]);
+    if (!p) return { erro: "Plano mínimo não encontrado" };
+  }
+  return { d: [nome, b.descricao ? String(b.descricao).slice(0, 255) : null, b.tipo, incremento, Math.round(valor * 100) / 100,
+               Math.max(1, parseInt(b.ciclo_dias, 10) || 30), planoMinimo, ativo, parseInt(b.ordem, 10) || 0] };
+}
+
+exports.criarAdicional = async (req, res) => {
+  const { erro, d } = await dadosAdicional(req.body || {});
+  if (erro) return res.status(400).json({ message: erro });
+  const [r] = await db.execute(
+    "INSERT INTO saas_adicionais (nome, descricao, tipo, incremento, valor, ciclo_dias, plano_minimo_id, ativo, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
+  res.status(201).json({ id: r.insertId });
+};
+
+exports.atualizarAdicional = async (req, res) => {
+  const { erro, d } = await dadosAdicional(req.body || {});
+  if (erro) return res.status(400).json({ message: erro });
+  await db.execute(
+    "UPDATE saas_adicionais SET nome=?, descricao=?, tipo=?, incremento=?, valor=?, ciclo_dias=?, plano_minimo_id=?, ativo=?, ordem=? WHERE id=?",
+    [...d, req.params.id]);
+  invalidar(); // mudar incremento/tipo muda o limite efetivo de quem ja comprou
+  res.json({ message: "Adicional atualizado" });
+};
+
+exports.removerAdicional = async (req, res) => {
+  const [[vig]] = await db.execute("SELECT COUNT(*) AS n FROM assinatura_adicionais WHERE adicional_id = ? AND vence_em >= NOW()", [req.params.id]);
+  if (vig.n > 0) return res.status(409).json({ message: "Há empresas com este adicional vigente. Desative em vez de remover." });
+  const [[hist]] = await db.execute("SELECT COUNT(*) AS n FROM assinatura_adicionais WHERE adicional_id = ?", [req.params.id]);
+  if (hist.n > 0) {
+    await db.execute("UPDATE saas_adicionais SET ativo = 0 WHERE id = ?", [req.params.id]);
+    return res.json({ message: "Adicional com histórico de compras: foi desativado em vez de removido" });
+  }
+  await db.execute("DELETE FROM saas_adicionais WHERE id = ?", [req.params.id]);
+  res.json({ message: "Adicional removido" });
+};
+
 exports.obterAssinaturaEmpresa = async (req, res) => {
   const [[a]] = await db.execute("SELECT * FROM assinaturas WHERE empresa_id = ?", [req.params.empresaId]);
   res.json({ assinatura: a || null, estado: await obterStatus(Number(req.params.empresaId)) });
@@ -383,3 +578,6 @@ exports.salvarPlataformaConfig = async (req, res) => {
   );
   res.json({ message: "Configuração salva" });
 };
+
+exports.motivoIndisponivel = motivoIndisponivel;
+exports.resolverItem = resolverItem;

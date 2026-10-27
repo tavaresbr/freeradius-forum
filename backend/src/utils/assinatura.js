@@ -36,7 +36,29 @@ function tabelaInexistente(err) {
   return err && (err.code === "ER_NO_SUCH_TABLE" || err.errno === 1146);
 }
 
-/** Estado + plano/limites da empresa (cache de 60s). */
+/** Limite efetivo = limite do plano + adicionais vigentes. NULL (ilimitado) continua ilimitado. */
+function limiteEfetivo(base, extra) {
+  if (base == null) return null;
+  return Number(base) + (Number(extra) || 0);
+}
+
+/** Adicionais vigentes (vence_em >= agora) da empresa. Sem a migration 041, nao ha adicionais. */
+async function adicionaisVigentes(empresaId) {
+  try {
+    const [rows] = await db.execute(
+      `SELECT aa.id, aa.adicional_id, aa.quantidade, aa.vence_em, a.nome, a.tipo, a.incremento, a.valor, a.ciclo_dias
+         FROM assinatura_adicionais aa JOIN saas_adicionais a ON a.id = aa.adicional_id
+        WHERE aa.empresa_id = ? AND aa.vence_em >= NOW() ORDER BY aa.vence_em`,
+      [empresaId]
+    );
+    return rows || [];
+  } catch (err) {
+    if (tabelaInexistente(err)) return [];
+    throw err;
+  }
+}
+
+/** Estado + plano/limites da empresa (cache de 60s). Limites ja incluem os adicionais vigentes. */
 async function obterStatus(empresaId) {
   const hit = cache.get(empresaId);
   if (hit && Date.now() - hit.t < CACHE_MS) return hit.v;
@@ -49,8 +71,22 @@ async function obterStatus(empresaId) {
       WHERE a.empresa_id = ? LIMIT 1`,
     [empresaId]
   );
+  const vigentes = await adicionaisVigentes(empresaId);
+  const extras = { equipamentos: 0, admins: 0 };
+  for (const a of vigentes) {
+    if (a.tipo in extras) extras[a.tipo] += (Number(a.incremento) || 0) * (Number(a.quantidade) || 0);
+  }
+  const agora = Date.now();
   const v = { ...calcularEstado(row), plano_nome: row?.plano_nome || null, plano_valor: row?.plano_valor ?? null,
-              max_equipamentos: row?.max_equipamentos ?? null, max_admins: row?.max_admins ?? null };
+              plano_max_equipamentos: row?.max_equipamentos ?? null, plano_max_admins: row?.max_admins ?? null,
+              max_equipamentos: limiteEfetivo(row?.max_equipamentos ?? null, extras.equipamentos),
+              max_admins: limiteEfetivo(row?.max_admins ?? null, extras.admins),
+              extras,
+              adicionais: vigentes.map((a) => ({
+                id: a.id, adicional_id: a.adicional_id, nome: a.nome, tipo: a.tipo, quantidade: a.quantidade,
+                valor: Number(a.valor), vence_em: a.vence_em,
+                dias_restantes: Math.ceil((new Date(a.vence_em).getTime() - agora) / 86400000),
+              })) };
   cache.set(empresaId, { t: Date.now(), v });
   return v;
 }
@@ -104,4 +140,4 @@ async function checarLimiteSeguro(empresaId, tipo) {
   }
 }
 
-module.exports = { TRIAL_DIAS, calcularEstado, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };
+module.exports = { TRIAL_DIAS, limiteEfetivo, adicionaisVigentes, calcularEstado, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };

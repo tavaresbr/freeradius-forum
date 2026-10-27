@@ -4,6 +4,13 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../contexts/AuthContext";
 
 const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", ativo: true, ordem: 0 };
+const TIPOS = [
+  ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
+  ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
+  ["exportacao", "Exportação da base"], ["sem_marca", "Remover marca Apex"], ["dominio", "Domínio próprio"],
+];
+const TIPOS_ATIVOS = ["equipamentos", "admins"]; // os demais ainda nao tem efeito no sistema: so inativos
+const VAZIO_AD = { nome: "", descricao: "", tipo: "equipamentos", incremento: 1, valor: "", ciclo_dias: 30, plano_minimo_id: "", ativo: true, ordem: 0 };
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm";
 
 export default function PlanosSaas() {
@@ -14,18 +21,23 @@ export default function PlanosSaas() {
   const [editId, setEditId] = useState(null);
   const [copiaDe, setCopiaDe] = useState(null);
   const [msg, setMsg] = useState("");
+  const [adicionais, setAdicionais] = useState([]);
+  const [formAd, setFormAd] = useState(null);
+  const [editAdId, setEditAdId] = useState(null);
   const [cfg, setCfg] = useState({ access_token: "", public_key: "", webhook_secret: "", email_pagador: "", configurado: false });
 
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   const carregar = useCallback(async () => {
-    const [a, b] = await Promise.all([
+    const [a, b, c] = await Promise.all([
       fetch("/api/assinatura/admin/planos", { headers }),
       fetch("/api/assinatura/admin/plataforma", { headers }),
+      fetch("/api/assinatura/admin/adicionais", { headers }),
     ]);
     if (a.ok) setPlanos(await a.json());
     if (b.ok) setCfg(await b.json());
+    if (c.ok) setAdicionais(await c.json());
   }, []);
 
   useEffect(() => {
@@ -46,6 +58,24 @@ export default function PlanosSaas() {
     const res = await fetch(`/api/assinatura/admin/planos/${id}`, { method: "DELETE", headers });
     if (res.ok) { const d = await res.json(); setMsg(d.message); carregar(); }
   };
+
+  const salvarAdicional = async (e) => {
+    e.preventDefault();
+    const res = await fetch(editAdId ? `/api/assinatura/admin/adicionais/${editAdId}` : "/api/assinatura/admin/adicionais", {
+      method: editAdId ? "PUT" : "POST", headers, body: JSON.stringify(formAd),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) { setFormAd(null); setEditAdId(null); setMsg(""); carregar(); } else setMsg(d.message || "Erro ao salvar adicional");
+  };
+  const removerAdicional = async (id) => {
+    if (!confirm("Remover este adicional? Com histórico de compras ele será apenas desativado.")) return;
+    const res = await fetch(`/api/assinatura/admin/adicionais/${id}`, { method: "DELETE", headers });
+    const d = await res.json().catch(() => ({}));
+    setMsg(d.message || "");
+    if (res.ok) carregar();
+  };
+  const editarAdicional = (a) => { setEditAdId(a.id); setFormAd({ ...a, plano_minimo_id: a.plano_minimo_id ?? "", ativo: !!a.ativo }); };
+  const campoAd = (k) => (e) => setFormAd({ ...formAd, [k]: e.target.value });
 
   const salvarCfg = async (e) => {
     e.preventDefault();
@@ -103,6 +133,39 @@ export default function PlanosSaas() {
           </table>
         </div>
 
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white">Adicionais</h2>
+            <p className="text-sm text-gray-400 mt-1">Extras mensais que a empresa compra por cima do plano. Mantenha o avulso mais caro que subir de plano. Só equipamentos e administradores podem ficar ativos por enquanto.</p>
+          </div>
+          <button onClick={() => { setEditAdId(null); setFormAd(VAZIO_AD); }} className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-500 text-sm font-medium whitespace-nowrap">Novo adicional</button>
+        </div>
+        <div className="bg-[#1a1d27] border border-gray-800 rounded-xl overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-gray-800 text-gray-400">
+              <th className="text-left px-5 py-3">Adicional</th><th className="text-left px-5 py-3">Tipo</th><th className="text-left px-5 py-3">Valor</th>
+              <th className="text-left px-5 py-3">Soma</th><th className="text-left px-5 py-3">A partir de</th><th className="text-left px-5 py-3">Status</th><th className="px-5 py-3" />
+            </tr></thead>
+            <tbody>
+              {adicionais.map((a) => (
+                <tr key={a.id} className="border-b border-gray-800/50 text-gray-300">
+                  <td className="px-5 py-3 text-white">{a.nome}</td>
+                  <td className="px-5 py-3">{(TIPOS.find((t) => t[0] === a.tipo) || [a.tipo, a.tipo])[1]}</td>
+                  <td className="px-5 py-3">R$ {Number(a.valor).toFixed(2)} / {a.ciclo_dias}d</td>
+                  <td className="px-5 py-3">{TIPOS_ATIVOS.includes(a.tipo) ? `+${a.incremento}` : "—"}</td>
+                  <td className="px-5 py-3">{a.plano_minimo_nome || "qualquer"}</td>
+                  <td className="px-5 py-3">{a.ativo ? "Ativo" : "Inativo"}</td>
+                  <td className="px-5 py-3 text-right whitespace-nowrap">
+                    <button onClick={() => editarAdicional(a)} className="px-2.5 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs mr-2">Editar</button>
+                    <button onClick={() => removerAdicional(a.id)} className="px-2.5 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs">Remover</button>
+                  </td>
+                </tr>
+              ))}
+              {adicionais.length === 0 && <tr><td colSpan="7" className="px-5 py-4 text-gray-500">Nenhum adicional. Rode a migration 041 ou crie um.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
         <form onSubmit={salvarCfg} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
           <h2 className="text-lg font-bold text-white">Mercado Pago da plataforma {cfg.configurado && <span className="text-xs text-green-400 ml-2">configurado</span>}</h2>
           <p className="text-xs text-gray-500">Recebe as assinaturas das empresas. Webhook: <code>/api/assinatura/webhook</code>. Campos mascarados (terminam em ...) são mantidos se não alterados.</p>
@@ -114,6 +177,36 @@ export default function PlanosSaas() {
           ))}
           <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Salvar configuração</button>
         </form>
+
+        {formAd && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <form onSubmit={salvarAdicional} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3">
+              <h2 className="text-lg font-bold text-white">{editAdId ? "Editar adicional" : "Novo adicional"}</h2>
+              {msg && <p className="text-sm text-red-300 bg-red-900/20 p-2 rounded">{msg}</p>}
+              <div><label className="block text-sm text-gray-400 mb-1">Nome *</label><input required className={inputCls} value={formAd.nome} onChange={campoAd("nome")} /></div>
+              <div><label className="block text-sm text-gray-400 mb-1">Descrição</label><input className={inputCls} value={formAd.descricao || ""} onChange={campoAd("descricao")} /></div>
+              <div><label className="block text-sm text-gray-400 mb-1">Tipo</label>
+                <select className={inputCls} value={formAd.tipo} onChange={campoAd("tipo")}>{TIPOS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-sm text-gray-400 mb-1">Valor (R$) *</label><input required type="number" step="0.01" min="0" className={inputCls} value={formAd.valor} onChange={campoAd("valor")} /></div>
+                <div><label className="block text-sm text-gray-400 mb-1">Ciclo (dias)</label><input type="number" min="1" className={inputCls} value={formAd.ciclo_dias} onChange={campoAd("ciclo_dias")} /></div>
+                <div><label className="block text-sm text-gray-400 mb-1">Soma ao limite</label><input type="number" min="1" className={inputCls} value={formAd.incremento} onChange={campoAd("incremento")} /></div>
+                <div><label className="block text-sm text-gray-400 mb-1">Disponível a partir de</label>
+                  <select className={inputCls} value={formAd.plano_minimo_id} onChange={campoAd("plano_minimo_id")}>
+                    <option value="">Qualquer plano</option>{planos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                  </select>
+                </div>
+                <div><label className="block text-sm text-gray-400 mb-1">Ordem</label><input type="number" className={inputCls} value={formAd.ordem} onChange={campoAd("ordem")} /></div>
+                <label className="flex items-center gap-2 text-sm text-gray-300 mt-6"><input type="checkbox" checked={formAd.ativo} onChange={(e) => setFormAd({ ...formAd, ativo: e.target.checked })} /> Ativo</label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium">Salvar</button>
+                <button type="button" onClick={() => { setFormAd(null); setEditAdId(null); setMsg(""); }} className="flex-1 bg-gray-700 text-gray-300 py-2.5 rounded-lg text-sm">Cancelar</button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {form && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
