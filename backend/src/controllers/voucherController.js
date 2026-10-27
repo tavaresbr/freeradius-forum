@@ -23,7 +23,7 @@ exports.listar = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
     const [rows] = await db.query(
-      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, m.nome AS equipamento_nome,
+      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, p.mikrotik_id AS equipamento_id, m.nome AS equipamento_nome,
               mu.nome AS usado_equipamento, v.lote, v.status, v.valido_ate,
               v.usado_em, v.usado_mac, v.criado_em
          FROM vouchers v
@@ -39,7 +39,7 @@ exports.listar = async (req, res) => {
     const [lotes] = await db.query("SELECT DISTINCT lote FROM vouchers WHERE empresa_id = ? AND lote IS NOT NULL ORDER BY lote", [empresaId]);
     const contadores = { disponivel: 0, usado: 0, cancelado: 0 };
     cont.forEach((c) => { contadores[c.status] = c.n; });
-    res.json({ success: true, data: rows, total: tot.total, page, limit, contadores, lotes: lotes.map((l) => l.lote) });
+    res.json({ success: true, empresa_id: empresaId, data: rows, total: tot.total, page, limit, contadores, lotes: lotes.map((l) => l.lote) });
   } catch (err) {
     console.error("[vouchers] listar:", err.message);
     if (err.code === "ER_NO_SUCH_TABLE") return res.status(500).json({ error: "Atualização do banco pendente: rode a migration 043 (node migrations/043_vouchers.js)." });
