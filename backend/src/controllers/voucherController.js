@@ -23,9 +23,14 @@ exports.listar = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
     const [rows] = await db.query(
-      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, v.lote, v.status, v.valido_ate,
+      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, m.nome AS equipamento_nome,
+              mu.nome AS usado_equipamento, v.lote, v.status, v.valido_ate,
               v.usado_em, v.usado_mac, v.criado_em
-         FROM vouchers v LEFT JOIN planos p ON p.id = v.plano_id
+         FROM vouchers v
+         LEFT JOIN planos p ON p.id = v.plano_id
+         LEFT JOIN mikrotiks m ON m.id = p.mikrotik_id AND m.empresa_id = v.empresa_id
+         LEFT JOIN radius_users ru ON ru.username = v.username AND ru.empresa_id = v.empresa_id
+         LEFT JOIN mikrotiks mu ON mu.id = ru.nas_id AND mu.empresa_id = v.empresa_id
         WHERE ${where.join(" AND ")} ORDER BY v.id DESC LIMIT ? OFFSET ?`,
       [...params, limit, (page - 1) * limit]
     );
@@ -128,14 +133,19 @@ exports.exportarCSV = async (req, res) => {
     if (typeof req.query.lote === "string" && req.query.lote) { filtro += " AND v.lote = ?"; params.push(req.query.lote.slice(0, 60)); }
     if (["disponivel", "usado", "cancelado"].includes(req.query.status)) { filtro += " AND v.status = ?"; params.push(req.query.status); }
     const [rows] = await db.query(
-      `SELECT v.codigo, p.nome AS plano, v.lote, v.status, v.valido_ate, v.usado_em
-         FROM vouchers v LEFT JOIN planos p ON p.id = v.plano_id
+      `SELECT v.codigo, p.nome AS plano, m.nome AS equipamento, mu.nome AS usado_equipamento,
+              v.lote, v.status, v.valido_ate, v.usado_em
+         FROM vouchers v
+         LEFT JOIN planos p ON p.id = v.plano_id
+         LEFT JOIN mikrotiks m ON m.id = p.mikrotik_id AND m.empresa_id = v.empresa_id
+         LEFT JOIN radius_users ru ON ru.username = v.username AND ru.empresa_id = v.empresa_id
+         LEFT JOIN mikrotiks mu ON mu.id = ru.nas_id AND mu.empresa_id = v.empresa_id
         WHERE v.empresa_id = ?${filtro} ORDER BY v.id`,
       params
     );
     const dia = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-    const linhas = [["Codigo", "Plano", "Lote", "Status", "Valido ate", "Usado em"].join(";")];
-    rows.forEach((r) => linhas.push([r.codigo, r.plano, r.lote, r.status, dia(r.valido_ate), r.usado_em ? new Date(r.usado_em).toISOString() : ""].map(celulaCsv).join(";")));
+    const linhas = [["Codigo", "Plano", "Equipamento", "Lote", "Status", "Valido ate", "Usado em", "Usado no equipamento"].join(";")];
+    rows.forEach((r) => linhas.push([r.codigo, r.plano, r.equipamento, r.lote, r.status, dia(r.valido_ate), r.usado_em ? new Date(r.usado_em).toISOString() : "", r.usado_equipamento].map(celulaCsv).join(";")));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="vouchers.csv"');
     res.send("﻿" + linhas.join("\n"));
