@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter, voucherFalhasLimiters } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -150,6 +150,9 @@ app.post("/api/lead-portal/login", cadastroPortalLimiter, somentePrimitivos, lea
 app.post("/api/lead-portal/passivo", cadastroPortalLimiter, somentePrimitivos, capturaPassiva);
 app.post("/api/clientes/cadastro", cadastroPortalLimiter, somentePrimitivos, cadastroCliente);
 
+// Rota pública: resgate de voucher no portal (limite de falhas por IP/MAC contra forca bruta)
+app.post("/api/voucher-portal/resgatar", cadastroPortalLimiter, somentePrimitivos, ...voucherFalhasLimiters, require("./src/controllers/voucherController").resgatar);
+
 // Rota pública para login do portal Wifi/Radius
 app.use("/api/login-portal", somentePrimitivos, loginPortalRoutes);
 
@@ -180,6 +183,7 @@ app.use("/api/config-mercadopago", auth, tenant, exigeAssinatura, checkPermissao
 app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
 app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
 app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), whatsappRoutes);
+app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
 app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), promocaoWhatsappRoutes);
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);

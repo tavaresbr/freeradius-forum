@@ -51,6 +51,22 @@ const cartaoHotspotLimiters = [
   falhasCartao(5, (req) => `dev:${hashCurto(req.body?.mac)}|${hashCurto(req.body?.cpf || req.body?.identification_number)}`),
 ];
 
+// Resgate de voucher (POST /api/voucher-portal/resgatar): conta so as FALHAS (codigo errado/usado = 4xx)
+// por IP e por aparelho (MAC), contra forca bruta de codigos.
+const falhasVoucher = (limit, keyGenerator) => rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator,
+  handler: jsonHandler('Muitas tentativas de voucher. Aguarde alguns minutos.'),
+});
+const voucherFalhasLimiters = [
+  falhasVoucher(20, (req) => `ip:${ipKeyGenerator(req.ip)}`),
+  falhasVoucher(8, (req) => `dev:${hashCurto(req.body?.mac)}`),
+];
+
 // Registro de empresa: evita criacao em massa.
 const registroLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
@@ -203,4 +219,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { cartaoHotspotLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, updateCheckLimiter, cpfLookupLimiters };
