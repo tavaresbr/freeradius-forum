@@ -144,7 +144,7 @@ export default function AdminLayout({ children }) {
       key: "marketing_group",
       title: "Marketing",
       children: [
-        { key: "campanhas", title: "Campanhas", path: `${basePath}/campanhas` },
+        { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
         { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
       ],
       icon: (
