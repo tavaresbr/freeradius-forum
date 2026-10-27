@@ -24,6 +24,7 @@ process.on('uncaughtException', (err) => {
 const auth = require('./src/middleware/auth')
 const tenant = require('./src/middleware/tenant')
 const exigeAssinatura = require('./src/middleware/assinatura')
+const exigeRecurso = require('./src/middleware/recurso')
 
 // Rotas
 const authRoutes = require('./src/routes/authRoutes')
@@ -172,7 +173,7 @@ app.get('/api/auth/download-token', auth, tenant, exigeAssinatura, (req, res, ne
   }
   return checkPermissao(String(req.query.para))(req, res, next);
 }, issueDownloadToken);
-app.get('/api/leads/export', verifyDownloadToken('leads'), leadCtrlDl.exportarLeadsCSV);
+app.get('/api/leads/export', verifyDownloadToken('leads'), exigeRecurso('exportacao'), leadCtrlDl.exportarLeadsCSV);
 app.get('/api/lgpd/export', verifyDownloadToken('leads'), require('./src/controllers/lgpdController').exportarLgpdCSV);
 app.get('/api/portais/:id/preview', verifyDownloadToken('portais'), portalCtrlDl.previewPortal);
 
@@ -182,15 +183,15 @@ app.use("/api/efi", auth, tenant, exigeAssinatura, checkPermissao('configuracoes
 app.use("/api/config-mercadopago", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), mercadoPagoRoutes);
 app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
 app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
-app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), whatsappRoutes);
+app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), whatsappRoutes);
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
-app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), promocaoWhatsappRoutes);
+app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), promocaoWhatsappRoutes);
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);
 app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
 app.use("/api/wireguard", auth, tenant, exigeAssinatura, checkPermissao('vpn'), wireguardRoutes);
 app.use("/api/portais", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalRoutes);
-app.use("/api/campanhas", auth, tenant, exigeAssinatura, checkPermissao('portais'), campanhasRoutes);
+app.use("/api/campanhas", auth, tenant, exigeAssinatura, checkPermissao('portais'), exigeRecurso('campanhas'), campanhasRoutes);
 app.use("/api/portal-templates", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalTemplateRoutes);
 app.use("/api/leads", auth, tenant, exigeAssinatura, checkPermissao('leads'), leadRoutes);
 app.use("/api/clientes-import", auth, tenant, exigeAssinatura, checkPermissao('leads'), importacaoRoutes);

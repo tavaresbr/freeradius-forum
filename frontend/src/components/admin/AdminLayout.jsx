@@ -1,3 +1,4 @@
+import RecursoBloqueado from "./RecursoBloqueado";
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -39,6 +40,12 @@ export default function AdminLayout({ children }) {
   }, [location.pathname]);
 
   const naTelaAssinatura = location.pathname.startsWith(`${basePath}/assinatura`);
+
+  // SaaS Fase 2: tela de recurso que o plano/adicionais nao incluem (super admin nunca e' bloqueado).
+  const rota = location.pathname.slice(basePath.length);
+  const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
+    : /^\/campanhas(\/|$)/.test(rota) ? ["campanhas", "Campanhas"] : null;
+  const recursoBloqueado = !isSuperAdmin && recursoDaRota && assinatura?.recursos?.[recursoDaRota[0]] === false ? recursoDaRota[1] : null;
   useEffect(() => {
     if (assinatura?.bloqueada && !naTelaAssinatura) navigate(`${basePath}/assinatura`, { replace: true });
   }, [assinatura, naTelaAssinatura, basePath]);
@@ -532,7 +539,7 @@ export default function AdminLayout({ children }) {
               <Link to={`${basePath}/assinatura`} className="font-semibold underline whitespace-nowrap">Ver assinatura</Link>
             </div>
           )}
-          {children}
+          {recursoBloqueado ? <RecursoBloqueado titulo={recursoBloqueado} basePath={basePath} /> : children}
         </main>
       </div>
     </div>

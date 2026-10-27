@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { useAuth } from "../../contexts/AuthContext";
 import { mascaraCPF, validarCPF } from "../../utils/cpfUtils";
 import { mascaraData, mascaraTelefone, dataNascimentoValida } from "../../utils/dataUtils";
 import { mascaraCEP, buscarCep } from "../../utils/cepUtils";
@@ -68,6 +69,7 @@ function Campo({ label, children, className = "" }) {
 }
 
 export default function Leads() {
+  const { user } = useAuth();
   const { empresaSlug } = useParams();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -305,6 +307,13 @@ export default function Leads() {
 
   const handleExport = async () => {
     try {
+      // SaaS: a exportacao so existe em plano/adicional que a inclua (o servidor tambem recusa).
+      const st = await fetch(`${API}/api/assinatura/status`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (st?.recursos?.exportacao === false && user?.role !== "super_admin") {
+        alert("A exportação da base de clientes não está incluída no seu plano. Contrate o plano ou o adicional em Assinatura.");
+        return;
+      }
       const r = await fetch(`${API}/api/auth/download-token?para=leads`, {
         headers: { Authorization: `Bearer ${token}` },
       });

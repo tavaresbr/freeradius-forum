@@ -8,12 +8,15 @@ const descartar = (rel) => { delete require.cache[require.resolve(rel)]; };
 function publico(handler) {
   const db = criarDb(handler);
   descartar('../../src/utils/campanhaAtiva');
+  descartar('../../src/utils/assinatura');
   descartar('../../src/utils/dedupeTtl');
   const ctrl = carregar('src/controllers/campanhasPublicController.js', { db });
   return { db, ctrl };
 }
 const base = (over = {}) => (sql) => {
-  if (/FROM portais p\s+JOIN campanhas c/.test(sql)) return [[{ id: 5 }]];       // campanhaAtivaDoPortal
+  if (/FROM assinaturas a LEFT JOIN saas_planos/.test(sql)) return [[{ plano_id: 1, status: 'ativa', vence_em: new Date(Date.now() + 864e5), carencia_dias: 3, inclui_whatsapp: 1, inclui_campanhas: 1, inclui_exportacao: 1 }]];
+  if (/FROM assinatura_adicionais/.test(sql)) return [[]];
+  if (/FROM portais p\s+JOIN campanhas c/.test(sql)) return [[{ id: 5, empresa_id: 7 }]];       // campanhaAtivaDoPortal
   if (/^SELECT empresa_id FROM portais/.test(sql)) return [[{ empresa_id: 7 }]];
   if (/FROM campanha_itens WHERE id = \?/.test(sql)) return [[{ id: 9, link_destino: 'https://x.com' }]];
   return [{ affectedRows: 1 }];

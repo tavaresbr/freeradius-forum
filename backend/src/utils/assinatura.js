@@ -63,25 +63,37 @@ async function obterStatus(empresaId) {
   const hit = cache.get(empresaId);
   if (hit && Date.now() - hit.t < CACHE_MS) return hit.v;
 
+  // p.* traz tambem as colunas da migration 043 quando existirem (sem ela o painel segue como antes).
   const [[row]] = await db.execute(
     `SELECT a.plano_id, a.status, a.trial_ate, a.vence_em, a.carencia_dias,
-            p.nome AS plano_nome, p.valor AS plano_valor, p.ciclo_dias,
-            p.max_equipamentos, p.max_admins
+            p.*, p.nome AS plano_nome, p.valor AS plano_valor
        FROM assinaturas a LEFT JOIN saas_planos p ON p.id = a.plano_id
       WHERE a.empresa_id = ? LIMIT 1`,
     [empresaId]
   );
   const vigentes = await adicionaisVigentes(empresaId);
-  const extras = { equipamentos: 0, admins: 0 };
+  const extras = { equipamentos: 0, admins: 0, portais: 0 };
   for (const a of vigentes) {
     if (a.tipo in extras) extras[a.tipo] += (Number(a.incremento) || 0) * (Number(a.quantidade) || 0);
   }
   const agora = Date.now();
+  // Recurso liga/desliga: o plano inclui OU ha adicional vigente do tipo. Sem a migration 043 (coluna ausente)
+  // `recursos_migrados` fica false e nada e bloqueado.
+  const migrado = row ? "inclui_whatsapp" in row : false;
+  const tem = (tipo) => vigentes.some((a) => a.tipo === tipo);
+  const recursos = {
+    whatsapp: !migrado || !!row.inclui_whatsapp || tem("whatsapp"),
+    campanhas: !migrado || !!row.inclui_campanhas || tem("campanhas"),
+    exportacao: !migrado || !!row.inclui_exportacao || tem("exportacao"),
+  };
   const v = { ...calcularEstado(row), plano_nome: row?.plano_nome || null, plano_valor: row?.plano_valor ?? null,
               plano_max_equipamentos: row?.max_equipamentos ?? null, plano_max_admins: row?.max_admins ?? null,
               max_equipamentos: limiteEfetivo(row?.max_equipamentos ?? null, extras.equipamentos),
               max_admins: limiteEfetivo(row?.max_admins ?? null, extras.admins),
-              extras,
+              max_portais: limiteEfetivo(row?.max_portais ?? null, extras.portais),
+              plano_max_portais: row?.max_portais ?? null,
+              recursos, extras,
+              plano_recursos: { whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao },
               adicionais: vigentes.map((a) => ({
                 id: a.id, adicional_id: a.adicional_id, nome: a.nome, tipo: a.tipo, quantidade: a.quantidade,
                 valor: Number(a.valor), vence_em: a.vence_em,
@@ -118,6 +130,7 @@ async function criarTrial(executor, empresaId, planoId = null) {
 const CONTAGENS = {
   equipamentos: { sql: "SELECT COUNT(*) AS n FROM mikrotiks WHERE empresa_id = ?", campo: "max_equipamentos", rotulo: "equipamentos" },
   admins: { sql: "SELECT COUNT(*) AS n FROM admins WHERE empresa_id = ?", campo: "max_admins", rotulo: "administradores" },
+  portais: { sql: "SELECT COUNT(*) AS n FROM portais WHERE empresa_id = ?", campo: "max_portais", rotulo: "portais" },
 };
 
 /** Uso atual vs limite do plano. `ok:false` quando criar mais um passaria do limite. */
@@ -140,4 +153,15 @@ async function checarLimiteSeguro(empresaId, tipo) {
   }
 }
 
-module.exports = { TRIAL_DIAS, limiteEfetivo, adicionaisVigentes, calcularEstado, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };
+/** A empresa tem o recurso (whatsapp|campanhas|exportacao)? Sem a migration 031/043 libera (compat). */
+async function temRecurso(empresaId, nome) {
+  try {
+    const st = await obterStatus(empresaId);
+    return st.recursos ? st.recursos[nome] !== false : true;
+  } catch (err) {
+    if (tabelaInexistente(err)) return true;
+    throw err;
+  }
+}
+
+module.exports = { temRecurso, TRIAL_DIAS, limiteEfetivo, adicionaisVigentes, calcularEstado, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };

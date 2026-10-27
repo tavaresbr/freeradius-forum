@@ -1,12 +1,13 @@
 // "Campanha utilizavel": ativa e com pelo menos 1 item. Usada no redirect do hotspot, ao vincular ao portal
 // e na rota publica, para nao mandar o cliente a um pre-portal que nao tem o que mostrar (volta extra).
 const db = require("../../db");
+const { temRecurso } = require("./assinatura");
 
 // Campanha ativa do portal (campanha_ativa_id do proprio portal, mesma empresa), dentro da janela de datas
 // (data_inicio/data_fim NULL = sem limite; datas inclusivas). Retorna { id, frequencia } ou null.
 async function campanhaAtivaInfo(portalId) {
   const [rows] = await db.execute(
-    `SELECT c.id, c.frequencia
+    `SELECT c.id, c.frequencia, p.empresa_id
        FROM portais p
        JOIN campanhas c ON c.id = p.campanha_ativa_id AND c.empresa_id = p.empresa_id AND c.ativo = 1
       WHERE p.id = ?
@@ -16,6 +17,8 @@ async function campanhaAtivaInfo(portalId) {
       LIMIT 1`,
     [portalId]
   );
+  // Empresa sem o recurso Campanhas: o portal abre direto, sem pre-portal (o captive portal nao quebra).
+  if (rows.length && !(await temRecurso(rows[0].empresa_id, "campanhas"))) return null;
   return rows.length ? { id: rows[0].id, frequencia: rows[0].frequencia || "sempre" } : null;
 }
 

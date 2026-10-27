@@ -1,3 +1,4 @@
+const { checarLimiteSeguro } = require('../utils/assinatura');
 const { urlHttpSegura, urlPortalSegura } = require('../utils/entradaSegura');
 const db = require("../../db");
 const { motivoCampanhaInutilizavel } = require("../utils/campanhaAtiva");
@@ -34,6 +35,9 @@ exports.criarPortal = async (req, res) => {
   }
 
   try {
+    const lim = await checarLimiteSeguro(req.empresa_id, "portais");
+    if (!lim.ok) return res.status(403).json({ message: lim.mensagem, code: "LIMITE_PLANO" });
+
     const [existing] = await db.query("SELECT id FROM portais WHERE slug = ? AND empresa_id = ?", [slug, req.empresa_id]);
     if (existing.length > 0) return res.status(400).json({ message: "Já existe um portal com esse slug" });
 

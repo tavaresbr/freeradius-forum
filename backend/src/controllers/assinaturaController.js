@@ -17,16 +17,23 @@ const mascarar = (v) => (v ? `${String(v).slice(0, 8)}...` : "");
 
 // Adicionais que o sistema ja sabe aplicar (Fase 1): sobem o limite de equipamentos/admins.
 const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
-const TIPOS_APLICAVEIS = ["equipamentos", "admins"];
+const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao"];
+const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao"]; // quantidade fixa 1; o plano pode ja incluir
 const MAX_QUANTIDADE = 20;
-const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins" };
+const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins", portais: "plano_max_portais" };
 
 /** Por que a empresa NAO pode comprar este adicional agora (null = pode). Funcao pura. */
-function motivoIndisponivel(adicional, st, ordemAtual, ordemMinimo) {
+function motivoIndisponivel(adicional, st, ordemAtual, ordemMinimo, renovacao = false) {
   if (!TIPOS_APLICAVEIS.includes(adicional.tipo)) return "Recurso ainda não disponível.";
   if (!st || !["trial", "ativa"].includes(st.status)) return "Renove o plano antes de comprar adicionais.";
   if (adicional.plano_minimo_id != null && (ordemAtual == null || ordemMinimo == null || ordemAtual < ordemMinimo)) {
     return `Disponível a partir do plano ${adicional.plano_minimo_nome || "superior"}.`;
+  }
+  if (TIPOS_LIGA_DESLIGA.includes(adicional.tipo)) {
+    // Compra nova: recusa se ja tem o recurso (plano OU adicional vigente). Renovacao: so se o plano ja inclui.
+    const ja = renovacao ? st.plano_recursos && st.plano_recursos[adicional.tipo] : st.recursos && st.recursos[adicional.tipo];
+    if (ja) return "Este recurso já está incluído no seu plano" + (renovacao ? "." : " ou em um adicional ativo.");
+    return null;
   }
   if (st[TIPO_PLANO_MAX[adicional.tipo]] == null) return "Seu plano já é ilimitado neste recurso.";
   return null;
@@ -70,8 +77,9 @@ async function resolverItem(b, empresaId) {
     [idAdicional]
   );
   if (!ad) return { erro: { status: 404, message: "Adicional não encontrado." } };
+  if (TIPOS_LIGA_DESLIGA.includes(ad.tipo) && quantidade !== 1) return { erro: { status: 400, message: "Este recurso é contratado com quantidade 1." } };
   const st = await obterStatus(empresaId);
-  const motivo = motivoIndisponivel(ad, st, await ordemDoPlano(st.plano_id), ad.plano_minimo_ordem == null ? null : Number(ad.plano_minimo_ordem));
+  const motivo = motivoIndisponivel(ad, st, await ordemDoPlano(st.plano_id), ad.plano_minimo_ordem == null ? null : Number(ad.plano_minimo_ordem), !!renovarId);
   if (motivo) return { erro: { status: 409, message: motivo } };
   return {
     item: {
@@ -266,7 +274,7 @@ exports.pagarCartao = async (req, res) => {
 exports.planosPublicos = async (req, res) => {
   try {
     const [rows] = await db.execute(
-      "SELECT id, nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins FROM saas_planos WHERE ativo = 1 ORDER BY ordem, id"
+      "SELECT * FROM saas_planos WHERE ativo = 1 ORDER BY ordem, id"
     );
     res.json(rows);
   } catch (err) {
@@ -279,8 +287,9 @@ exports.status = async (req, res) => {
   try {
     const st = await obterStatus(req.empresa_id);
     const [[eq]] = await db.execute("SELECT COUNT(*) AS n FROM mikrotiks WHERE empresa_id = ?", [req.empresa_id]);
+    const [[po]] = await db.execute("SELECT COUNT(*) AS n FROM portais WHERE empresa_id = ?", [req.empresa_id]);
     const [[ad]] = await db.execute("SELECT COUNT(*) AS n FROM admins WHERE empresa_id = ?", [req.empresa_id]);
-    res.json({ ...st, uso: { equipamentos: eq.n, admins: ad.n } });
+    res.json({ ...st, uso: { equipamentos: eq.n, admins: ad.n, portais: po.n } });
   } catch (err) {
     console.error("Erro ao obter assinatura:", err.message);
     res.status(500).json({ message: "Erro ao obter assinatura" });
@@ -423,6 +432,10 @@ function dadosPlano(b) {
     nulo(b.max_admins),
     b.ativo === false || b.ativo === 0 ? 0 : 1,
     parseInt(b.ordem, 10) || 0,
+    b.inclui_whatsapp ? 1 : 0,
+    b.inclui_campanhas ? 1 : 0,
+    b.inclui_exportacao ? 1 : 0,
+    nulo(b.max_portais),
   ];
 }
 
@@ -430,7 +443,7 @@ exports.criarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   const [r] = await db.execute(
-    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", d);
+    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
   invalidar();
   res.status(201).json({ id: r.insertId });
 };
@@ -439,7 +452,7 @@ exports.atualizarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   await db.execute(
-    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=? WHERE id=?",
+    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=? WHERE id=?",
     [...d, req.params.id]);
   invalidar();
   res.json({ message: "Plano atualizado" });
@@ -481,7 +494,7 @@ async function dadosAdicional(b) {
   if (!Number.isFinite(valor) || valor < 0) return { erro: "Valor inválido" };
   const ativo = b.ativo === false || b.ativo === 0 ? 0 : 1;
   if (ativo && !TIPOS_APLICAVEIS.includes(b.tipo)) {
-    return { erro: "Este tipo ainda não pode ser ativado: só equipamentos e administradores têm efeito no sistema." };
+    return { erro: "Este tipo ainda não pode ser ativado: ainda não tem efeito no sistema (só equipamentos, administradores, portais, WhatsApp, campanhas e exportação)." };
   }
   let planoMinimo = null;
   if (b.plano_minimo_id !== "" && b.plano_minimo_id != null) {
