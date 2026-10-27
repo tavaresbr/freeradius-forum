@@ -186,6 +186,7 @@ export default function Assinatura() {
             <div>
               <p className="text-gray-500">Uso</p>
               <p className="text-white mt-1">{st.uso?.equipamentos ?? 0}/{limite(st.max_equipamentos)} equipamentos{st.extras?.equipamentos > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_equipamentos)} do plano + {st.extras.equipamentos})</span>}</p>
+              {st.max_portais !== undefined && <p className="text-white">{st.uso?.portais ?? 0}/{limite(st.max_portais)} portais{st.extras?.portais > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_portais)} do plano + {st.extras.portais})</span>}</p>}
               <p className="text-white">{st.uso?.admins ?? 0}/{limite(st.max_admins)} administradores{st.extras?.admins > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_admins)} do plano + {st.extras.admins})</span>}</p>
             </div>
           </div>
@@ -257,6 +258,10 @@ export default function Assinatura() {
                 <ul className="mt-3 text-sm text-gray-300 space-y-1 flex-1">
                   <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
                   <li>✓ {limite(p.max_admins)} administradores</li>
+                  {p.max_portais !== undefined && <li>✓ {limite(p.max_portais)} portais</li>}
+                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"]].map(([k, r]) => (
+                    p[k] !== undefined && <li key={k} className={p[k] ? "" : "opacity-50"}>{p[k] ? "✓" : "—"} {r}</li>
+                  ))}
                 </ul>
                 <button disabled={!podePagar} onClick={() => escolher(itemPlano(p))} className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium">
                   {p.id === st?.plano_id && st?.status === "ativa" ? "Renovar" : "Assinar"}

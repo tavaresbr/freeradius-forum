@@ -98,7 +98,7 @@ test('motivoIndisponivel: tipo sem efeito, plano abaixo do minimo, plano ilimita
   const st = { status: 'ativa', plano_max_equipamentos: 2, plano_max_admins: 1 };
   const base = { tipo: 'equipamentos', plano_minimo_id: 2, plano_minimo_nome: 'Start' };
   assert.strictEqual(m(base, st, 2, 2), null);
-  assert.match(m({ ...base, tipo: 'whatsapp' }, st, 2, 2), /ainda não disponível/);
+  assert.match(m({ ...base, tipo: 'sem_marca' }, st, 2, 2), /ainda não disponível/);
   assert.match(m(base, st, 1, 2), /a partir do plano Start/);
   assert.match(m(base, st, null, 2), /a partir do plano Start/);
   assert.match(m(base, { ...st, plano_max_equipamentos: null }, 2, 2), /ilimitado/);
@@ -137,7 +137,7 @@ test('resolverItem: recusa quantidade invalida, plano abaixo do minimo e tipo in
   assert.match(abaixo.erro.message, /a partir do plano Start/);
 
   ass.invalidar();
-  respostas = [{ re: /FROM saas_adicionais a LEFT JOIN saas_planos pm/, out: [[{ ...ADICIONAL_5EQ, tipo: 'whatsapp' }]] }, ...respItem()];
+  respostas = [{ re: /FROM saas_adicionais a LEFT JOIN saas_planos pm/, out: [[{ ...ADICIONAL_5EQ, tipo: 'sem_marca' }]] }, ...respItem()];
   assert.strictEqual((await ctrl.resolverItem({ adicional_id: 2, quantidade: 1 }, 1)).erro.status, 409);
 
   ass.invalidar();
@@ -256,7 +256,7 @@ test('adicionaisEmpresa: lista o catalogo com disponivel/motivo e as compras', a
 test('super admin: nao ativa tipo sem efeito, valida valor e plano minimo; remover com compra vigente = 409', async () => {
   respostas = [{ re: /SELECT id FROM saas_planos WHERE id/, out: [[]] }];
   let res = resMock();
-  await ctrl.criarAdicional({ body: { nome: 'WA', tipo: 'whatsapp', valor: 49.9, ativo: true } }, res);
+  await ctrl.criarAdicional({ body: { nome: 'WA', tipo: 'sem_marca', valor: 49.9, ativo: true } }, res);
   assert.strictEqual(res.code, 400);
   assert.match(res.body.message, /ainda não pode ser ativado/);
 
@@ -273,7 +273,7 @@ test('super admin: nao ativa tipo sem efeito, valida valor e plano minimo; remov
   chamadas.length = 0;
   respostas = [{ re: /INSERT INTO saas_adicionais/, out: [{ insertId: 12 }] }];
   res = resMock();
-  await ctrl.criarAdicional({ body: { nome: 'WA', tipo: 'whatsapp', valor: 49.9, ativo: false } }, res);
+  await ctrl.criarAdicional({ body: { nome: 'WA', tipo: 'sem_marca', valor: 49.9, ativo: false } }, res);
   assert.strictEqual(res.code, 201);
 
   respostas = [{ re: /COUNT\(\*\) AS n FROM assinatura_adicionais WHERE adicional_id = \? AND vence_em >= NOW\(\)/, out: [[{ n: 2 }]] }];

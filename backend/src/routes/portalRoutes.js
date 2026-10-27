@@ -1,4 +1,5 @@
 const express = require("express");
+const exigeRecurso = require("../middleware/recurso");
 const router = express.Router();
 const ctrl = require("../controllers/portalController");
 const assinaturaImagem = require("../middleware/assinaturaImagem");
@@ -43,7 +44,7 @@ router.delete("/:id", ctrl.deletarPortal);
 router.get("/:id/preview", ctrl.previewPortal);
 router.post("/:id/logo", upload.single('logo'), assinaturaImagem, copyToPublic, ctrl.uploadLogo);
 router.put("/:portalId/campanha", ctrl.vincularCampanha);
-router.post("/:id/whatsapp-preview", ctrl.whatsappPreview);
-router.post("/:id/whatsapp-teste", ctrl.whatsappTeste);
+router.post("/:id/whatsapp-preview", exigeRecurso("whatsapp"), ctrl.whatsappPreview);
+router.post("/:id/whatsapp-teste", exigeRecurso("whatsapp"), ctrl.whatsappTeste);
 
 module.exports = router;

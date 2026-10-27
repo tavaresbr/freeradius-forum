@@ -2,6 +2,7 @@
 // Por rodada: no maximo 1 promocao por empresa e LOTE mensagens, com intervalo aleatorio entre elas
 // (ritmo humano reduz risco de banimento do numero). O estado vive no banco: restart do PM2 nao perde nada.
 const db = require("../../db");
+const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
 const { montarMensagem } = require("../utils/promocaoWhatsapp");
@@ -36,6 +37,12 @@ async function recontarEFechar(envio) {
 }
 
 async function processarEnvio(envio, { dormirFn }) {
+  if (!(await temRecurso(envio.empresa_id, "whatsapp"))) {
+    // Plano/adicional sem WhatsApp: pausa (o admin ve na tela; volta a enviar ao contratar e retomar).
+    await db.execute("UPDATE promocao_envios SET status = 'pausada' WHERE id = ? AND status = 'em_andamento'", [envio.id]);
+    console.warn(`[promocoes] envio ${envio.id} pausado: empresa ${envio.empresa_id} sem o recurso WhatsApp`);
+    return;
+  }
   if (!(await instanciaConectada(envio.empresa_id))) {
     // Sem WhatsApp conectado: pausa em vez de queimar a fila com erros. O admin retoma na tela.
     await db.execute("UPDATE promocao_envios SET status = 'pausada' WHERE id = ? AND status = 'em_andamento'", [envio.id]);

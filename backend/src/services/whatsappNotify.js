@@ -12,6 +12,7 @@
  */
 
 const db = require("../../db");
+const { temRecurso } = require("../utils/assinatura");
 const { enviarMensagemDireta } = require("../controllers/whatsappController");
 
 /**
@@ -155,6 +156,16 @@ async function notificarLiberacao(ctx) {
     let portalId = portalIdInput || null;
     if (!portalId && mikrotik_id) {
       portalId = await resolvePortalByMikrotik(mikrotik_id, empresa_id);
+    }
+
+    // Plano/adicionais sem WhatsApp: nao envia (nunca bloqueia a liberacao; so registra o motivo).
+    if (empresa_id && !(await temRecurso(empresa_id, "whatsapp"))) {
+      await gravarLog({
+        empresa_id, portal_id: portalId, telefone: telefoneInput,
+        contexto_tipo, referencia_id,
+        status: "skipped", skip_motivo: "sem_recurso",
+      });
+      return { ok: false, skipped: "sem_recurso" };
     }
 
     // 2. Buscar config do portal
