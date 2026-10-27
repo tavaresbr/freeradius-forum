@@ -179,3 +179,37 @@ test('resgate: voucher exclusivo do equipamento so vale nele; legado (sem equipa
   r = await resgatar(ctrlResgate({ voucher: usado, saldo: { existe: true, temSaldo: true, password: 'p', tempoRestante: 10 } }).c, {});
   assert.strictEqual(r.statusCode, 403); // reconexao tambem respeita o equipamento
 });
+
+test('vouchers admin: marcarImpressos so toca DISPONIVEIS da propria empresa e valida ids', async () => {
+  const { c, db } = ctrlAdmin(async () => [{ affectedRows: 2 }]);
+  let res = criarRes();
+  await c.marcarImpressos(criarReq({ empresa_id: 7, body: { ids: [1, '2', 2] } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.afetados, 2);
+  const up = db.calls[0];
+  assert.match(up.sql, /UPDATE vouchers SET impresso_em = NOW\(\) WHERE empresa_id = \? AND status = 'disponivel' AND id IN \(\?,\?\)/);
+  assert.deepStrictEqual(up.params, [7, 1, 2]); // empresa primeiro, ids unicos
+  for (const ids of [undefined, [], ['x'], [1.5], [-1], [{ $ne: 1 }], Array.from({ length: 1001 }, (_, i) => i + 1)]) {
+    res = criarRes();
+    await c.marcarImpressos(criarReq({ empresa_id: 7, body: { ids } }), res);
+    assert.strictEqual(res.statusCode, 400);
+  }
+  assert.strictEqual(db.calls.length, 1); // os invalidos nao tocaram o banco
+});
+
+test('vouchers admin: listar filtra por impresso e ordena asc so quando pedido; devolve nao_impressos', async () => {
+  const { c, db } = ctrlAdmin(async (sql) => {
+    if (/COUNT\(\*\) AS total/.test(sql)) return [[{ total: 0 }]];
+    if (/impresso_em IS NULL", \[|status = 'disponivel' AND impresso_em IS NULL/.test(sql)) return [[{ n: 5 }]];
+    return [[]];
+  });
+  let res = criarRes();
+  await c.listar(criarReq({ empresa_id: 7, query: { impresso: 'nao', ordem: 'asc' } }), res);
+  const q = db.calls.find((x) => /SELECT v\.id/.test(x.sql)).sql;
+  assert.match(q, /v\.impresso_em IS NULL/);
+  assert.match(q, /ORDER BY v\.id ASC/);
+  assert.strictEqual(res.body.contadores.nao_impressos, 5);
+  res = criarRes();
+  await c.listar(criarReq({ empresa_id: 7, query: { ordem: 'DROP TABLE' } }), res);
+  assert.match(db.calls.filter((x) => /SELECT v\.id/.test(x.sql)).pop().sql, /ORDER BY v\.id DESC/); // so 'asc' vale
+});
