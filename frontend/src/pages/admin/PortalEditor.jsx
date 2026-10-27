@@ -26,6 +26,16 @@ const defaultConfigs = {
     cor_botao: "#059669",
     logo_url: "",
   },
+  voucher: {
+    titulo: "Acesso por Voucher",
+    subtitulo: "Digite o código do seu voucher para acessar a internet",
+    texto_botao: "Conectar à Internet",
+    texto_rodape: "",
+    cor_fundo_1: "#3730a3",
+    cor_fundo_2: "#1e1b4b",
+    cor_botao: "#4f46e5",
+    logo_url: "",
+  },
   lead_passivo: {
     titulo: "Receber Novidades",
     subtitulo: "Cadastre-se para entrarmos em contato",
@@ -69,6 +79,7 @@ const iconPaths = {
   lead: "M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.858 15.355-5.858 21.213 0",
   lead_passivo: "M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.858 15.355-5.858 21.213 0",
   planos: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z",
+  voucher: "M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z",
   login: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
 };
 
@@ -402,6 +413,7 @@ export default function PortalEditor() {
     planos: { label: "Planos", cls: "bg-green-900/30 text-green-400 border-green-800/50" },
     lead: { label: "Lead", cls: "bg-yellow-900/30 text-yellow-400 border-yellow-800/50" },
     lead_passivo: { label: "Lead (Sem Internet)", cls: "bg-orange-900/30 text-orange-400 border-orange-800/50" },
+    voucher: { label: "Voucher", cls: "bg-purple-900/30 text-purple-400 border-purple-800/50" },
     login: { label: "Login", cls: "bg-blue-900/30 text-blue-400 border-blue-800/50" },
   };
   const badge = tipoBadge[portal.tipo] || { label: portal.tipo, cls: "bg-gray-900/30 text-gray-400 border-gray-800/50" };
@@ -735,6 +747,14 @@ export default function PortalEditor() {
                         </div>
                       </>
                     )}
+                  </div>
+                )}
+                {portal.tipo === "voucher" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Código do voucher</label>
+                    <div className="flex items-center justify-center border border-gray-300 rounded-lg px-3 py-3 bg-gray-50">
+                      <span className="text-gray-400 text-lg tracking-widest font-mono">XXXXXXXX</span>
+                    </div>
                   </div>
                 )}
                 {portal.tipo === "lead_passivo" && (

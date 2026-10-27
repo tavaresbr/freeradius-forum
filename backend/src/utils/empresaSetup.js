@@ -1,7 +1,7 @@
 /**
  * empresaSetup — setup padrao de uma empresa nova.
  *
- * Os 5 portais padrao (lgpd, planos, lead, lead_passivo, login) TEM que existir
+ * Os 6 portais padrao (lgpd, planos, lead, lead_passivo, login, voucher) TEM que existir
  * em toda empresa: os fluxos publicos resolvem portal por tipo
  * (SELECT ... WHERE tipo = ? AND empresa_id = ?) e falham em silencio sem eles
  * (aceite LGPD sem prova, lead sem portal_id, WhatsApp nunca dispara).
@@ -14,7 +14,7 @@
 const { DEFAULT_WHATSAPP_TEMPLATE, DEFAULT_PORTAL_PLANOS_CONFIG } = require("../constants/whatsappDefaults");
 
 /**
- * Cria os 5 portais padrao da empresa.
+ * Cria os 6 portais padrao da empresa.
  * O portal 'planos' ja vem com configuracoes padrao (PIX + Cartao ativos +
  * trial de 5min habilitado). Todos vem com template WhatsApp preenchido.
  *
@@ -29,10 +29,12 @@ async function criarPortaisPadrao(executor, empresaId) {
      (?, 'Planos - Pagamento', 'planos', 'planos', '/planos-cliente', 1, ?, ?),
      (?, 'Cadastro de LEAD', 'lead', 'lead', '/lead', 1, ?, NULL),
      (?, 'Cadastro de LEAD (Sem Internet)', 'lead-passivo', 'lead_passivo', '/lead-passivo', 1, ?, NULL),
-     (?, 'Acesso Wi-Fi', 'login', 'login', '/login-hotspot', 1, ?, NULL)`,
+     (?, 'Acesso Wi-Fi', 'login', 'login', '/login-hotspot', 1, ?, NULL),
+     (?, 'Acesso por Voucher', 'voucher', 'voucher', '/voucher', 1, ?, NULL)`,
     [
       empresaId, DEFAULT_WHATSAPP_TEMPLATE,
       empresaId, DEFAULT_WHATSAPP_TEMPLATE, planosConfigJson,
+      empresaId, DEFAULT_WHATSAPP_TEMPLATE,
       empresaId, DEFAULT_WHATSAPP_TEMPLATE,
       empresaId, DEFAULT_WHATSAPP_TEMPLATE,
       empresaId, DEFAULT_WHATSAPP_TEMPLATE,

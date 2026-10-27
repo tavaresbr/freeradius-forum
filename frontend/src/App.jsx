@@ -27,6 +27,8 @@ import PlanosSaas from "./pages/admin/PlanosSaas";
 import GruposPermissao from "./pages/admin/GruposPermissao";
 import WhatsApp from "./pages/admin/WhatsApp";
 import PromocoesWhatsapp from "./pages/admin/PromocoesWhatsapp";
+import Vouchers from "./pages/admin/Vouchers";
+import Voucher from "./pages/public/Voucher";
 import Campanhas from "./pages/admin/Campanhas";
 import TutorialOmada from "./pages/admin/TutorialOmada";
 import TutorialGrandstream from "./pages/admin/TutorialGrandstream";
@@ -87,6 +89,7 @@ function App() {
       <Route path="/lgpd" element={<LgpdAuto />} />
       <Route path="/cadastro" element={<CadastroLGPD />} />
       <Route path="/lead" element={<CadastroLead />} />
+      <Route path="/voucher" element={<Voucher />} />
       <Route path="/lead-passivo" element={<CadastroLeadPassivo />} />
       <Route path="/login-hotspot" element={<LoginHotspot />} />
       <Route path="/registro" element={<Registro />} />
@@ -124,6 +127,7 @@ function App() {
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/whatsapp" element={<RotaPrivada><WhatsApp /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/vouchers" element={<RotaPrivada><Vouchers /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/promocoes-whatsapp" element={<RotaPrivada><PromocoesWhatsapp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas" element={<RotaPrivada><Campanhas /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas/:id" element={<RotaPrivada><CampanhaEditor /></RotaPrivada>} />
