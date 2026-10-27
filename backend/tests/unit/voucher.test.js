@@ -134,3 +134,24 @@ test('resgate: codigo nao-string (NoSQL/objeto) e rejeitado sem tocar o banco', 
   assert.strictEqual(res.statusCode, 400);
   assert.strictEqual(db.calls.length, 0);
 });
+
+test('vouchers admin: listar e CSV trazem plano e equipamento, com JOINs escopados por empresa', async () => {
+  const { c, db } = ctrlAdmin(async (sql) => {
+    if (/FROM vouchers v\s+LEFT JOIN planos/.test(sql) && /v\.codigo, p\.nome AS plano/.test(sql)) {
+      return [[{ codigo: 'ABCD2345', plano: 'Plano 60', equipamento: 'Matriz', lote: null, status: 'usado', valido_ate: null, usado_em: null, usado_equipamento: 'Filial' }]];
+    }
+    if (/SELECT v\.id/.test(sql)) return [[{ id: 1, codigo: 'ABCD2345', plano_nome: 'Plano 60', equipamento_nome: 'Matriz', usado_equipamento: 'Filial' }]];
+    if (/COUNT\(\*\) AS total/.test(sql)) return [[{ total: 1 }]];
+    return [[]];
+  });
+  let res = criarRes();
+  await c.listar(criarReq({ empresa_id: 7, query: {} }), res);
+  assert.strictEqual(res.body.data[0].equipamento_nome, 'Matriz');
+  const q = db.calls.find((x) => /SELECT v\.id/.test(x.sql)).sql;
+  assert.match(q, /m\.empresa_id = v\.empresa_id/);
+  assert.match(q, /mu\.empresa_id = v\.empresa_id/);
+  res = criarRes();
+  await c.exportarCSV(criarReq({ empresa_id: 7, query: {} }), res);
+  assert.match(String(res.body), /Codigo;Plano;Equipamento;Lote;Status;Valido ate;Usado em;Usado no equipamento/);
+  assert.match(String(res.body), /ABCD2345;Plano 60;Matriz;.*;Filial/);
+});

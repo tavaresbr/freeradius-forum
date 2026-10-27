@@ -18,6 +18,7 @@ export default function Vouchers() {
 
   const [dados, setDados] = useState({ data: [], total: 0, contadores: {}, lotes: [] });
   const [planos, setPlanos] = useState([]);
+  const [equipamentos, setEquipamentos] = useState({});
   const [filtro, setFiltro] = useState({ status: "", lote: "", q: "" });
   const [page, setPage] = useState(1);
   const [msg, setMsg] = useState(null);
@@ -45,6 +46,10 @@ export default function Vouchers() {
   useEffect(() => { carregar(); }, [carregar]);
   useEffect(() => {
     chamar("/api/planos").then((d) => setPlanos(Array.isArray(d) ? d : d.data || [])).catch(() => {});
+    chamar("/api/mikrotiks").then((d) => {
+      const lista = Array.isArray(d) ? d : d.data || [];
+      setEquipamentos(Object.fromEntries(lista.map((m) => [m.id, m.nome])));
+    }).catch(() => {});
   }, [chamar]);
 
   const gerar = async (e) => {
@@ -139,11 +144,17 @@ export default function Vouchers() {
             {dados.data.map((v) => (
               <tr key={v.id} className="border-t border-gray-800">
                 <td className="p-3 font-mono tracking-wider text-white">{v.codigo}</td>
-                <td className="p-3">{v.plano_nome || "-"}</td>
+                <td className="p-3">
+                  {v.plano_nome || "-"}
+                  <div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento"}</div>
+                </td>
                 <td className="p-3">{v.lote || "-"}</td>
                 <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${STATUS[v.status]?.[1]}`}>{STATUS[v.status]?.[0]}</span></td>
                 <td className="p-3">{fmtDia(v.valido_ate)}</td>
-                <td className="p-3">{fmt(v.usado_em)}</td>
+                <td className="p-3">
+                  {fmt(v.usado_em)}
+                  {v.usado_equipamento && <div className="text-xs text-gray-500">{v.usado_equipamento}</div>}
+                </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {v.status === "disponivel" && <button className="text-yellow-400 hover:underline mr-3" onClick={() => acao(v.id, "cancelar")}>Cancelar</button>}
                   {v.status !== "usado" && <button className="text-red-400 hover:underline" onClick={() => acao(v.id, "excluir")}>Excluir</button>}
@@ -181,7 +192,7 @@ export default function Vouchers() {
                   <label className="block text-xs text-gray-400 mb-1">Plano *</label>
                   <select required className={inputCls} value={novo.plano_id} onChange={(e) => setNovo({ ...novo, plano_id: e.target.value })}>
                     <option value="">Selecione...</option>
-                    {planos.map((p) => <option key={p.id} value={p.id}>{p.nome} ({p.duracao_minutos} min)</option>)}
+                    {planos.map((p) => <option key={p.id} value={p.id}>{p.nome} — {equipamentos[p.mikrotik_id] || "Qualquer equipamento"} ({p.duracao_minutos} min)</option>)}
                   </select>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-300">
