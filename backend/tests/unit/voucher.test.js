@@ -213,3 +213,55 @@ test('vouchers admin: listar filtra por impresso e ordena asc so quando pedido; 
   await c.listar(criarReq({ empresa_id: 7, query: { ordem: 'DROP TABLE' } }), res);
   assert.match(db.calls.filter((x) => /SELECT v\.id/.test(x.sql)).pop().sql, /ORDER BY v\.id DESC/); // so 'asc' vale
 });
+
+test('vouchers admin: acaoEmMassa exclui so nao usados e cancela so disponiveis, da propria empresa, validando ids', async () => {
+  const { c, db } = ctrlAdmin(async () => [{ affectedRows: 2 }]);
+  let res = criarRes();
+  await c.acaoEmMassa(criarReq({ empresa_id: 7, body: { acao: 'excluir', ids: [1, '2', 2, 3] } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual([res.body.afetados, res.body.ignorados], [2, 1]); // 3 ids unicos, 2 afetados
+  assert.match(db.calls[0].sql, /DELETE FROM vouchers WHERE empresa_id = \? AND status <> 'usado' AND id IN \(\?,\?,\?\)/);
+  assert.deepStrictEqual(db.calls[0].params, [7, 1, 2, 3]);
+  res = criarRes();
+  await c.acaoEmMassa(criarReq({ empresa_id: 7, body: { acao: 'cancelar', ids: [5] } }), res);
+  assert.match(db.calls[1].sql, /UPDATE vouchers SET status = 'cancelado' WHERE empresa_id = \? AND status = 'disponivel' AND id IN/);
+  for (const body of [{ acao: 'apagar', ids: [1] }, { ids: [1] }, { acao: 'excluir' }, { acao: 'excluir', ids: [] }, { acao: 'excluir', ids: ['x'] },
+    { acao: 'excluir', ids: [{ $ne: 1 }] }, { acao: 'excluir', ids: Array.from({ length: 1001 }, (_, i) => i + 1) }]) {
+    res = criarRes();
+    await c.acaoEmMassa(criarReq({ empresa_id: 7, body }), res);
+    assert.strictEqual(res.statusCode, 400);
+  }
+  assert.strictEqual(db.calls.length, 2); // os invalidos nao tocaram o banco
+});
+
+test('vouchers admin: excluirPorFiltro - previa nao apaga, exige EXCLUIR, sempre empresa e status <> usado, em lotes de 5000', async () => {
+  const { c, db } = ctrlAdmin(async (sql) => {
+    if (/SELECT COUNT\(\*\) AS n FROM vouchers v WHERE/.test(sql)) return [[{ n: 12 }]];
+    if (/^DELETE/.test(sql)) return [{ affectedRows: 7 }];
+    return undefined;
+  });
+  let res = criarRes();
+  await c.excluirPorFiltro(criarReq({ empresa_id: 7, body: { filtros: { lote: 'L1', equipamento: '3' }, previa: true } }), res);
+  assert.strictEqual(res.body.alvo, 12);
+  assert.ok(!db.calls.some((x) => /^DELETE/.test(x.sql)));
+  const q = db.calls[0];
+  assert.match(q.sql, /v\.empresa_id = \? AND v\.mikrotik_id = \? AND v\.lote = \? AND v\.status <> 'usado'/);
+  assert.deepStrictEqual(q.params, [7, 3, 'L1']);
+  res = criarRes();
+  await c.excluirPorFiltro(criarReq({ empresa_id: 7, body: { filtros: {}, confirmar: 'excluir' } }), res); // minusculo nao vale
+  assert.strictEqual(res.statusCode, 400);
+  assert.ok(!db.calls.some((x) => /^DELETE/.test(x.sql)));
+  res = criarRes();
+  await c.excluirPorFiltro(criarReq({ empresa_id: 7, body: { filtros: { lote: '__sem__', status: 'usado' }, confirmar: 'EXCLUIR' } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual([res.body.afetados, res.body.restantes], [7, 12]);
+  const del = db.calls.find((x) => /^DELETE/.test(x.sql));
+  assert.match(del.sql, /DELETE FROM vouchers WHERE empresa_id = \? AND id IN \(SELECT id FROM \(SELECT v\.id FROM vouchers v WHERE .*v\.status <> 'usado' ORDER BY v\.id LIMIT 5000\) AS alvo\)/);
+  assert.match(del.sql, /v\.lote IS NULL/);
+  assert.strictEqual(del.params[0], 7);
+  for (const filtros of ['x', [1], null]) {
+    res = criarRes();
+    await c.excluirPorFiltro(criarReq({ empresa_id: 7, body: { filtros: filtros === null ? null : filtros, previa: true } }), res);
+    if (filtros !== null) assert.strictEqual(res.statusCode, 400);
+  }
+});
