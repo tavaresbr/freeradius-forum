@@ -30,6 +30,7 @@ export default function Vouchers() {
   const [impressao, setImpressao] = useState(null); // { rede, qr, equipamento, eq, lote, quantidade, pular, marcados, imprimindo }
   const [sel, setSel] = useState([]); // ids marcados na lista (so da pagina atual)
   const [contagem, setContagem] = useState(null);
+  const [exclFiltro, setExclFiltro] = useState(null); // { alvo, texto, rodando, apagados }
   const [aba, setAba] = useState("lista"); // lista | relatorio
   const [novo, setNovo] = useState({ plano_id: "", mikrotik_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
   const [gerados, setGerados] = useState(null);
@@ -121,7 +122,7 @@ export default function Vouchers() {
 
   const abrirImpressao = () => setImpressao({
     rede: "", qr: true, equipamento: "", eq: filtro.equipamento, lote: filtro.lote, quantidade: "",
-    pular: true, marcados: sel.length > 0, imprimindo: false,
+    pular: true, marcados: selDisp.length > 0, imprimindo: false,
   });
 
   // Imprime os marcados na lista OU os DISPONIVEIS dos filtros do dialogo (mais antigos primeiro, ate a quantidade).
@@ -160,6 +161,55 @@ export default function Vouchers() {
       janela.close(); setMsg({ tipo: "erro", texto: err.message }); setImpressao((i) => (i ? { ...i, imprimindo: false } : i)); }
   };
 
+  const selecionaveis = dados.data.filter((v) => v.status !== "usado"); // usados nunca saem do historico
+  const selDisp = dados.data.filter((v) => sel.includes(v.id) && v.status === "disponivel");
+
+  const acaoMassa = async (acao) => {
+    const verbo = acao === "excluir" ? "Excluir" : "Cancelar";
+    const aviso = acao === "excluir" ? " Isso não pode ser desfeito." : " Eles deixam de funcionar.";
+    if (!window.confirm(`${verbo} ${sel.length} voucher(s) marcado(s)?${aviso} Vouchers já usados são ignorados.`)) return;
+    try {
+      const d = await chamar("/api/vouchers/massa", { method: "POST", body: JSON.stringify({ acao, ids: sel }) });
+      setMsg({ tipo: "ok", texto: `${d.afetados} voucher(s) ${acao === "excluir" ? "excluído(s)" : "cancelado(s)"}${d.ignorados ? `, ${d.ignorados} ignorado(s)` : ""}` });
+      setSel([]); carregar();
+    } catch (e) { setMsg({ tipo: "erro", texto: e.message }); }
+  };
+
+  const abrirExclFiltro = async () => {
+    setMsg(null);
+    setExclFiltro({ alvo: null, texto: "", rodando: false, apagados: 0 });
+    try {
+      const d = await chamar("/api/vouchers/massa-filtro", { method: "POST", body: JSON.stringify({ filtros: filtro, previa: true }) });
+      setExclFiltro((x) => x && { ...x, alvo: d.alvo });
+    } catch (e) { setMsg({ tipo: "erro", texto: e.message }); setExclFiltro(null); }
+  };
+
+  const confirmarExclFiltro = async (e) => {
+    e.preventDefault();
+    setExclFiltro((x) => ({ ...x, rodando: true }));
+    let total = 0;
+    try {
+      for (let i = 0; i < 100; i++) {
+        const d = await chamar("/api/vouchers/massa-filtro", { method: "POST", body: JSON.stringify({ filtros: filtro, confirmar: "EXCLUIR" }) });
+        total += d.afetados;
+        setExclFiltro((x) => x && { ...x, apagados: total });
+        if (!d.restantes || !d.afetados) break;
+      }
+      setMsg({ tipo: "ok", texto: `${total} voucher(s) excluído(s)` });
+    } catch (err) { setMsg({ tipo: "erro", texto: `${err.message}${total ? ` (${total} já excluídos)` : ""}` }); }
+    finally { setExclFiltro(null); setSel([]); carregar(); }
+  };
+
+  const descricaoFiltro = () => {
+    const partes = [];
+    if (filtro.status) partes.push(`status ${STATUS[filtro.status]?.[0]?.toLowerCase()}`);
+    if (filtro.equipamento) partes.push(`equipamento ${equipamentos[filtro.equipamento] || filtro.equipamento}`);
+    if (filtro.lote) partes.push(filtro.lote === "__sem__" ? "sem lote" : `lote ${filtro.lote}`);
+    if (filtro.impresso) partes.push(filtro.impresso === "sim" ? "já impressos" : "não impressos");
+    if (filtro.q) partes.push(`código com “${filtro.q}”`);
+    return partes.length ? partes.join(", ") : "todos os vouchers (disponíveis e cancelados)";
+  };
+
   const fecharModal = () => { setModal(false); setGerados(null); };
   const c = dados.contadores || {};
   const paginas = Math.max(1, Math.ceil((dados.total || 0) / 50));
@@ -173,7 +223,7 @@ export default function Vouchers() {
         </div>
         <div className={`flex gap-2 flex-wrap ${aba === "lista" ? "" : "hidden"}`}>
           <button className={btnSecundario} onClick={exportar}>Exportar CSV</button>
-          <button className={btnSecundario} onClick={abrirImpressao}>Imprimir cartões{sel.length > 0 ? ` (${sel.length})` : ""}</button>
+          <button className={btnSecundario} onClick={abrirImpressao}>Imprimir cartões{selDisp.length > 0 ? ` (${selDisp.length})` : ""}</button>
           <button className={btnPrimario} onClick={() => setModal(true)}>Gerar vouchers</button>
         </div>
       </div>
@@ -224,14 +274,27 @@ export default function Vouchers() {
         </select>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 mb-3 min-h-[2.25rem]">
+        {sel.length > 0 ? (
+          <>
+            <span className="text-sm text-white">{sel.length} selecionado(s)</span>
+            <button className={btnSecundario} onClick={() => acaoMassa("cancelar")}>Cancelar selecionados</button>
+            <button className="border border-red-800 text-red-300 px-3 py-2 rounded text-sm hover:bg-red-900/30 cursor-pointer" onClick={() => acaoMassa("excluir")}>Excluir selecionados</button>
+            <button className="text-sm text-gray-400 hover:text-gray-200 cursor-pointer" onClick={() => setSel([])}>Limpar</button>
+          </>
+        ) : <span className="text-xs text-gray-500">Marque vouchers na lista para cancelar, excluir ou imprimir. Vouchers usados não podem ser excluídos.</span>}
+        <button className="ml-auto border border-red-800 text-red-300 px-3 py-2 rounded text-sm hover:bg-red-900/30 disabled:opacity-40 cursor-pointer"
+          disabled={filtro.status === "usado"} onClick={abrirExclFiltro}>Excluir todos do filtro atual…</button>
+      </div>
+
       <div className="bg-[#1a1d27] border border-gray-800 rounded">
         <table className="w-full text-sm text-gray-300">
           <thead className="text-xs text-gray-500 uppercase">
             <tr>
               <th className="p-3 w-8">
                 <input type="checkbox" aria-label="Selecionar todos da página"
-                  checked={dados.data.filter((v) => v.status === "disponivel").length > 0 && dados.data.filter((v) => v.status === "disponivel").every((v) => sel.includes(v.id))}
-                  onChange={(e) => setSel(e.target.checked ? dados.data.filter((v) => v.status === "disponivel").map((v) => v.id) : [])} />
+                  checked={selecionaveis.length > 0 && selecionaveis.every((v) => sel.includes(v.id))}
+                  onChange={(e) => setSel(e.target.checked ? selecionaveis.map((v) => v.id) : [])} />
               </th>
               <th className="text-left p-3">Código</th><th className="text-left p-3">Plano</th><th className="text-left p-3">Lote</th>
               <th className="text-left p-3">Status</th><th className="text-left p-3">Válido até</th><th className="text-left p-3">Usado em</th><th className="p-3" />
@@ -242,7 +305,7 @@ export default function Vouchers() {
             {dados.data.map((v) => (
               <tr key={v.id} className="border-t border-gray-800">
                 <td className="p-3">
-                  {v.status === "disponivel" && (
+                  {v.status !== "usado" && (
                     <input type="checkbox" aria-label={`Selecionar ${v.codigo}`} checked={sel.includes(v.id)}
                       onChange={(e) => setSel(e.target.checked ? [...sel, v.id] : sel.filter((x) => x !== v.id))} />
                   )}
@@ -283,12 +346,36 @@ export default function Vouchers() {
       </>
       )}
 
+      {exclFiltro && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <form onSubmit={confirmarExclFiltro} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md space-y-3">
+            <h2 className="text-lg font-bold text-white">Excluir vouchers do filtro</h2>
+            <p className="text-sm text-gray-400">Filtro atual: <b>{descricaoFiltro()}</b>. Vouchers já usados nunca são excluídos.</p>
+            <p className="text-sm text-white">
+              {exclFiltro.alvo === null ? "Contando..." : exclFiltro.alvo === 0 ? "Nenhum voucher para excluir com este filtro." : `${exclFiltro.alvo} voucher(s) serão excluídos. Isso não pode ser desfeito.`}
+            </p>
+            {exclFiltro.alvo > 0 && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Digite EXCLUIR para confirmar</label>
+                <input className={inputCls} value={exclFiltro.texto} autoComplete="off" onChange={(e) => setExclFiltro({ ...exclFiltro, texto: e.target.value })} />
+              </div>
+            )}
+            {exclFiltro.rodando && <p className="text-sm text-yellow-300">Excluindo... {exclFiltro.apagados} até agora</p>}
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" className={btnSecundario} disabled={exclFiltro.rodando} onClick={() => setExclFiltro(null)}>Cancelar</button>
+              <button type="submit" className="bg-red-700 text-white px-4 py-2 rounded text-sm hover:bg-red-600 disabled:opacity-50 cursor-pointer"
+                disabled={exclFiltro.rodando || !exclFiltro.alvo || exclFiltro.texto !== "EXCLUIR"}>Excluir</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {impressao && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <form onSubmit={imprimir} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3">
             <h2 className="text-lg font-bold text-white">Imprimir cartões</h2>
             {impressao.marcados ? (
-              <p className="text-sm text-gray-400">Serão impressos os <b>{sel.length}</b> voucher(s) marcados na lista, 30 cartões por folha A4.</p>
+              <p className="text-sm text-gray-400">Serão impressos os <b>{selDisp.length}</b> voucher(s) disponíveis marcados na lista, 30 cartões por folha A4.</p>
             ) : (
               <>
                 <p className="text-sm text-gray-400">Imprime vouchers <b>disponíveis</b> (os mais antigos primeiro), 30 cartões por folha A4.</p>

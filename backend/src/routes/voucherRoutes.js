@@ -10,6 +10,8 @@ router.get("/relatorio", rel.relatorio);
 router.get("/relatorio/export", rel.relatorioCSV);
 router.post("/", promocaoLimiter, c.criarLote);
 router.post("/impressos", c.marcarImpressos);
+router.post("/massa", promocaoLimiter, c.acaoEmMassa);
+router.post("/massa-filtro", promocaoLimiter, c.excluirPorFiltro);
 router.post("/:id/cancelar", c.cancelar);
 router.delete("/:id", c.excluir);
 

@@ -12,18 +12,25 @@ const MSG_INVALIDO = "Código inválido, já utilizado ou de outro local.";
 
 // ---------- Admin (tudo filtrado por empresa_id) ----------
 
+// Filtros comuns da lista e da exclusao por filtro (sempre escopados por empresa_id).
+function montarFiltros(query, empresaId) {
+  const where = ["v.empresa_id = ?"];
+  const params = [empresaId];
+  const { status, lote, q, equipamento, impresso } = query || {};
+  if (impresso === "nao") where.push("v.impresso_em IS NULL");
+  else if (impresso === "sim") where.push("v.impresso_em IS NOT NULL");
+  if (normalizarId(equipamento)) { where.push("v.mikrotik_id = ?"); params.push(Number(equipamento)); }
+  if (["disponivel", "usado", "cancelado"].includes(status)) { where.push("v.status = ?"); params.push(status); }
+  if (lote === "__sem__") where.push("v.lote IS NULL");
+  else if (typeof lote === "string" && lote) { where.push("v.lote = ?"); params.push(lote.slice(0, 60)); }
+  if (typeof q === "string" && q.trim()) { where.push("v.codigo LIKE ?"); params.push(`%${normalizarCodigo(q)}%`); }
+  return { where, params };
+}
+
 exports.listar = async (req, res) => {
   try {
     const empresaId = req.empresa_id;
-    const where = ["v.empresa_id = ?"];
-    const params = [empresaId];
-    const { status, lote, q, equipamento, impresso } = req.query;
-    if (impresso === "nao") where.push("v.impresso_em IS NULL");
-    else if (impresso === "sim") where.push("v.impresso_em IS NOT NULL");
-    if (normalizarId(equipamento)) { where.push("v.mikrotik_id = ?"); params.push(Number(equipamento)); }
-    if (["disponivel", "usado", "cancelado"].includes(status)) { where.push("v.status = ?"); params.push(status); }
-    if (typeof lote === "string" && lote) { where.push("v.lote = ?"); params.push(lote.slice(0, 60)); }
-    if (typeof q === "string" && q.trim()) { where.push("v.codigo LIKE ?"); params.push(`%${normalizarCodigo(q)}%`); }
+    const { where, params } = montarFiltros(req.query, empresaId);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
@@ -132,6 +139,66 @@ exports.marcarImpressos = async (req, res) => {
     console.error("[vouchers] marcarImpressos:", err.message);
     if (err.code === "ER_BAD_FIELD_ERROR") return res.status(500).json({ error: MSG_PENDENTE_045 });
     res.status(500).json({ error: "Erro ao marcar vouchers como impressos" });
+  }
+};
+
+// ids vindos do corpo: array de inteiros positivos, sem repetidos, 1..MAX_IMPRESSOS
+function idsDoCorpo(body) {
+  const bruto = body && body.ids;
+  if (!Array.isArray(bruto) || bruto.length === 0) return { erro: "Nenhum voucher informado" };
+  if (bruto.length > MAX_IMPRESSOS) return { erro: `No máximo ${MAX_IMPRESSOS} vouchers por vez` };
+  const ids = [];
+  for (const v of bruto) {
+    const n = typeof v === "number" ? v : /^\d+$/.test(String(v)) ? Number(v) : NaN;
+    if (!Number.isSafeInteger(n) || n <= 0) return { erro: "Lista de vouchers inválida" };
+    ids.push(n);
+  }
+  return { ids: [...new Set(ids)] };
+}
+
+// POST /api/vouchers/massa { acao: 'excluir'|'cancelar', ids }: usados nunca sao apagados.
+exports.acaoEmMassa = async (req, res) => {
+  try {
+    const { acao } = req.body || {};
+    if (acao !== "excluir" && acao !== "cancelar") return res.status(400).json({ error: "Ação inválida" });
+    const { ids, erro } = idsDoCorpo(req.body);
+    if (erro) return res.status(400).json({ error: erro });
+    const marcas = ids.map(() => "?").join(",");
+    const [r] = acao === "excluir"
+      ? await db.execute(`DELETE FROM vouchers WHERE empresa_id = ? AND status <> 'usado' AND id IN (${marcas})`, [req.empresa_id, ...ids])
+      : await db.execute(`UPDATE vouchers SET status = 'cancelado' WHERE empresa_id = ? AND status = 'disponivel' AND id IN (${marcas})`, [req.empresa_id, ...ids]);
+    res.json({ success: true, afetados: r.affectedRows, ignorados: ids.length - r.affectedRows });
+  } catch (err) {
+    console.error("[vouchers] acaoEmMassa:", err.message);
+    res.status(500).json({ error: "Erro ao processar os vouchers" });
+  }
+};
+
+const LOTE_EXCLUSAO = 5000;
+
+// POST /api/vouchers/massa-filtro { filtros, previa?, confirmar? }: exclui (status <> 'usado') tudo que casa com o filtro.
+exports.excluirPorFiltro = async (req, res) => {
+  try {
+    const { filtros, previa, confirmar } = req.body || {};
+    if (filtros !== undefined && (typeof filtros !== "object" || filtros === null || Array.isArray(filtros))) return res.status(400).json({ error: "Filtros inválidos" });
+    const { where, params } = montarFiltros(filtros || {}, req.empresa_id);
+    where.push("v.status <> 'usado'");
+    const condicao = where.join(" AND ");
+    if (previa === true) {
+      const [[c]] = await db.query(`SELECT COUNT(*) AS n FROM vouchers v WHERE ${condicao}`, params);
+      return res.json({ success: true, alvo: c.n });
+    }
+    if (confirmar !== "EXCLUIR") return res.status(400).json({ error: "Confirmação ausente: digite EXCLUIR" });
+    // Subconsulta derivada: DELETE com LIMIT nao aceita alias/JOIN em todas as versoes do MySQL.
+    const [r] = await db.query(
+      `DELETE FROM vouchers WHERE empresa_id = ? AND id IN (SELECT id FROM (SELECT v.id FROM vouchers v WHERE ${condicao} ORDER BY v.id LIMIT ${LOTE_EXCLUSAO}) AS alvo)`,
+      [req.empresa_id, ...params]
+    );
+    const [[resto]] = await db.query(`SELECT COUNT(*) AS n FROM vouchers v WHERE ${condicao}`, params);
+    res.json({ success: true, afetados: r.affectedRows, restantes: resto.n });
+  } catch (err) {
+    console.error("[vouchers] excluirPorFiltro:", err.message);
+    res.status(500).json({ error: "Erro ao excluir os vouchers" });
   }
 };
 
