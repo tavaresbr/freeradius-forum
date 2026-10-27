@@ -28,21 +28,29 @@ function ctrlAdmin(handler) {
 test('vouchers admin: lote valida plano da empresa, grava com empresa_id e N codigos unicos', async () => {
   const { c, db } = ctrlAdmin(async (sql, p) => {
     if (/FROM planos WHERE id/.test(sql)) return [p[1] === 7 ? [{ id: 5 }] : []];
+    if (/FROM mikrotiks WHERE id = \? AND empresa_id/.test(sql)) return [p[1] === 7 && p[0] === '3' ? [{ id: 3 }] : []];
     return undefined;
   });
   let res = criarRes();
-  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, quantidade: 10 } }), res);
+  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, mikrotik_id: 3, quantidade: 10 } }), res);
   assert.strictEqual(res.statusCode, 201);
   assert.strictEqual(new Set(res.body.codigos).size, 10);
   const ins = db.calls.filter((x) => /INSERT INTO vouchers/.test(x.sql));
   assert.strictEqual(ins.length, 10);
-  assert.ok(ins.every((x) => x.params[0] === 7));
+  assert.ok(ins.every((x) => x.params[0] === 7 && x.params[3] === 3)); // grava o equipamento
   res = criarRes();
-  await c.criarLote(criarReq({ empresa_id: 8, body: { plano_id: 5, quantidade: 1 } }), res);
+  await c.criarLote(criarReq({ empresa_id: 8, body: { plano_id: 5, mikrotik_id: 3, quantidade: 1 } }), res);
   assert.strictEqual(res.statusCode, 400); // plano de outra empresa
   res = criarRes();
-  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, quantidade: 9999 } }), res);
+  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, mikrotik_id: 3, quantidade: 9999 } }), res);
   assert.strictEqual(res.statusCode, 400);
+  res = criarRes();
+  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, quantidade: 1 } }), res);
+  assert.strictEqual(res.statusCode, 400); // sem equipamento
+  assert.match(res.body.error, /equipamento/i);
+  res = criarRes();
+  await c.criarLote(criarReq({ empresa_id: 7, body: { plano_id: 5, mikrotik_id: 99, quantidade: 1 } }), res);
+  assert.strictEqual(res.statusCode, 400); // equipamento de outra empresa
 });
 
 test('vouchers admin: cancelar/excluir sempre escopados por empresa e status', async () => {
@@ -154,4 +162,20 @@ test('vouchers admin: listar e CSV trazem plano e equipamento, com JOINs escopad
   await c.exportarCSV(criarReq({ empresa_id: 7, query: {} }), res);
   assert.match(String(res.body), /Codigo;Plano;Equipamento;Lote;Status;Valido ate;Usado em;Usado no equipamento/);
   assert.match(String(res.body), /ABCD2345;Plano 60;Matriz;.*;Filial/);
+});
+
+test('resgate: voucher exclusivo do equipamento so vale nele; legado (sem equipamento) vale em qualquer', async () => {
+  const base = { id: 1, status: 'disponivel', expirado: 0, plano_id: 2 };
+  let r = await resgatar(ctrlResgate({ voucher: { ...base, mikrotik_id: 9 } }).c, {}); // requisicao vem do equipamento 3
+  assert.strictEqual(r.statusCode, 403);
+  const { c, db } = ctrlResgate({ voucher: { ...base, mikrotik_id: 9 } });
+  await resgatar(c, {});
+  assert.ok(!db.calls.some((x) => /UPDATE vouchers SET status = 'usado'|INSERT INTO radcheck/.test(x.sql))); // nem reivindica
+  r = await resgatar(ctrlResgate({ voucher: { ...base, mikrotik_id: 3 } }).c, {});
+  assert.strictEqual(r.statusCode, 200);
+  r = await resgatar(ctrlResgate({ voucher: { ...base, mikrotik_id: null } }).c, {});
+  assert.strictEqual(r.statusCode, 200);
+  const usado = { id: 1, status: 'usado', usado_mac: 'AA:BB:CC:DD:EE:01', username: 'voucher_x', plano_id: 2, mikrotik_id: 9 };
+  r = await resgatar(ctrlResgate({ voucher: usado, saldo: { existe: true, temSaldo: true, password: 'p', tempoRestante: 10 } }).c, {});
+  assert.strictEqual(r.statusCode, 403); // reconexao tambem respeita o equipamento
 });

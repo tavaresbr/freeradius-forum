@@ -21,13 +21,13 @@ export default function Vouchers() {
   const [planos, setPlanos] = useState([]);
   const [equipamentos, setEquipamentos] = useState({});
   const [empresaId, setEmpresaId] = useState("");
-  const [filtro, setFiltro] = useState({ status: "", lote: "", q: "" });
+  const [filtro, setFiltro] = useState({ status: "", lote: "", q: "", equipamento: "" });
   const [page, setPage] = useState(1);
   const [msg, setMsg] = useState(null);
   const [modal, setModal] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [impressao, setImpressao] = useState(null); // { rede, imprimindo }
-  const [novo, setNovo] = useState({ plano_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
+  const [novo, setNovo] = useState({ plano_id: "", mikrotik_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
   const [gerados, setGerados] = useState(null);
 
   const chamar = useCallback(async (url, opts = {}) => {
@@ -61,7 +61,7 @@ export default function Vouchers() {
     e.preventDefault();
     setOcupado(true); setMsg(null);
     try {
-      const body = { plano_id: novo.plano_id, lote: novo.lote, valido_ate: novo.valido_ate || null };
+      const body = { plano_id: novo.plano_id, mikrotik_id: novo.mikrotik_id, lote: novo.lote, valido_ate: novo.valido_ate || null };
       if (novo.modo === "lote") body.quantidade = Number(novo.quantidade); else body.codigo = novo.codigo;
       const d = await chamar("/api/vouchers", { method: "POST", body: JSON.stringify(body) });
       setGerados(d.codigos);
@@ -85,6 +85,7 @@ export default function Vouchers() {
       const qs = new URLSearchParams();
       if (filtro.lote) qs.set("lote", filtro.lote);
       if (filtro.status) qs.set("status", filtro.status);
+      if (filtro.equipamento) qs.set("equipamento", filtro.equipamento);
       const res = await fetch(`/api/vouchers/export?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Erro ao exportar");
       const url = URL.createObjectURL(await res.blob());
@@ -108,6 +109,7 @@ export default function Vouchers() {
         const qs = new URLSearchParams({ page: pg, limit: 200, status: "disponivel" });
         if (filtro.lote) qs.set("lote", filtro.lote);
         if (filtro.q) qs.set("q", filtro.q);
+        if (filtro.equipamento) qs.set("equipamento", filtro.equipamento);
         const d = await chamar(`/api/vouchers?${qs}`);
         todos = todos.concat(d.data || []);
         if (d.empresa_id) emp = d.empresa_id;
@@ -158,6 +160,10 @@ export default function Vouchers() {
           <option value="">Todos os status</option>
           {Object.entries(STATUS).map(([k, [r]]) => <option key={k} value={k}>{r}</option>)}
         </select>
+        <select className={`${inputCls} !w-48`} value={filtro.equipamento} onChange={(e) => { setPage(1); setFiltro({ ...filtro, equipamento: e.target.value }); }}>
+          <option value="">Todos os equipamentos</option>
+          {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+        </select>
         <select className={`${inputCls} !w-40`} value={filtro.lote} onChange={(e) => { setPage(1); setFiltro({ ...filtro, lote: e.target.value }); }}>
           <option value="">Todos os lotes</option>
           {(dados.lotes || []).map((l) => <option key={l} value={l}>{l}</option>)}
@@ -179,7 +185,7 @@ export default function Vouchers() {
                 <td className="p-3 font-mono tracking-wider text-white">{v.codigo}</td>
                 <td className="p-3">
                   {v.plano_nome || "-"}
-                  <div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento"}</div>
+                  <div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div>
                 </td>
                 <td className="p-3">{v.lote || "-"}</td>
                 <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${STATUS[v.status]?.[1]}`}>{STATUS[v.status]?.[0]}</span></td>
@@ -223,7 +229,7 @@ export default function Vouchers() {
             </label>
             {impressao.qr && (
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Equipamento do QR para planos sem equipamento próprio</label>
+                <label className="block text-xs text-gray-400 mb-1">Equipamento do QR para vouchers antigos (sem equipamento)</label>
                 <select className={inputCls} value={impressao.equipamento} onChange={(e) => setImpressao({ ...impressao, equipamento: e.target.value })}>
                   <option value="">Sem QR nesses cartões</option>
                   {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
@@ -255,9 +261,19 @@ export default function Vouchers() {
               <form onSubmit={gerar} className="space-y-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Plano *</label>
-                  <select required className={inputCls} value={novo.plano_id} onChange={(e) => setNovo({ ...novo, plano_id: e.target.value })}>
+                  <select required className={inputCls} value={novo.plano_id} onChange={(e) => {
+                    const pl = planos.find((x) => String(x.id) === e.target.value);
+                    setNovo({ ...novo, plano_id: e.target.value, mikrotik_id: pl?.mikrotik_id && equipamentos[pl.mikrotik_id] ? String(pl.mikrotik_id) : novo.mikrotik_id });
+                  }}>
                     <option value="">Selecione...</option>
-                    {planos.map((p) => <option key={p.id} value={p.id}>{p.nome} — {equipamentos[p.mikrotik_id] || "Qualquer equipamento"} ({p.duracao_minutos} min)</option>)}
+                    {planos.map((p) => <option key={p.id} value={p.id}>{p.nome} ({p.duracao_minutos} min)</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Equipamento * (o voucher só vale nele)</label>
+                  <select required className={inputCls} value={novo.mikrotik_id} onChange={(e) => setNovo({ ...novo, mikrotik_id: e.target.value })}>
+                    <option value="">Selecione...</option>
+                    {Object.entries(equipamentos).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
                   </select>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-300">

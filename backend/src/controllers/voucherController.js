@@ -6,7 +6,7 @@ const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { gerarCodigo, normalizarCodigo, codigoPersonalizadoValido, quantidadeValida, validarValidade, celulaCsv } = require("../utils/voucher");
 const { normalizarMac, normalizarIp, normalizarId } = require("../utils/entradaSegura");
 
-const MSG_INVALIDO = "Código inválido ou já utilizado.";
+const MSG_INVALIDO = "Código inválido, já utilizado ou de outro local.";
 
 // ---------- Admin (tudo filtrado por empresa_id) ----------
 
@@ -15,7 +15,8 @@ exports.listar = async (req, res) => {
     const empresaId = req.empresa_id;
     const where = ["v.empresa_id = ?"];
     const params = [empresaId];
-    const { status, lote, q } = req.query;
+    const { status, lote, q, equipamento } = req.query;
+    if (normalizarId(equipamento)) { where.push("v.mikrotik_id = ?"); params.push(Number(equipamento)); }
     if (["disponivel", "usado", "cancelado"].includes(status)) { where.push("v.status = ?"); params.push(status); }
     if (typeof lote === "string" && lote) { where.push("v.lote = ?"); params.push(lote.slice(0, 60)); }
     if (typeof q === "string" && q.trim()) { where.push("v.codigo LIKE ?"); params.push(`%${normalizarCodigo(q)}%`); }
@@ -23,12 +24,12 @@ exports.listar = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
     const [rows] = await db.query(
-      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, p.mikrotik_id AS equipamento_id, m.nome AS equipamento_nome,
+      `SELECT v.id, v.codigo, v.plano_id, p.nome AS plano_nome, p.duracao_minutos AS plano_minutos, v.mikrotik_id AS equipamento_id, m.nome AS equipamento_nome,
               mu.nome AS usado_equipamento, v.lote, v.status, v.valido_ate,
               v.usado_em, v.usado_mac, v.criado_em
          FROM vouchers v
          LEFT JOIN planos p ON p.id = v.plano_id
-         LEFT JOIN mikrotiks m ON m.id = p.mikrotik_id AND m.empresa_id = v.empresa_id
+         LEFT JOIN mikrotiks m ON m.id = v.mikrotik_id AND m.empresa_id = v.empresa_id
          LEFT JOIN radius_users ru ON ru.username = v.username AND ru.empresa_id = v.empresa_id
          LEFT JOIN mikrotiks mu ON mu.id = ru.nas_id AND mu.empresa_id = v.empresa_id
         WHERE ${where.join(" AND ")} ORDER BY v.id DESC LIMIT ? OFFSET ?`,
@@ -50,11 +51,15 @@ exports.listar = async (req, res) => {
 exports.criarLote = async (req, res) => {
   try {
     const empresaId = req.empresa_id;
-    const { plano_id, quantidade, codigo, lote, valido_ate } = req.body || {};
+    const { plano_id, mikrotik_id, quantidade, codigo, lote, valido_ate } = req.body || {};
     const planoId = normalizarId(plano_id);
     if (!planoId) return res.status(400).json({ error: "Escolha o plano do voucher" });
     const [[plano]] = await db.query("SELECT id FROM planos WHERE id = ? AND empresa_id = ?", [planoId, empresaId]);
     if (!plano) return res.status(400).json({ error: "Plano inválido" });
+    const equipId = normalizarId(mikrotik_id);
+    if (!equipId) return res.status(400).json({ error: "Escolha o equipamento do voucher" });
+    const [[equip]] = await db.query("SELECT id FROM mikrotiks WHERE id = ? AND empresa_id = ?", [equipId, empresaId]);
+    if (!equip) return res.status(400).json({ error: "Equipamento inválido" });
 
     const validade = validarValidade(valido_ate);
     if (validade === undefined) return res.status(400).json({ error: "Data de validade inválida" });
@@ -77,8 +82,8 @@ exports.criarLote = async (req, res) => {
     for (const c of codigos) {
       try {
         await db.execute(
-          "INSERT INTO vouchers (empresa_id, codigo, plano_id, lote, valido_ate, criado_por) VALUES (?,?,?,?,?,?)",
-          [empresaId, c, planoId, nomeLote, validade, req.user?.id || null]
+          "INSERT INTO vouchers (empresa_id, codigo, plano_id, mikrotik_id, lote, valido_ate, criado_por) VALUES (?,?,?,?,?,?,?)",
+          [empresaId, c, planoId, equip.id, nomeLote, validade, req.user?.id || null]
         );
         criados.push(c);
       } catch (e) {
@@ -132,12 +137,13 @@ exports.exportarCSV = async (req, res) => {
     let filtro = "";
     if (typeof req.query.lote === "string" && req.query.lote) { filtro += " AND v.lote = ?"; params.push(req.query.lote.slice(0, 60)); }
     if (["disponivel", "usado", "cancelado"].includes(req.query.status)) { filtro += " AND v.status = ?"; params.push(req.query.status); }
+    if (normalizarId(req.query.equipamento)) { filtro += " AND v.mikrotik_id = ?"; params.push(Number(req.query.equipamento)); }
     const [rows] = await db.query(
       `SELECT v.codigo, p.nome AS plano, m.nome AS equipamento, mu.nome AS usado_equipamento,
               v.lote, v.status, v.valido_ate, v.usado_em
          FROM vouchers v
          LEFT JOIN planos p ON p.id = v.plano_id
-         LEFT JOIN mikrotiks m ON m.id = p.mikrotik_id AND m.empresa_id = v.empresa_id
+         LEFT JOIN mikrotiks m ON m.id = v.mikrotik_id AND m.empresa_id = v.empresa_id
          LEFT JOIN radius_users ru ON ru.username = v.username AND ru.empresa_id = v.empresa_id
          LEFT JOIN mikrotiks mu ON mu.id = ru.nas_id AND mu.empresa_id = v.empresa_id
         WHERE v.empresa_id = ?${filtro} ORDER BY v.id`,
@@ -171,12 +177,14 @@ exports.resgatar = async (req, res) => {
     const empresaId = mtk.empresa_id;
 
     const [[v]] = await db.execute(
-      `SELECT v.id, v.status, v.valido_ate, v.usado_mac, v.username, v.plano_id,
+      `SELECT v.id, v.status, v.valido_ate, v.usado_mac, v.username, v.plano_id, v.mikrotik_id,
               (v.valido_ate IS NOT NULL AND v.valido_ate < CURDATE()) AS expirado
          FROM vouchers v WHERE v.empresa_id = ? AND v.codigo = ?`,
       [empresaId, codigo]
     );
     if (!v || v.status === "cancelado") return res.status(403).json({ error: MSG_INVALIDO });
+    // Voucher exclusivo por equipamento (NULL = legado, vale em qualquer equipamento da empresa).
+    if (v.mikrotik_id != null && String(v.mikrotik_id) !== String(mtk.id)) return res.status(403).json({ error: MSG_INVALIDO });
 
     const gateway = mtk.end_hotspot || mtk.ip;
 
