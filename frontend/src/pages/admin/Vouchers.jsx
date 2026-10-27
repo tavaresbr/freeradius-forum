@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { abrirJanelaImpressao, escreverCartoes } from "../../utils/imprimirVouchers";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
 const btnPrimario = "bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 disabled:opacity-50 cursor-pointer";
@@ -24,6 +25,7 @@ export default function Vouchers() {
   const [msg, setMsg] = useState(null);
   const [modal, setModal] = useState(false);
   const [ocupado, setOcupado] = useState(false);
+  const [impressao, setImpressao] = useState(null); // { rede, imprimindo }
   const [novo, setNovo] = useState({ plano_id: "", modo: "lote", quantidade: 10, codigo: "", lote: "", valido_ate: "" });
   const [gerados, setGerados] = useState(null);
 
@@ -89,6 +91,30 @@ export default function Vouchers() {
     } catch (e) { setMsg({ tipo: "erro", texto: e.message }); }
   };
 
+  // Imprime so os vouchers DISPONIVEIS do filtro atual (lote/busca), todas as paginas.
+  const imprimir = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+    const janela = abrirJanelaImpressao();
+    if (!janela) { setMsg({ tipo: "erro", texto: "O navegador bloqueou a janela de impressão. Permita pop-ups para este site." }); return; }
+    setImpressao((i) => ({ ...i, imprimindo: true }));
+    try {
+      let todos = [];
+      for (let pg = 1; pg <= 10; pg++) {
+        const qs = new URLSearchParams({ page: pg, limit: 200, status: "disponivel" });
+        if (filtro.lote) qs.set("lote", filtro.lote);
+        if (filtro.q) qs.set("q", filtro.q);
+        const d = await chamar(`/api/vouchers?${qs}`);
+        todos = todos.concat(d.data || []);
+        if (todos.length >= d.total) break;
+      }
+      if (!todos.length) throw new Error("Não há vouchers disponíveis neste filtro para imprimir");
+      escreverCartoes(janela, todos, { rede: impressao.rede });
+      setImpressao(null);
+    } catch (err) {
+      janela.close(); setMsg({ tipo: "erro", texto: err.message }); setImpressao((i) => (i ? { ...i, imprimindo: false } : i)); }
+  };
+
   const fecharModal = () => { setModal(false); setGerados(null); };
   const c = dados.contadores || {};
   const paginas = Math.max(1, Math.ceil((dados.total || 0) / 50));
@@ -102,6 +128,7 @@ export default function Vouchers() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button className={btnSecundario} onClick={exportar}>Exportar CSV</button>
+          <button className={btnSecundario} onClick={() => setImpressao({ rede: "", imprimindo: false })}>Imprimir cartões</button>
           <button className={btnPrimario} onClick={() => setModal(true)}>Gerar vouchers</button>
         </div>
       </div>
@@ -170,6 +197,25 @@ export default function Vouchers() {
           <button className={btnSecundario} disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</button>
           <span>{page} / {paginas}</span>
           <button className={btnSecundario} disabled={page >= paginas} onClick={() => setPage(page + 1)}>Próxima</button>
+        </div>
+      )}
+
+      {impressao && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <form onSubmit={imprimir} className="bg-[#1a1d27] border border-gray-700 rounded-lg p-6 w-full max-w-md space-y-3">
+            <h2 className="text-lg font-bold text-white">Imprimir cartões</h2>
+            <p className="text-sm text-gray-400">
+              Imprime os vouchers <b>disponíveis</b>{filtro.lote ? <> do lote <b>{filtro.lote}</b></> : " (todos os lotes)"}{filtro.q ? <>, com a busca “{filtro.q}”</> : ""}, 8 cartões por folha A4.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Nome da rede Wi-Fi (opcional, aparece no cartão)</label>
+              <input className={inputCls} maxLength={40} value={impressao.rede} onChange={(e) => setImpressao({ ...impressao, rede: e.target.value })} />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" className={btnSecundario} onClick={() => setImpressao(null)}>Cancelar</button>
+              <button type="submit" className={btnPrimario} disabled={impressao.imprimindo}>{impressao.imprimindo ? "Preparando..." : "Imprimir"}</button>
+            </div>
+          </form>
         </div>
       )}
 
