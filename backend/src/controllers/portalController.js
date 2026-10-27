@@ -1,4 +1,4 @@
-const { urlHttpSegura } = require('../utils/entradaSegura');
+const { urlHttpSegura, urlPortalSegura } = require('../utils/entradaSegura');
 const db = require("../../db");
 const { motivoCampanhaInutilizavel } = require("../utils/campanhaAtiva");
 const { DEFAULT_WHATSAPP_TEMPLATE } = require("../constants/whatsappDefaults");
@@ -29,7 +29,7 @@ exports.criarPortal = async (req, res) => {
     campos_cadastro, mostrar_planos, mostrar_lgpd
   } = req.body;
   if (!nome || !slug) return res.status(400).json({ message: "Nome e slug são obrigatórios" });
-  if (url_redirect && !urlHttpSegura(String(url_redirect))) {
+  if (url_redirect && !urlPortalSegura(String(url_redirect))) {
     return res.status(400).json({ message: "URL de redirecionamento inválida (use http:// ou https://)" });
   }
 
@@ -80,7 +80,7 @@ exports.atualizarPortal = async (req, res) => {
     campos_cadastro, mostrar_planos, mostrar_lgpd, configuracoes,
     whatsapp_enabled, whatsapp_template,
   } = req.body;
-  if (url_redirect && !urlHttpSegura(String(url_redirect))) {
+  if (url_redirect && !urlPortalSegura(String(url_redirect))) {
     return res.status(400).json({ message: "URL de redirecionamento inválida (use http:// ou https://)" });
   }
 

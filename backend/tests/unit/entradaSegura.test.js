@@ -48,3 +48,13 @@ test('browserauth do Omada ignora target fora do gateway (credencial nao vai a h
   assert.strictEqual(ok.url, 'http://192.168.0.10:8088/portal/radius/browserauth');
   assert.strictEqual(ok.fields.originUrl, undefined);
 });
+
+test('urlPortalSegura: aceita caminho relativo do site e http(s); recusa o resto', () => {
+  const { urlPortalSegura } = require('../../src/utils/entradaSegura');
+  assert.strictEqual(urlPortalSegura('/cadastro'), '/cadastro');
+  assert.strictEqual(urlPortalSegura('/planos-cliente?x=1'), '/planos-cliente?x=1');
+  assert.ok(urlPortalSegura('https://exemplo.com/p'));
+  for (const ruim of ['//evil.com', '/\\evil.com', 'javascript:alert(1)', 'cadastro', '', null, '/a\nb']) {
+    assert.strictEqual(urlPortalSegura(ruim), null, String(ruim));
+  }
+});

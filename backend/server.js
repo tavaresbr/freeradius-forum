@@ -69,7 +69,7 @@ const logsRoutes = require("./src/routes/logsRoutes");
 const db = require("./db");
 const somentePrimitivos = require("./src/middleware/somentePrimitivos");
 const { detectPortalVendor } = require("./src/utils/portalVendor");
-const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost, urlHttpSegura } = require("./src/utils/entradaSegura");
+const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost, urlHttpSegura, urlPortalSegura } = require("./src/utils/entradaSegura");
 const { salvarContextoPortal } = require("./src/gateways/gatewayLiberacao");
 
 // Rotas exclusivas do servidor principal (OTA updates) - não existem nos servidores de alunos
@@ -560,7 +560,7 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
       return res.send(html);
     }
 
-    if (portal.url_redirect && urlHttpSegura(portal.url_redirect)) {
+    if (portal.url_redirect && urlPortalSegura(portal.url_redirect)) {
       const separator = portal.url_redirect.includes("?") ? "&" : "?";
       return res.redirect(`${portal.url_redirect}${separator}${params}`);
     }
