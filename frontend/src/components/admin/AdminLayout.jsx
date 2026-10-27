@@ -8,7 +8,7 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { empresaSlug } = useParams();
-  const { user, logout, isSuperAdmin, empresas, switchEmpresa, hasPermission } = useAuth();
+  const { user, logout, isSuperAdmin, donoPlataforma, empresas, switchEmpresa, hasPermission } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
   const [switchingEmpresa, setSwitchingEmpresa] = useState(false);
   const [openMenus, setOpenMenus] = useState({});
@@ -97,7 +97,7 @@ export default function AdminLayout({ children }) {
         </svg>
       )
     },
-    ...(isSuperAdmin ? [{
+    ...(donoPlataforma ? [{
       key: "planos-saas",
       title: "Planos SaaS",
       path: `${basePath}/planos-saas`,
@@ -107,7 +107,7 @@ export default function AdminLayout({ children }) {
         </svg>
       )
     }] : []),
-    ...(isSuperAdmin ? [{
+    ...(donoPlataforma ? [{
       key: "empresas",
       title: "Empresas",
       path: `${basePath}/empresas`,
@@ -212,7 +212,7 @@ export default function AdminLayout({ children }) {
         </svg>
       )
     },
-    ...(isSuperAdmin ? [{
+    ...(donoPlataforma ? [{
       key: "logs",
       title: "Logs do Sistema",
       path: `${basePath}/logs`,
@@ -363,7 +363,7 @@ export default function AdminLayout({ children }) {
         <nav className="flex-1 overflow-y-auto p-4">
           <div className="space-y-1">
             {/* Super Admin link */}
-            {isSuperAdmin && (
+            {donoPlataforma && (
               <Link
                 to="/super"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-yellow-400 hover:bg-yellow-900/20 transition-all duration-200 mb-2 border border-yellow-800/30"

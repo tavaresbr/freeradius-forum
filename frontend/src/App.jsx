@@ -58,6 +58,15 @@ const RotaPrivada = ({ children }) => {
   return children;
 };
 
+// Areas da plataforma (SaaS, empresas, atualizacao, logs): so o dono da plataforma
+const RotaDono = ({ children }) => {
+  const { user, loading, donoPlataforma, donoCarregando } = useAuth();
+  if (loading || donoCarregando) return null;
+  if (!user) return <Navigate to="/login" />;
+  if (!donoPlataforma) return <Navigate to={`/admin/${user.empresa_slug}`} replace />;
+  return children;
+};
+
 // Redireciona /admin para /admin/:slug
 const AdminRedirect = () => {
   const { user, loading } = useAuth();
@@ -88,9 +97,9 @@ function App() {
 
       {/* Admin (protegidas com empresa slug) */}
       <Route path="/admin/:empresaSlug" element={<RotaPrivada><Dashboard /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/empresas" element={<RotaPrivada><EmpresasAdmin /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/empresas" element={<RotaDono><EmpresasAdmin /></RotaDono>} />
       <Route path="/admin/:empresaSlug/assinatura" element={<RotaPrivada><Assinatura /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/planos-saas" element={<RotaPrivada><PlanosSaas /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/planos-saas" element={<RotaDono><PlanosSaas /></RotaDono>} />
       <Route path="/admin/:empresaSlug/mikrotiks" element={<RotaPrivada><Mikrotiks /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vpn" element={<RotaPrivada><Wireguard /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-omada" element={<RotaPrivada><TutorialOmada /></RotaPrivada>} />
@@ -105,7 +114,7 @@ function App() {
       <Route path="/admin/:empresaSlug/lgpd" element={<RotaPrivada><LgpdCadastros /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/sessoes" element={<RotaPrivada><Sessoes /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/sessoeslog" element={<RotaPrivada><SessoesLog /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/logs" element={<RotaPrivada><Logs /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/logs" element={<RotaDono><Logs /></RotaDono>} />
       <Route path="/admin/:empresaSlug/leads" element={<RotaPrivada><Leads /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/importar-clientes" element={<RotaPrivada><ImportarClientes /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/integracoes" element={<RotaPrivada><Integracoes /></RotaPrivada>} />
@@ -120,11 +129,11 @@ function App() {
       <Route path="/admin/:empresaSlug/campanhas/:id" element={<RotaPrivada><CampanhaEditor /></RotaPrivada>} />
 
       {/* Super Admin */}
-      <Route path="/super" element={<RotaPrivada><SuperDashboard /></RotaPrivada>} />
-      <Route path="/super/empresas" element={<RotaPrivada><Empresas /></RotaPrivada>} />
-      <Route path="/super/atualizar" element={<RotaPrivada><AtualizarSistema /></RotaPrivada>} />
-      <Route path="/super/backups" element={<RotaPrivada><Backups /></RotaPrivada>} />
-      <Route path="/super/publicar-atualizacao" element={<RotaPrivada><PublicarAtualizacao /></RotaPrivada>} />
+      <Route path="/super" element={<RotaDono><SuperDashboard /></RotaDono>} />
+      <Route path="/super/empresas" element={<RotaDono><Empresas /></RotaDono>} />
+      <Route path="/super/atualizar" element={<RotaDono><AtualizarSistema /></RotaDono>} />
+      <Route path="/super/backups" element={<RotaDono><Backups /></RotaDono>} />
+      <Route path="/super/publicar-atualizacao" element={<RotaDono><PublicarAtualizacao /></RotaDono>} />
     </Routes>
   );
 }

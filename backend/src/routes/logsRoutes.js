@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const authorize = require("../middleware/authorize");
+const exigeDonoPlataforma = require("../middleware/exigeDonoPlataforma");
 const {
   getPm2Logs,
   getRadiusLogs,
@@ -11,7 +12,7 @@ const {
 } = require("../controllers/logsController");
 
 // Somente super_admin pode ver/limpar logs do sistema
-router.use(auth, authorize("super_admin"));
+router.use(auth, authorize("super_admin"), exigeDonoPlataforma);
 
 router.get("/pm2", getPm2Logs);
 router.get("/radius", getRadiusLogs);

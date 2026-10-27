@@ -55,6 +55,7 @@ const importacaoRoutes = require("./src/routes/importacaoRoutes");
 const integracaoRoutes = require("./src/routes/integracaoRoutes");
 const complianceRoutes = require("./src/routes/complianceRoutes");
 const empresaRoutes = require("./src/routes/empresaRoutes");
+const plataformaRoutes = require("./src/routes/plataformaRoutes");
 const empresaConfigRoutes = require("./src/routes/empresaConfigRoutes");
 const registroRoutes = require("./src/routes/registroRoutes");
 const siteRoutes = require("./src/routes/siteRoutes");
@@ -199,6 +200,7 @@ app.get("/api/portal-config/:tipo", leituraPortalLimiter, portalCtrl.getPortalCo
 
 // --- Rotas super admin ---
 app.use("/api/empresas", empresaRoutes);  // Auth + authorize interno
+app.use("/api/plataforma", plataformaRoutes);  // /eu (auth); /donos so o dono
 app.use("/api/grupos-permissao", grupoPermissaoRoutes); // Auth + authorize interno
 app.use("/api/system-backup", systemBackupRoutes);
 app.use("/api/system-update", systemUpdateRoutes);

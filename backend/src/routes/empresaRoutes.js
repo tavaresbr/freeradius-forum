@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const authorize = require("../middleware/authorize");
+const exigeDonoPlataforma = require("../middleware/exigeDonoPlataforma");
 const multer = require("multer");
 const path = require("path");
 const {
@@ -68,7 +69,7 @@ router.get("/by-slug/:slug", auth, async (req, res) => {
 });
 
 // Todas as rotas abaixo requerem super_admin
-router.use(auth, authorize('super_admin'));
+router.use(auth, authorize('super_admin'), exigeDonoPlataforma);
 
 router.get("/", listarEmpresas);
 router.post("/", criarEmpresa);

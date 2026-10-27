@@ -17,6 +17,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [empresas, setEmpresas] = useState([]);
   const [permissoes, setPermissoes] = useState({});
+  // Dono da plataforma: null = ainda nao sabemos (so super admin consulta)
+  const [donoPlataforma, setDonoPlataforma] = useState(null);
+
+  const carregarDono = async (token) => {
+    try {
+      const res = await fetch('/api/plataforma/eu', { headers: { Authorization: `Bearer ${token}` } });
+      const data = res.ok ? await res.json() : {};
+      setDonoPlataforma(data.dono === true);
+    } catch {
+      setDonoPlataforma(false);
+    }
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -24,6 +36,8 @@ export function AuthProvider({ children }) {
       if (token) {
         const decoded = parseJwt(token);
         if (decoded && decoded.exp * 1000 > Date.now()) {
+          if (decoded.role === 'super_admin') carregarDono(token);
+          else setDonoPlataforma(false);
           setUser({
             id: decoded.id,
             email: decoded.email,
@@ -76,6 +90,8 @@ export function AuthProvider({ children }) {
   const login = (token, userData, empresasList, permissoesData) => {
     localStorage.setItem('admin_token', token);
     const decoded = parseJwt(token);
+    if (decoded.role === 'super_admin') { setDonoPlataforma(null); carregarDono(token); }
+    else setDonoPlataforma(false);
     setUser({
       id: decoded.id,
       email: decoded.email,
@@ -137,9 +153,11 @@ export function AuthProvider({ children }) {
     setUser(null);
     setEmpresas([]);
     setPermissoes({});
+    setDonoPlataforma(null);
   };
 
   const isSuperAdmin = user?.role === 'super_admin';
+  const ehDono = isSuperAdmin && donoPlataforma === true;
 
   const hasPermission = (modulo, acao = 'ver') => {
     if (isSuperAdmin) return true;
@@ -149,7 +167,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, isSuperAdmin, empresas, switchEmpresa, permissoes, hasPermission }}>
+    <AuthContext.Provider value={{ user, donoPlataforma: ehDono, donoCarregando: isSuperAdmin && donoPlataforma === null, login, logout, loading, isSuperAdmin, empresas, switchEmpresa, permissoes, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

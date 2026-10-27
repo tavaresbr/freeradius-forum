@@ -22,6 +22,7 @@ export default function PlanosSaas() {
   const [copiaDe, setCopiaDe] = useState(null);
   const [msg, setMsg] = useState("");
   const [adicionais, setAdicionais] = useState([]);
+  const [donos, setDonos] = useState([]);
   const [formAd, setFormAd] = useState(null);
   const [editAdId, setEditAdId] = useState(null);
   const [cfg, setCfg] = useState({ access_token: "", public_key: "", webhook_secret: "", email_pagador: "", configurado: false });
@@ -38,7 +39,16 @@ export default function PlanosSaas() {
     if (a.ok) setPlanos(await a.json());
     if (b.ok) setCfg(await b.json());
     if (c.ok) setAdicionais(await c.json());
+    const d = await fetch("/api/plataforma/donos", { headers });
+    if (d.ok) setDonos(await d.json());
   }, []);
+
+  const alternarDono = async (u) => {
+    const res = await fetch(`/api/plataforma/donos/${u.id}`, { method: "PUT", headers, body: JSON.stringify({ dono: !u.dono }) });
+    const d = await res.json().catch(() => ({}));
+    setMsg(d.message || (res.ok ? "Salvo." : "Erro ao salvar"));
+    carregar();
+  };
 
   useEffect(() => {
     if (!isSuperAdmin) { navigate("/admin"); return; }
@@ -207,6 +217,30 @@ export default function PlanosSaas() {
             </form>
           </div>
         )}
+
+        <section className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3" data-testid="donos-plataforma">
+          <div>
+            <h2 className="text-lg font-bold text-white">Donos da plataforma</h2>
+            <p className="text-xs text-gray-500">Só quem tem este perfil vê Planos SaaS, Empresas, Atualizar/Backups e Logs do sistema. Vale apenas para super admins.</p>
+          </div>
+          {donos.length === 0 && <p className="text-sm text-gray-500">Nenhum super admin encontrado.</p>}
+          <ul className="divide-y divide-gray-800">
+            {donos.map((u) => (
+              <li key={u.id} className="flex items-center justify-between gap-3 py-2 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-sm text-white truncate">{u.nome || u.email}</p>
+                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {u.dono && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-800/30">Dono</span>}
+                  <button type="button" onClick={() => alternarDono(u)} className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600">
+                    {u.dono ? "Remover perfil" : "Dar perfil de dono"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         {form && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
