@@ -61,3 +61,17 @@ exports.importarPlanilha = async (req, res) => {
     res.status(500).json({ message: "Erro ao importar planilha" });
   }
 };
+
+const { importarContatos } = require("../utils/whatsappContatos");
+
+// POST /api/clientes-import/whatsapp/importar  ({ simular })
+exports.importarWhatsapp = async (req, res) => {
+  const simular = req.body?.simular === true || req.body?.simular === "true";
+  try {
+    const resumo = await importarContatos(req.empresa_id, { dryRun: simular });
+    res.json({ success: true, simulacao: simular, ...resumo });
+  } catch (err) {
+    console.error("Erro ao importar contatos do WhatsApp:", err?.response?.data || err.message);
+    res.status(502).json({ message: "Não foi possível ler os contatos do WhatsApp. Confira se a instância está conectada." });
+  }
+};
