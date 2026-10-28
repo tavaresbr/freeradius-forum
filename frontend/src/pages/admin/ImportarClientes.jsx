@@ -203,7 +203,7 @@ function ResultadoContatos({ r }) {
   );
 }
 
-function Google({ token }) {
+function ArquivoContatos({ token, tipo, instrucao }) {
   const [arquivo, setArquivo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -217,7 +217,7 @@ function Google({ token }) {
       const fd = new FormData();
       fd.append("arquivo", arquivo);
       fd.append("simular", simular ? "true" : "false");
-      const res = await fetch(`${API}/api/clientes-import/google/importar`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const res = await fetch(`${API}/api/clientes-import/${tipo}/importar`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg(data.message || "Erro ao importar"); return; }
       setR(data);
@@ -232,11 +232,10 @@ function Google({ token }) {
     <div className="space-y-5">
       <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
         <p className="text-gray-300 text-sm">
-          Em <strong>contacts.google.com</strong> clique em <strong>Exportar</strong>, escolha <strong>Google CSV</strong> (ou vCard) e envie o arquivo aqui.
-          Entram nome, telefone e e-mail; contatos sem telefone válido e telefones já cadastrados são ignorados.
+          {instrucao} Entram nome, telefone e e-mail; contatos sem telefone válido e telefones já cadastrados são ignorados.
         </p>
         <p className="text-xs text-yellow-400">
-          Esses cadastros entram sem CPF e sem consentimento LGPD (origem "google"). Antes de enviar promoções, filtre por consentimento ou origem.
+          Esses cadastros entram sem CPF e sem consentimento LGPD (origem "{tipo}"). Antes de enviar promoções, filtre por consentimento ou origem.
         </p>
         <input type="file" accept=".csv,.vcf" onChange={(e) => { setArquivo(e.target.files[0] || null); setR(null); setMsg(""); }} className="text-sm text-gray-300 w-full max-w-full" />
         <div className="flex gap-3 flex-wrap">
@@ -247,6 +246,26 @@ function Google({ token }) {
       {msg && <p className="text-red-400 text-sm">{msg}</p>}
       <ResultadoContatos r={r} />
     </div>
+  );
+}
+
+function Google({ token }) {
+  return (
+    <ArquivoContatos
+      token={token}
+      tipo="google"
+      instrucao={<>Em <strong>contacts.google.com</strong> clique em <strong>Exportar</strong>, escolha <strong>Google CSV</strong> (ou vCard) e envie o arquivo aqui.</>}
+    />
+  );
+}
+
+function Outlook({ token }) {
+  return (
+    <ArquivoContatos
+      token={token}
+      tipo="outlook"
+      instrucao={<>No Outlook, em <strong>Pessoas › Gerenciar › Exportar contatos</strong> (ou <strong>Arquivo › Abrir e Exportar</strong> no Outlook clássico), exporte em <strong>CSV</strong> e envie o arquivo aqui.</>}
+    />
   );
 }
 
@@ -327,13 +346,13 @@ export default function ImportarClientes() {
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Importar clientes</h1>
-            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp ou do Google</p>
+            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google ou do Outlook</p>
           </div>
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
         <div className="flex gap-2">
-          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"]].map(([k, rot]) => (
+          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"]].map(([k, rot]) => (
             <button
               key={k}
               onClick={() => setOrigem(k)}
@@ -349,6 +368,7 @@ export default function ImportarClientes() {
         {origem === "planilha" ? <Planilha token={token} campos={campos} />
           : origem === "whatsapp" ? <Whatsapp token={token} empresaSlug={empresaSlug} />
           : origem === "google" ? <Google token={token} />
+          : origem === "outlook" ? <Outlook token={token} />
           : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
