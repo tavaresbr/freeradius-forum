@@ -175,6 +175,69 @@ function Planilha({ token, campos }) {
   );
 }
 
+function Whatsapp({ token, empresaSlug }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [r, setR] = useState(null);
+
+  const enviar = async (simular) => {
+    setBusy(true);
+    setMsg("");
+    setR(null);
+    try {
+      const res = await fetch(`${API}/api/clientes-import/whatsapp/importar`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ simular }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg(data.message || "Erro ao importar"); return; }
+      setR(data);
+    } catch {
+      setMsg("Erro de conexão");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
+        <p className="text-gray-300 text-sm">
+          Importa os contatos do <strong>WhatsApp conectado</strong> (nome e telefone) como clientes. Contatos cujo telefone já existe no cadastro são ignorados;
+          grupos não entram. A instância precisa estar conectada em <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-blue-400 hover:text-blue-300">WhatsApp</Link>.
+        </p>
+        <p className="text-xs text-yellow-400">
+          Esses cadastros entram sem CPF e sem consentimento LGPD (origem "whatsapp"). Antes de enviar promoções, filtre por consentimento ou origem.
+        </p>
+        <div className="flex gap-3 flex-wrap">
+          <button disabled={busy} onClick={() => enviar(true)} className={btnSecondary}>Simular</button>
+          <button disabled={busy} onClick={() => enviar(false)} className={btnPrimary}>{busy ? "Processando..." : "Importar contatos"}</button>
+        </div>
+      </div>
+      {msg && <p className="text-red-400 text-sm">{msg}</p>}
+      {r && (
+        <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
+          <h3 className="text-white font-semibold">{r.simulacao ? "Simulação (nada foi gravado)" : "Importação concluída"}</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[["Contatos lidos", r.total, "text-gray-200"], [r.simulacao ? "Seriam criados" : "Criados", r.criados, "text-green-400"], ["Já cadastrados", r.ignorados, "text-yellow-400"]].map(([rot, val, cor]) => (
+              <div key={rot} className="bg-[#0f111a] border border-gray-800 rounded-lg p-3">
+                <p className="text-xs text-gray-500">{rot}</p>
+                <p className={`text-xl font-bold ${cor}`}>{val}</p>
+              </div>
+            ))}
+          </div>
+          {r.amostra?.length > 0 && (
+            <ul className="text-xs text-gray-400 space-y-1">
+              {r.amostra.map((c, i) => <li key={i}>{c.nome} — {c.telefone}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Sgp({ empresaSlug }) {
   return (
     <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
@@ -206,13 +269,13 @@ export default function ImportarClientes() {
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Importar clientes</h1>
-            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP) ou de uma planilha</p>
+            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha ou do WhatsApp</p>
           </div>
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
         <div className="flex gap-2">
-          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"]].map(([k, rot]) => (
+          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"]].map(([k, rot]) => (
             <button
               key={k}
               onClick={() => setOrigem(k)}
@@ -225,7 +288,9 @@ export default function ImportarClientes() {
           ))}
         </div>
 
-        {origem === "planilha" ? <Planilha token={token} campos={campos} /> : <Sgp empresaSlug={empresaSlug} />}
+        {origem === "planilha" ? <Planilha token={token} campos={campos} />
+          : origem === "whatsapp" ? <Whatsapp token={token} empresaSlug={empresaSlug} />
+          : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
   );

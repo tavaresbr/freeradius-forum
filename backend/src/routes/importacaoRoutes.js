@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const { promocaoLimiter } = require("../middleware/rateLimiters");
 const ctrl = require("../controllers/importacaoController");
 
 const router = express.Router();
@@ -23,5 +24,6 @@ router.get("/campos", ctrl.campos);
 router.get("/modelo.csv", ctrl.modelo);
 router.post("/planilha/preview", comArquivo, ctrl.previewPlanilha);
 router.post("/planilha/importar", comArquivo, ctrl.importarPlanilha);
+router.post("/whatsapp/importar", promocaoLimiter, ctrl.importarWhatsapp);
 
 module.exports = router;
