@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 
 export default function WhatsApp() {
@@ -11,6 +12,10 @@ export default function WhatsApp() {
   const [config, setConfig] = useState({ api_url: "", api_key: "", instance_name: "" });
   const [configSaved, setConfigSaved] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
+  const { empresaSlug } = useParams();
+  const [recebimento, setRecebimento] = useState(null); // { ativo } do webhook de atendimento
+  const [recebimentoMsg, setRecebimentoMsg] = useState("");
+  const [recebimentoBusy, setRecebimentoBusy] = useState(false);
   const token = localStorage.getItem("admin_token");
   const pollingRef = useRef(null);
 
@@ -36,6 +41,29 @@ export default function WhatsApp() {
     fetchLogs();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
+
+  useEffect(() => {
+    fetch("/api/whatsapp/webhook/status", { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setRecebimento(d))
+      .catch(() => {});
+    // eslint-disable-next-line
+  }, []);
+
+  const ativarRecebimento = async () => {
+    setRecebimentoBusy(true);
+    setRecebimentoMsg("");
+    try {
+      const res = await fetch("/api/whatsapp/webhook/ativar", { method: "POST", headers });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setRecebimento({ ativo: true });
+      else setRecebimentoMsg(data.error || "Não foi possível ativar");
+    } catch {
+      setRecebimentoMsg("Erro de conexão");
+    } finally {
+      setRecebimentoBusy(false);
+    }
+  };
 
   useEffect(() => { fetchLogs(); /* eslint-disable-next-line */ }, [logsPage, logsFilter.status]);
 
@@ -374,6 +402,29 @@ export default function WhatsApp() {
       </div>
 
       {/* Enviar mensagem de teste */}
+      {/* Recebimento de mensagens (atendimento) */}
+      <div className="bg-[#1a1d27] rounded-xl border border-gray-800 p-6 mb-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold">Recebimento de mensagens</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Permite ver e responder as mensagens dos clientes no menu <Link to={`/admin/${empresaSlug}/atendimento`} className="text-blue-400 hover:text-blue-300">WhatsApp</Link>.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {recebimento && (
+              <span className={`text-xs px-2 py-1 rounded-md border ${recebimento.ativo ? "bg-green-900/40 text-green-400 border-green-800/50" : "bg-gray-800 text-gray-400 border-gray-700"}`}>
+                {recebimento.ativo ? "Ativo" : "Não ativo"}
+              </span>
+            )}
+            <button onClick={ativarRecebimento} disabled={recebimentoBusy || !status?.exists} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer">
+              {recebimentoBusy ? "Ativando..." : recebimento?.ativo ? "Reativar" : "Ativar recebimento"}
+            </button>
+          </div>
+        </div>
+        {recebimentoMsg && <p className="text-sm text-red-400 mt-3">{recebimentoMsg}</p>}
+      </div>
+
       {/* Configuracao Evolution API */}
       <div className="bg-[#1a1d27] rounded-xl border border-gray-800 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">

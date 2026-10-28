@@ -132,6 +132,25 @@ const cartaoAssinaturaLimiter = rateLimit({
 
 // Endpoints publicos do captive portal (pagamentos, acesso temporario, etc).
 // Limite mais folgado por causa de polling de status, mas ainda limita abuso/enumeracao.
+// Webhook da Evolution (mesmo IP para todas as empresas: teto alto; o token da URL e' quem autentica).
+const whatsappWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonHandler('Muitas requisicoes.'),
+});
+
+// Envio de mensagens no atendimento: por usuario logado (evita disparo em massa pela tela).
+const atendimentoEnvioLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `adm:${req.user?.id || ipKeyGenerator(req.ip)}`,
+  handler: jsonHandler('Muitas mensagens em pouco tempo. Aguarde um instante.'),
+});
+
 const publicApiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 min
   limit: 120,
@@ -228,4 +247,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { whatsappWebhookLimiter, atendimentoEnvioLimiter, cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };
