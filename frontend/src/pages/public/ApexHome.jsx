@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
 import useBranding from "../../hooks/useBranding";
+import useSeo from "../../hooks/useSeo";
 import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle, Layout, Router, Users, Image as Imagem } from "lucide-react";
 
-const WHATSAPP = "5593991935695";
-const TELEFONE = "(93) 99193-5695";
-const EMAIL = "adm@tavarestelecom.com.br";
+import { SITE_URL, TITULO, DESCRICAO, WHATSAPP, TELEFONE, EMAIL, COMO_FUNCIONA, RECURSOS as RECURSOS_TEXTO, FAQ } from "../../constants/siteSeo";
 
 // Fallback caso a API de planos esteja indisponivel (a fonte real e' /api/assinatura/planos).
 const PLANOS_FALLBACK = [
@@ -20,28 +19,16 @@ const VANTAGENS = [
   { icone: ShieldCheck, titulo: "Marco Civil e LGPD", texto: "Logs de conexão e consentimento prontos para auditoria." },
   { icone: BarChart3, titulo: "Multi-equipamento", texto: "MikroTik, Omada, UniFi e Grandstream em um só painel." },
 ];
-// So recursos que o sistema tem hoje. O plano muda apenas os limites (equipamentos e administradores).
-const RECURSOS = [
-  { icone: Layout, titulo: "Portais de acesso", texto: "LGPD, cadastro de lead, venda de planos e login por usuário e senha, com editor visual." },
-  { icone: Zap, titulo: "PIX e cartão", texto: "Mercado Pago e EFI, liberação automática do acesso e PIX com acesso grátis de teste." },
-  { icone: MessageCircle, titulo: "WhatsApp automático", texto: "Mensagem com as credenciais assim que o acesso é liberado, com texto que você edita." },
-  { icone: ShieldCheck, titulo: "LGPD e Marco Civil", texto: "Aceite com o termo gravado e logs de conexão com exportação em CSV." },
-  { icone: Router, titulo: "Vários equipamentos", texto: "MikroTik, Omada, UniFi e Grandstream no mesmo painel, com script de instalação rápida e VPN WireGuard." },
-  { icone: Users, titulo: "Clientes e sessões", texto: "Cadastro completo, importação por planilha ou SGP, sessões ativas com tempo restante e desconexão remota." },
-  { icone: Imagem, titulo: "Campanhas", texto: "Imagens e vídeos antes do portal para divulgar suas ofertas." },
-  { icone: BarChart3, titulo: "Equipe e acesso", texto: "Perfis de Administrador e Usuário Padrão, painel pelo navegador e pelo celular." },
-];
-const FAQ = [
-  ["Como funciona o teste grátis?", "Você cria sua conta e usa o sistema por 7 dias, sem cartão. Depois escolhe um plano e paga por PIX."],
-  ["Posso trocar de plano?", "Sim, a qualquer momento pelo menu Assinatura do painel."],
-  ["E se eu atrasar o pagamento?", "Seus clientes continuam conectando. O painel administrativo fica bloqueado até a renovação."],
-];
+// Textos (RECURSOS, FAQ, COMO_FUNCIONA) vem de constants/siteSeo.js: o mesmo conteudo vai para o HTML estatico e o JSON-LD.
+const ICONES = { portais: Layout, pagamentos: Zap, whatsapp: MessageCircle, conformidade: ShieldCheck, equipamentos: Router, clientes: Users, campanhas: Imagem, equipe: BarChart3 };
+const RECURSOS = RECURSOS_TEXTO.map((r) => ({ ...r, icone: ICONES[r.chave] || Layout }));
 
 const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const limite = (v) => (v == null ? "Ilimitados" : v);
 
 export default function ApexHome() {
   const { nome } = useBranding();
+  useSeo({ titulo: TITULO, descricao: DESCRICAO, caminho: "/" });
   const [planos, setPlanos] = useState(PLANOS_FALLBACK);
   const { hash } = useLocation();
 
@@ -53,22 +40,41 @@ export default function ApexHome() {
   }, [hash]);
 
   useEffect(() => {
-    document.title = `${nome} | Sistema de Wi-Fi Hotspot para provedores`;
-    let meta = document.querySelector('meta[name="description"]');
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.name = "description";
-      document.head.appendChild(meta);
-    }
-    meta.content = "Sistema de Wi-Fi Hotspot com captive portal, pagamentos PIX/cartão, WhatsApp automático, vários equipamentos e conformidade LGPD. Teste grátis por 7 dias.";
-  }, [nome]);
-
-  useEffect(() => {
     fetch("/api/assinatura/planos")
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d) && d.length) setPlanos(d); })
       .catch(() => {});
   }, []);
+
+  // Precos reais (da API) para os buscadores: so quando vierem do servidor, nunca do fallback.
+  useEffect(() => {
+    const reais = planos.filter((p) => p.id != null);
+    const id = "ld-planos";
+    document.getElementById(id)?.remove();
+    if (!reais.length) return;
+    const el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.id = id;
+    el.text = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_URL}/#software`,
+      name: `${nome} - Sistema de Wi-Fi Hotspot`,
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      offers: reais.map((p) => ({
+        "@type": "Offer",
+        name: p.nome,
+        description: p.descricao || undefined,
+        price: Number(p.valor).toFixed(2),
+        priceCurrency: "BRL",
+        url: `${SITE_URL}/registro?plano=${p.id}`,
+        availability: "https://schema.org/InStock",
+      })),
+    }).replace(/</g, "\\u003c");
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, [planos, nome]);
 
   const cadastro = (p) => (p?.id ? `/registro?plano=${p.id}` : "/registro");
 
@@ -88,7 +94,7 @@ export default function ApexHome() {
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
               <Link to="/registro" className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg shadow-orange-500/20">Começar teste grátis</Link>
-              <a href={`https://wa.me/${WHATSAPP}`} className="border border-apex-500 text-apex-700 hover:bg-apex-50 px-8 py-3 rounded-lg font-semibold inline-flex items-center justify-center gap-2">
+              <a href={`https://wa.me/${WHATSAPP}`} rel="noopener" className="border border-apex-500 text-apex-700 hover:bg-apex-50 px-8 py-3 rounded-lg font-semibold inline-flex items-center justify-center gap-2">
                 <MessageCircle size={18} /> Falar com a equipe
               </a>
             </div>
@@ -115,6 +121,21 @@ export default function ApexHome() {
               <p className="mt-1 text-gray-600">{texto}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="como-funciona" aria-labelledby="como-funciona-titulo" className="py-16 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <h2 id="como-funciona-titulo" className="text-3xl font-bold text-center">Como funciona o Wi-Fi com cadastro e pagamento</h2>
+          <ol className="mt-10 grid gap-6 md:grid-cols-3">
+            {COMO_FUNCIONA.map(([titulo, texto], i) => (
+              <li key={titulo} className="bg-white rounded-2xl p-6 border border-apex-100 shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-apex-500 text-white font-bold" aria-hidden="true">{i + 1}</span>
+                <h3 className="mt-3 font-bold text-apex-900">{titulo}</h3>
+                <p className="mt-1 text-sm text-gray-600">{texto}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
