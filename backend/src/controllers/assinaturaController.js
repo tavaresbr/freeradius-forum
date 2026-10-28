@@ -426,7 +426,7 @@ function dadosPlano(b) {
   return [
     String(b.nome || "").trim().slice(0, 100),
     b.descricao ? String(b.descricao).slice(0, 255) : null,
-    Math.max(0, Number(b.valor) || 0),
+    b.gratis ? 0 : Math.max(0, Number(b.valor) || 0),
     Math.max(1, parseInt(b.ciclo_dias, 10) || 30),
     nulo(b.max_equipamentos),
     nulo(b.max_admins),
@@ -437,6 +437,8 @@ function dadosPlano(b) {
     b.inclui_exportacao ? 1 : 0,
     nulo(b.max_portais),
     b.inclui_dominio ? 1 : 0,
+    b.gratis ? 1 : 0,
+    nulo(b.trial_dias) ? Math.min(nulo(b.trial_dias), 365) : null,
   ];
 }
 
@@ -444,7 +446,7 @@ exports.criarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   const [r] = await db.execute(
-    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais, inclui_dominio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
+    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais, inclui_dominio, gratis, trial_dias) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
   invalidar();
   res.status(201).json({ id: r.insertId });
 };
@@ -453,7 +455,7 @@ exports.atualizarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
   await db.execute(
-    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=?, inclui_dominio=? WHERE id=?",
+    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=?, inclui_dominio=?, gratis=?, trial_dias=? WHERE id=?",
     [...d, req.params.id]);
   invalidar();
   res.json({ message: "Plano atualizado" });
@@ -567,8 +569,16 @@ exports.definirAssinaturaEmpresa = async (req, res) => {
     if (Number.isNaN(d.getTime())) return res.status(400).json({ message: "Data inválida" });
     await db.execute("UPDATE assinaturas SET vence_em = ?, ultimo_aviso = NULL WHERE empresa_id = ?", [d, empresaId]);
   }
-  // 'ativa' sem vencimento ficaria bloqueada: assume 1 ciclo de 30 dias a partir de agora
-  await db.execute("UPDATE assinaturas SET vence_em = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE empresa_id = ? AND status = 'ativa' AND vence_em IS NULL", [empresaId]);
+  // Plano gratis nunca vence: sem vencimento e sempre ativa (cancelada continua cancelada).
+  const [[atual]] = await db.execute(
+    "SELECT p.gratis, a.status FROM assinaturas a LEFT JOIN saas_planos p ON p.id = a.plano_id WHERE a.empresa_id = ?", [empresaId]
+  ).catch(() => [[null]]);
+  if (atual && atual.gratis && atual.status !== "cancelada") {
+    await db.execute("UPDATE assinaturas SET status = 'ativa', vence_em = NULL, trial_ate = NULL WHERE empresa_id = ?", [empresaId]);
+  } else {
+    // 'ativa' sem vencimento ficaria bloqueada: assume 1 ciclo de 30 dias a partir de agora
+    await db.execute("UPDATE assinaturas SET vence_em = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE empresa_id = ? AND status = 'ativa' AND vence_em IS NULL", [empresaId]);
+  }
   invalidar(empresaId);
   res.json({ message: "Assinatura atualizada" });
 };

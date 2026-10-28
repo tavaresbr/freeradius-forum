@@ -190,3 +190,20 @@ test('cartao: aprovado ativa 1x; recusado marca recusada; sem fingerprint e 400'
   axios.get = origGet; axios.post = origPost;
   void pagCtrl;
 });
+
+test('plano gratis nunca bloqueia, mesmo sem vencimento', () => {
+  const { calcularEstado } = require('../../src/utils/assinatura');
+  const e = calcularEstado({ status: 'ativa', vence_em: null, gratis: 1, plano_id: 1 });
+  assert.strictEqual(e.bloqueada, false);
+  assert.strictEqual(e.status, 'ativa');
+  assert.strictEqual(e.gratis, true);
+  assert.strictEqual(calcularEstado({ status: 'cancelada', gratis: 1 }).bloqueada, true);
+});
+
+test('diasDeTeste usa trial_dias ou o padrao 7', () => {
+  const { diasDeTeste } = require('../../src/utils/assinatura');
+  assert.strictEqual(diasDeTeste({ trial_dias: 30 }), 30);
+  assert.strictEqual(diasDeTeste({ trial_dias: null }), 7);
+  assert.strictEqual(diasDeTeste(null), 7);
+  assert.strictEqual(diasDeTeste({ trial_dias: 9999 }), 365);
+});
