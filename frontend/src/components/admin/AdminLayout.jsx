@@ -220,16 +220,6 @@ export default function AdminLayout({ children }) {
         { key: "compliance", title: "Marco Civil", path: `${basePath}/compliance` },
       ]
     },
-    {
-      key: "whatsapp",
-      title: "WhatsApp",
-      path: `${basePath}/whatsapp`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 20l1.3-3.9A9 9 0 113.9 18.7L3 20zm9-14a7 7 0 00-5.9 10.7l.3.5-.8 2.3 2.4-.8.5.3A7 7 0 1012 6z"/>
-        </svg>
-      )
-    },
     ...(donoPlataforma ? [{
       key: "logs",
       title: "Logs do Sistema",

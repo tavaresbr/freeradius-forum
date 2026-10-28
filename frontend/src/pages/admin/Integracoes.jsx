@@ -18,6 +18,13 @@ const CATALOGO = [
     descricao: "Receba pagamentos por PIX e cartão dos planos pagos do portal.",
     caminho: "mercado-pago",
   },
+  {
+    chave: "whatsapp",
+    nome: "WhatsApp",
+    descricao: "Conecte a instância do WhatsApp, envie mensagens de teste e veja o histórico de envios dos portais.",
+    caminho: "../whatsapp",
+    semStatus: true,
+  },
 ];
 
 export default function Integracoes() {
@@ -45,20 +52,22 @@ export default function Integracoes() {
           {CATALOGO.map((i) => (
             <Link
               key={i.chave}
-              to={`/admin/${empresaSlug}/integracoes/${i.caminho}`}
+              to={i.semStatus ? `/admin/${empresaSlug}/${i.chave}` : `/admin/${empresaSlug}/integracoes/${i.caminho}`}
               className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 hover:bg-[#252b3b] transition-colors block"
             >
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-semibold text-white">{i.nome}</h2>
-                <span
-                  className={`text-xs px-2 py-1 rounded-md border ${
-                    status[i.chave]
-                      ? "bg-green-900/40 text-green-400 border-green-800/50"
-                      : "bg-gray-800 text-gray-400 border-gray-700"
-                  }`}
-                >
-                  {status[i.chave] ? "Configurado" : "Não configurado"}
-                </span>
+                {!i.semStatus && (
+                  <span
+                    className={`text-xs px-2 py-1 rounded-md border ${
+                      status[i.chave]
+                        ? "bg-green-900/40 text-green-400 border-green-800/50"
+                        : "bg-gray-800 text-gray-400 border-gray-700"
+                    }`}
+                  >
+                    {status[i.chave] ? "Configurado" : "Não configurado"}
+                  </span>
+                )}
               </div>
               <p className="text-sm text-gray-400">{i.descricao}</p>
             </Link>
