@@ -60,7 +60,8 @@ export default function PlanosSaas() {
     const res = await fetch(editId ? `/api/assinatura/admin/planos/${editId}` : "/api/assinatura/admin/planos", {
       method: editId ? "PUT" : "POST", headers, body: JSON.stringify(form),
     });
-    if (res.ok) { setForm(null); setEditId(null); setCopiaDe(null); carregar(); } else setMsg("Erro ao salvar plano");
+    const dados = await res.json().catch(() => ({}));
+    if (res.ok) { setForm(null); setEditId(null); setCopiaDe(null); setMsg(dados.aviso || ""); carregar(); } else setMsg(dados.message || "Erro ao salvar plano");
   };
 
   const remover = async (id) => {

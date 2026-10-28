@@ -207,3 +207,22 @@ test('diasDeTeste usa trial_dias ou o padrao 7', () => {
   assert.strictEqual(diasDeTeste(null), 7);
   assert.strictEqual(diasDeTeste({ trial_dias: 9999 }), 365);
 });
+
+test('atualizarPlano sem a migration 047 regrava sem gratis/trial_dias e avisa', async () => {
+  const ctrl = require('../../src/controllers/assinaturaController');
+  const orig = fakeDb.execute;
+  chamadas.length = 0;
+  fakeDb.execute = async (sql, params) => {
+    chamadas.push({ sql, params });
+    if (/gratis=/.test(sql)) { const e = new Error("Unknown column 'gratis'"); e.code = 'ER_BAD_FIELD_ERROR'; throw e; }
+    return [{ affectedRows: 1 }];
+  };
+  const res = { json: (b) => { res.body = b; }, status: (c) => { res.code = c; return res; } };
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 0, gratis: true }, params: { id: 1 } }, res);
+  fakeDb.execute = orig;
+  assert.strictEqual(res.code, undefined);
+  assert.ok(res.body.aviso);
+  assert.strictEqual(chamadas.length, 2);
+  assert.ok(!/gratis/.test(chamadas[1].sql));
+  assert.strictEqual(chamadas[1].params.length, 14);
+});
