@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
+import SeoRota from "./components/SeoRota";
 import Login from "./pages/admin/Login";
 import Dashboard from "./pages/admin/Dashboard";
 import Mikrotiks from "./pages/admin/Mikrotiks";
@@ -80,6 +81,8 @@ const AdminRedirect = () => {
 
 function App() {
   return (
+    <>
+    <SeoRota />
     <Routes>
       {/* Público */}
       <Route path="/" element={<ApexHome />} />
@@ -141,6 +144,7 @@ function App() {
       <Route path="/super/backups" element={<RotaDono><Backups /></RotaDono>} />
       <Route path="/super/publicar-atualizacao" element={<RotaDono><PublicarAtualizacao /></RotaDono>} />
     </Routes>
+    </>
   );
 }
 
