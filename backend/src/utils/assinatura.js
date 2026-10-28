@@ -17,6 +17,8 @@ function calcularEstado(row, agora = new Date()) {
   const base = { plano_id: row.plano_id || null, fim, carencia_dias: carencia };
 
   if (row.status === "cancelada") return { ...base, status: "cancelada", bloqueada: true, expirado: true, dias_restantes: 0 };
+  // Plano gratis (migration 047): nunca vence nem bloqueia.
+  if (row.gratis) return { ...base, status: "ativa", gratis: true, bloqueada: false, expirado: false, em_carencia: false, dias_restantes: null };
   if (!fim) return { ...base, status: "vencida", bloqueada: true, expirado: true, dias_restantes: 0 };
 
   const dias = Math.ceil((fim.getTime() - agora.getTime()) / 86400000);
@@ -110,20 +112,38 @@ function invalidar(empresaId) {
   else cache.delete(Number(empresaId));
 }
 
+/** Dias de teste do plano (trial_dias, 1-365) ou o padrao. Sempre inteiro (vai direto no SQL). */
+function diasDeTeste(plano) {
+  const n = parseInt(plano && plano.trial_dias, 10);
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, 365) : TRIAL_DIAS;
+}
+
 /** Cria o trial da empresa (executor: pool ou conexao de transacao). */
 async function criarTrial(executor, empresaId, planoId = null) {
   let id = planoId ? Number(planoId) : null;
+  let plano = null;
+  // SELECT * porque gratis/trial_dias (migration 047) podem nao existir ainda.
   if (id) {
-    const [[ok]] = await executor.execute("SELECT id FROM saas_planos WHERE id = ? AND ativo = 1", [id]);
-    if (!ok) id = null;
+    [[plano]] = await executor.execute("SELECT * FROM saas_planos WHERE id = ? AND ativo = 1", [id]);
+    if (!plano) id = null;
   }
   if (!id) {
-    const [[p]] = await executor.execute("SELECT id FROM saas_planos WHERE ativo = 1 ORDER BY ordem, id LIMIT 1");
-    id = p ? p.id : null;
+    [[plano]] = await executor.execute("SELECT * FROM saas_planos WHERE ativo = 1 ORDER BY ordem, id LIMIT 1");
+    id = plano ? plano.id : null;
   }
+  if (plano && plano.gratis) {
+    await executor.execute(
+      `INSERT INTO assinaturas (empresa_id, plano_id, status, vence_em)
+       VALUES (?, ?, 'ativa', NULL)
+       ON DUPLICATE KEY UPDATE empresa_id = empresa_id`,
+      [empresaId, id]
+    );
+    return;
+  }
+  const dias = diasDeTeste(plano);
   await executor.execute(
     `INSERT INTO assinaturas (empresa_id, plano_id, status, trial_ate)
-     VALUES (?, ?, 'trial', DATE_ADD(NOW(), INTERVAL ${TRIAL_DIAS} DAY))
+     VALUES (?, ?, 'trial', DATE_ADD(NOW(), INTERVAL ${dias} DAY))
      ON DUPLICATE KEY UPDATE empresa_id = empresa_id`,
     [empresaId, id]
   );
@@ -166,4 +186,4 @@ async function temRecurso(empresaId, nome) {
   }
 }
 
-module.exports = { temRecurso, TRIAL_DIAS, limiteEfetivo, adicionaisVigentes, calcularEstado, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };
+module.exports = { temRecurso, TRIAL_DIAS, limiteEfetivo, adicionaisVigentes, calcularEstado, diasDeTeste, obterStatus, invalidar, criarTrial, checarLimite, checarLimiteSeguro, tabelaInexistente };

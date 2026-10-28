@@ -519,7 +519,7 @@ export default function AdminLayout({ children }) {
               </button>
             </div>
           )}
-          {assinatura && !assinatura.bloqueada && !naTelaAssinatura && (assinatura.status === 'trial' || assinatura.em_carencia || assinatura.dias_restantes <= 5) && (
+          {assinatura && !assinatura.gratis && !assinatura.bloqueada && !naTelaAssinatura && (assinatura.status === 'trial' || assinatura.em_carencia || assinatura.dias_restantes <= 5) && (
             <div className="mb-4 flex items-center justify-between gap-3 bg-blue-900/20 border border-blue-700/40 text-blue-200 rounded-xl px-4 py-3 text-sm">
               <span>
                 {assinatura.em_carencia

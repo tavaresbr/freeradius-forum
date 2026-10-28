@@ -208,6 +208,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 043 | `043_vouchers` | tabela `vouchers` (codigo UNIQUE por empresa, plano_id, lote, status disponivel/usado/cancelado, valido_ate, usado_mac/usado_em/username) e portal `Acesso por Voucher` (tipo `voucher`, `/voucher`) em todas as empresas; idempotente. **Rodar no servidor antes de usar vouchers** |
 | 044 | `044_vouchers_equipamento` | `vouchers.mikrotik_id` (+indice) = equipamento exclusivo do voucher; backfill com o `planos.mikrotik_id` do plano (sem equipamento = NULL = legado, vale em qualquer equipamento da empresa); idempotente. **Rodar no servidor antes de gerar vouchers** |
 | 045 | `045_vouchers_impresso` | `vouchers.impresso_em` DATETIME NULL (+indice) = quando o cartao foi impresso (NULL = nunca); sem backfill; idempotente. **Rodar no servidor antes de usar a impressao com selecao** |
+| 047 | `047_planos_gratis_trial` | `saas_planos.gratis` (plano nunca vence/bloqueia; valor forcado a 0; `calcularEstado` devolve ativa com `gratis:true`, `criarTrial` cria assinatura ativa sem vencimento) e `saas_planos.trial_dias` (NULL = 7; `diasDeTeste`); idempotente. **Rodar no servidor antes de salvar planos pelo modal** |
 | 046 | `046_dominio_proprio` | `empresas.dominio_portal` (UNIQUE), `dominio_status` ('pendente','dns_ok','ativo','erro'), `dominio_erro`, `dominio_ativado_em` e `saas_planos.inclui_dominio` (backfill: planos pagos incluem; ativa o adicional de seed `dominio`); idempotente. **Rodar no servidor antes de usar o dominio proprio** |
 
 ---

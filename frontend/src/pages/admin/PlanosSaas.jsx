@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, ativo: true, ordem: 0 };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0 };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
   ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
@@ -99,9 +99,9 @@ export default function PlanosSaas() {
   const duplicar = (p) => {
     setEditId(null);
     setCopiaDe(p.nome);
-    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, ativo: false, ordem: (p.ordem ?? 0) + 1 });
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", ativo: false, ordem: (p.ordem ?? 0) + 1 });
   };
-  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, ativo: !!p.ativo }); };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", ativo: !!p.ativo }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -127,7 +127,7 @@ export default function PlanosSaas() {
               {planos.map((p) => (
                 <tr key={p.id} className="border-b border-gray-800/50 text-gray-300">
                   <td className="px-5 py-3 text-white">{p.nome}</td>
-                  <td className="px-5 py-3">R$ {Number(p.valor).toFixed(2)}</td>
+                  <td className="px-5 py-3">R$ {Number(p.valor).toFixed(2)}{!!p.gratis && <span className="ml-2 text-xs text-green-400">Grátis</span>}</td>
                   <td className="px-5 py-3">{p.ciclo_dias} dias</td>
                   <td className="px-5 py-3">{p.max_equipamentos ?? "∞"}</td>
                   <td className="px-5 py-3">{p.max_admins ?? "∞"}</td>
@@ -250,10 +250,12 @@ export default function PlanosSaas() {
               <div><label className="block text-sm text-gray-400 mb-1">Nome *</label><input required className={inputCls} value={form.nome} onChange={campo("nome")} /></div>
               <div><label className="block text-sm text-gray-400 mb-1">Descrição</label><input className={inputCls} value={form.descricao || ""} onChange={campo("descricao")} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm text-gray-400 mb-1">Valor (R$) *</label><input required type="number" step="0.01" min="0" className={inputCls} value={form.valor} onChange={campo("valor")} /></div>
+                <div><label className="block text-sm text-gray-400 mb-1">Valor (R$) *</label><input required type="number" step="0.01" min="0" disabled={!!form.gratis} className={inputCls} value={form.gratis ? 0 : form.valor} onChange={campo("valor")} /></div>
                 <div><label className="block text-sm text-gray-400 mb-1">Ciclo (dias)</label><input type="number" min="1" className={inputCls} value={form.ciclo_dias} onChange={campo("ciclo_dias")} /></div>
                 <div><label className="block text-sm text-gray-400 mb-1">Máx. equipamentos</label><input type="number" min="0" placeholder="ilimitado" className={inputCls} value={form.max_equipamentos} onChange={campo("max_equipamentos")} /></div>
                 <div><label className="block text-sm text-gray-400 mb-1">Máx. portais</label><input type="number" min="0" placeholder="ilimitado" className={inputCls} value={form.max_portais} onChange={campo("max_portais")} /></div>
+                <label className="col-span-2 flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={!!form.gratis} onChange={(e) => setForm({ ...form, gratis: e.target.checked, valor: e.target.checked ? 0 : form.valor })} /> Plano grátis (nunca vence, sem cobrança)</label>
+                <div className="col-span-2"><label className="block text-sm text-gray-400 mb-1">Dias de teste</label><input type="number" min="1" max="365" disabled={!!form.gratis} placeholder="padrão 7" className={inputCls} value={form.gratis ? "" : form.trial_dias} onChange={campo("trial_dias")} /></div>
                 <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2" data-testid="recursos-plano">
                   <span className="w-full text-sm text-gray-400">Recursos incluídos</span>
                   {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (

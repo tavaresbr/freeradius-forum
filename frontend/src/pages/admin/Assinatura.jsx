@@ -158,7 +158,7 @@ export default function Assinatura() {
   const caixaAviso = (a) => a && (
     <p className="text-sm text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3" data-testid="aviso-upgrade">💡 {textoAviso(a)}</p>
   );
-  const fim = st?.fim ? new Date(st.fim).toLocaleDateString("pt-BR") : "—";
+  const fim = st?.gratis ? "Sem vencimento" : st?.fim ? new Date(st.fim).toLocaleDateString("pt-BR") : "—";
 
   return (
     <AdminLayout>
