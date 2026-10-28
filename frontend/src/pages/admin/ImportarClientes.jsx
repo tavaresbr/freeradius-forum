@@ -269,6 +269,16 @@ function Outlook({ token }) {
   );
 }
 
+function Icloud({ token }) {
+  return (
+    <ArquivoContatos
+      token={token}
+      tipo="icloud"
+      instrucao={<>Em <strong>icloud.com/contacts</strong>, selecione os contatos (Ctrl/Cmd + A), clique na engrenagem e em <strong>Exportar vCard</strong>, e envie o arquivo <strong>.vcf</strong> aqui.</>}
+    />
+  );
+}
+
 function Whatsapp({ token, empresaSlug }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -346,13 +356,13 @@ export default function ImportarClientes() {
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Importar clientes</h1>
-            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google ou do Outlook</p>
+            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google, do Outlook ou do iCloud</p>
           </div>
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
         <div className="flex gap-2">
-          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"]].map(([k, rot]) => (
+          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"], ["icloud", "iCloud"]].map(([k, rot]) => (
             <button
               key={k}
               onClick={() => setOrigem(k)}
@@ -369,6 +379,7 @@ export default function ImportarClientes() {
           : origem === "whatsapp" ? <Whatsapp token={token} empresaSlug={empresaSlug} />
           : origem === "google" ? <Google token={token} />
           : origem === "outlook" ? <Outlook token={token} />
+          : origem === "icloud" ? <Icloud token={token} />
           : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
