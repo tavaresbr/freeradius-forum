@@ -75,3 +75,25 @@ exports.importarWhatsapp = async (req, res) => {
     res.status(502).json({ message: "Não foi possível ler os contatos do WhatsApp. Confira se a instância está conectada." });
   }
 };
+
+const { gravarContatos } = require("../utils/whatsappContatos");
+const { lerContatosGoogle } = require("../utils/googleContatos");
+
+// POST /api/clientes-import/google/importar  (multipart: arquivo CSV/VCF do Google Contatos, simular)
+exports.importarGoogle = async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "Envie o arquivo exportado do Google Contatos (CSV ou vCard)" });
+  const simular = req.body?.simular === true || req.body?.simular === "true";
+  let lido;
+  try {
+    lido = lerContatosGoogle(req.file.buffer, req.file.originalname);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Não foi possível ler o arquivo" });
+  }
+  try {
+    const resumo = await gravarContatos(req.empresa_id, lido.contatos, "google", { dryRun: simular, invalidos: lido.invalidos });
+    res.json({ success: true, simulacao: simular, ...resumo });
+  } catch (err) {
+    console.error("Erro ao importar contatos do Google:", err.message);
+    res.status(500).json({ message: "Erro ao importar contatos" });
+  }
+};

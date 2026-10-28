@@ -35,8 +35,8 @@ async function buscarContatos(empresaId) {
 // Compara pelos 10 ultimos digitos (com/sem DDI e 9o digito de DDD >30 nao se confundem).
 const ultimos10 = (t) => String(t || "").replace(/\D/g, "").slice(-10);
 
-async function importarContatos(empresaId, { dryRun = false } = {}) {
-  const contatos = await buscarContatos(empresaId);
+/** Grava contatos {nome, telefone, email?} como leads sem CPF, pulando telefones ja cadastrados. */
+async function gravarContatos(empresaId, contatos, origem, { dryRun = false, invalidos = 0 } = {}) {
   const [existentes] = await db.query(
     "SELECT telefone FROM leads WHERE empresa_id = ? AND telefone IS NOT NULL AND telefone <> ''",
     [empresaId]
@@ -44,20 +44,24 @@ async function importarContatos(empresaId, { dryRun = false } = {}) {
   const jaTem = new Set(existentes.map((e) => ultimos10(e.telefone)));
   const novos = contatos.filter((c) => !jaTem.has(ultimos10(c.telefone)));
   const resumo = {
-    total: contatos.length, criados: novos.length, ignorados: contatos.length - novos.length,
+    total: contatos.length + invalidos, criados: novos.length, ignorados: contatos.length - novos.length, invalidos,
     amostra: novos.slice(0, 5).map((c) => ({ nome: c.nome, telefone: c.telefone })),
   };
   if (dryRun) return resumo;
 
   const agora = new Date();
   for (let i = 0; i < novos.length; i += LOTE) {
-    const valores = novos.slice(i, i + LOTE).map((c) => [empresaId, c.nome, c.telefone, "whatsapp", agora, "whatsapp", "novo", 0]);
+    const valores = novos.slice(i, i + LOTE).map((c) => [empresaId, c.nome, c.telefone, c.email || null, origem, agora, origem, "novo", 0]);
     await db.query(
-      "INSERT INTO leads (empresa_id, nome, telefone, sistema_origem, importado_em, origem, status, lgpd_aceite) VALUES ?",
+      "INSERT INTO leads (empresa_id, nome, telefone, email, sistema_origem, importado_em, origem, status, lgpd_aceite) VALUES ?",
       [valores]
     );
   }
   return resumo;
 }
 
-module.exports = { buscarContatos, importarContatos };
+async function importarContatos(empresaId, { dryRun = false } = {}) {
+  return gravarContatos(empresaId, await buscarContatos(empresaId), "whatsapp", { dryRun });
+}
+
+module.exports = { buscarContatos, importarContatos, gravarContatos, MAX_CONTATOS };
