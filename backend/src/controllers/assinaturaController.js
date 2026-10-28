@@ -442,23 +442,50 @@ function dadosPlano(b) {
   ];
 }
 
+const AVISO_047 = "Plano salvo, mas 'Plano grátis' e 'Dias de teste' só funcionam depois de rodar a migration 047 no servidor.";
+const colunaAusente = (err) => err && (err.code === "ER_BAD_FIELD_ERROR" || err.errno === 1054);
+
 exports.criarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
-  const [r] = await db.execute(
-    "INSERT INTO saas_planos (nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais, inclui_dominio, gratis, trial_dias) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d);
-  invalidar();
-  res.status(201).json({ id: r.insertId });
+  const cols = "nome, descricao, valor, ciclo_dias, max_equipamentos, max_admins, ativo, ordem, inclui_whatsapp, inclui_campanhas, inclui_exportacao, max_portais, inclui_dominio";
+  try {
+    let r, aviso;
+    try {
+      [r] = await db.execute(`INSERT INTO saas_planos (${cols}, gratis, trial_dias) VALUES (${d.map(() => "?").join(", ")})`, d);
+    } catch (err) {
+      if (!colunaAusente(err)) throw err;
+      // Migration 047 ainda nao rodou: grava sem as colunas novas.
+      [r] = await db.execute(`INSERT INTO saas_planos (${cols}) VALUES (${d.slice(0, 13).map(() => "?").join(", ")})`, d.slice(0, 13));
+      aviso = AVISO_047;
+    }
+    invalidar();
+    res.status(201).json({ id: r.insertId, aviso });
+  } catch (err) {
+    console.error("[assinatura] criarPlano:", err.message);
+    res.status(500).json({ message: `Erro ao salvar plano: ${err.message}` });
+  }
 };
 
 exports.atualizarPlano = async (req, res) => {
   const d = dadosPlano(req.body);
   if (!d[0]) return res.status(400).json({ message: "Nome é obrigatório" });
-  await db.execute(
-    "UPDATE saas_planos SET nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=?, inclui_dominio=?, gratis=?, trial_dias=? WHERE id=?",
-    [...d, req.params.id]);
-  invalidar();
-  res.json({ message: "Plano atualizado" });
+  const set = "nome=?, descricao=?, valor=?, ciclo_dias=?, max_equipamentos=?, max_admins=?, ativo=?, ordem=?, inclui_whatsapp=?, inclui_campanhas=?, inclui_exportacao=?, max_portais=?, inclui_dominio=?";
+  try {
+    let aviso;
+    try {
+      await db.execute(`UPDATE saas_planos SET ${set}, gratis=?, trial_dias=? WHERE id=?`, [...d, req.params.id]);
+    } catch (err) {
+      if (!colunaAusente(err)) throw err;
+      await db.execute(`UPDATE saas_planos SET ${set} WHERE id=?`, [...d.slice(0, 13), req.params.id]);
+      aviso = AVISO_047;
+    }
+    invalidar();
+    res.json({ message: "Plano atualizado", aviso });
+  } catch (err) {
+    console.error("[assinatura] atualizarPlano:", err.message);
+    res.status(500).json({ message: `Erro ao salvar plano: ${err.message}` });
+  }
 };
 
 exports.removerPlano = async (req, res) => {
