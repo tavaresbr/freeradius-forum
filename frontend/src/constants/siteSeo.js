@@ -14,6 +14,8 @@ export const WHATSAPP = "5593991935695";
 export const TELEFONE = "(93) 99193-5695";
 export const EMAIL = "adm@tavarestelecom.com.br";
 export const IDIOMA = "pt-BR";
+export const ENDERECO = { rua: "Rodovia Transamazônica, 1187", cidade: "Itaituba", uf: "PA", cep: "68180-010", pais: "BR" };
+export const ENDERECO_TEXTO = `${ENDERECO.rua}, ${ENDERECO.cidade} - ${ENDERECO.uf}, CEP ${ENDERECO.cep}`;
 
 export const EQUIPAMENTOS = ["MikroTik", "TP-Link Omada", "UniFi", "Grandstream (GWN)"];
 

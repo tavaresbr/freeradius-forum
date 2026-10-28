@@ -2,7 +2,7 @@
 // um resumo estatico dentro de <div id="root"> (para rastreadores que nao rodam JS, como os de IA) e os arquivos
 // robots.txt, sitemap.xml e llms.txt, tudo a partir de src/constants/siteSeo.js.
 import {
-  SITE_URL, NOME, TITULO, DESCRICAO, RESUMO, WHATSAPP, TELEFONE, EMAIL, IDIOMA,
+  SITE_URL, NOME, TITULO, DESCRICAO, RESUMO, WHATSAPP, TELEFONE, EMAIL, IDIOMA, ENDERECO, ENDERECO_TEXTO,
   EQUIPAMENTOS, COMO_FUNCIONA, RECURSOS, FAQ,
 } from "../constants/siteSeo.js";
 
@@ -18,6 +18,8 @@ export function gerarJsonLd() {
     name: NOME,
     url: SITE_URL,
     logo: `${SITE_URL}/og-apex.png`,
+    image: `${SITE_URL}/og-apex.png`,
+    address: { "@type": "PostalAddress", streetAddress: ENDERECO.rua, addressLocality: ENDERECO.cidade, addressRegion: ENDERECO.uf, postalCode: ENDERECO.cep, addressCountry: ENDERECO.pais },
     email: EMAIL,
     telephone: "+55 93 99193-5695",
     contactPoint: [{ "@type": "ContactPoint", contactType: "customer support", telephone: "+55 93 99193-5695", email: EMAIL, availableLanguage: "Portuguese", url: `https://wa.me/${WHATSAPP}` }],
@@ -43,6 +45,7 @@ export function gerarJsonLd() {
     inLanguage: IDIOMA,
     featureList: RECURSOS.map((r) => `${r.titulo}: ${r.texto}`),
     publisher: { "@id": `${SITE_URL}/#organizacao` },
+    offers: { "@type": "Offer", name: "Teste grátis por 7 dias", price: "0", priceCurrency: "BRL", url: `${SITE_URL}/registro`, availability: "https://schema.org/InStock" },
   };
   const faq = {
     "@context": "https://schema.org",
@@ -93,6 +96,7 @@ export function gerarFallback() {
       <h2>Dúvidas frequentes</h2>
       ${FAQ.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join("")}
       <h2>Contato</h2>
+      <p>${esc(ENDERECO_TEXTO)}</p>
       <p>WhatsApp ${esc(TELEFONE)} · <a href="mailto:${esc(EMAIL)}">${esc(EMAIL)}</a> · <a href="${SITE_URL}/registro">Começar teste grátis de 7 dias</a></p>
     </div>
     <script>if(location.pathname!=="/"){var f=document.getElementById("seo-fallback");if(f)f.remove()}</script>`;
@@ -138,6 +142,7 @@ ${FAQ.map(([q, a]) => `- ${q} ${a}`).join("\n")}
 ## Contato
 - WhatsApp: ${TELEFONE} (https://wa.me/${WHATSAPP})
 - E-mail: ${EMAIL}
+- Endereço: ${ENDERECO_TEXTO}
 `;
 }
 

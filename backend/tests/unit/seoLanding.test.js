@@ -20,6 +20,9 @@ test('JSON-LD: Organization, WebSite, SoftwareApplication e FAQPage validos e co
   assert.strictEqual(faq.mainEntity.length, FAQ.length);
   assert.deepStrictEqual(faq.mainEntity.map((q) => q.name), FAQ.map(([q]) => q));
   assert.ok(faq.mainEntity.every((q) => q.acceptedAnswer.text.length > 20));
+  assert.strictEqual(blocos[0].image, `${SITE_URL}/og-apex.png`);
+  assert.strictEqual(blocos[0].address.postalCode, '68180-010');
+  assert.strictEqual(blocos[2].offers.price, '0');
   assert.ok(blocos[0].url === SITE_URL && SITE_URL.startsWith('https://'));
 });
 
