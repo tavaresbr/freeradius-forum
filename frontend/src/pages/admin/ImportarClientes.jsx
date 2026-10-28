@@ -175,6 +175,81 @@ function Planilha({ token, campos }) {
   );
 }
 
+function ResultadoContatos({ r }) {
+  if (!r) return null;
+  const itens = [
+    ["Contatos lidos", r.total, "text-gray-200"],
+    [r.simulacao ? "Seriam criados" : "Criados", r.criados, "text-green-400"],
+    ["Já cadastrados", r.ignorados, "text-yellow-400"],
+  ];
+  if (r.invalidos) itens.push(["Sem telefone válido", r.invalidos, "text-red-400"]);
+  return (
+    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
+      <h3 className="text-white font-semibold">{r.simulacao ? "Simulação (nada foi gravado)" : "Importação concluída"}</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {itens.map(([rot, val, cor]) => (
+          <div key={rot} className="bg-[#0f111a] border border-gray-800 rounded-lg p-3">
+            <p className="text-xs text-gray-500">{rot}</p>
+            <p className={`text-xl font-bold ${cor}`}>{val}</p>
+          </div>
+        ))}
+      </div>
+      {r.amostra?.length > 0 && (
+        <ul className="text-xs text-gray-400 space-y-1">
+          {r.amostra.map((c, i) => <li key={i}>{c.nome} — {c.telefone}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Google({ token }) {
+  const [arquivo, setArquivo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [r, setR] = useState(null);
+
+  const enviar = async (simular) => {
+    setBusy(true);
+    setMsg("");
+    setR(null);
+    try {
+      const fd = new FormData();
+      fd.append("arquivo", arquivo);
+      fd.append("simular", simular ? "true" : "false");
+      const res = await fetch(`${API}/api/clientes-import/google/importar`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg(data.message || "Erro ao importar"); return; }
+      setR(data);
+    } catch {
+      setMsg("Erro de conexão");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
+        <p className="text-gray-300 text-sm">
+          Em <strong>contacts.google.com</strong> clique em <strong>Exportar</strong>, escolha <strong>Google CSV</strong> (ou vCard) e envie o arquivo aqui.
+          Entram nome, telefone e e-mail; contatos sem telefone válido e telefones já cadastrados são ignorados.
+        </p>
+        <p className="text-xs text-yellow-400">
+          Esses cadastros entram sem CPF e sem consentimento LGPD (origem "google"). Antes de enviar promoções, filtre por consentimento ou origem.
+        </p>
+        <input type="file" accept=".csv,.vcf" onChange={(e) => { setArquivo(e.target.files[0] || null); setR(null); setMsg(""); }} className="text-sm text-gray-300 w-full max-w-full" />
+        <div className="flex gap-3 flex-wrap">
+          <button disabled={!arquivo || busy} onClick={() => enviar(true)} className={btnSecondary}>Simular</button>
+          <button disabled={!arquivo || busy} onClick={() => enviar(false)} className={btnPrimary}>{busy ? "Processando..." : "Importar contatos"}</button>
+        </div>
+      </div>
+      {msg && <p className="text-red-400 text-sm">{msg}</p>}
+      <ResultadoContatos r={r} />
+    </div>
+  );
+}
+
 function Whatsapp({ token, empresaSlug }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -216,24 +291,7 @@ function Whatsapp({ token, empresaSlug }) {
         </div>
       </div>
       {msg && <p className="text-red-400 text-sm">{msg}</p>}
-      {r && (
-        <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-3">
-          <h3 className="text-white font-semibold">{r.simulacao ? "Simulação (nada foi gravado)" : "Importação concluída"}</h3>
-          <div className="grid grid-cols-3 gap-3">
-            {[["Contatos lidos", r.total, "text-gray-200"], [r.simulacao ? "Seriam criados" : "Criados", r.criados, "text-green-400"], ["Já cadastrados", r.ignorados, "text-yellow-400"]].map(([rot, val, cor]) => (
-              <div key={rot} className="bg-[#0f111a] border border-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-500">{rot}</p>
-                <p className={`text-xl font-bold ${cor}`}>{val}</p>
-              </div>
-            ))}
-          </div>
-          {r.amostra?.length > 0 && (
-            <ul className="text-xs text-gray-400 space-y-1">
-              {r.amostra.map((c, i) => <li key={i}>{c.nome} — {c.telefone}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
+      <ResultadoContatos r={r} />
     </div>
   );
 }
@@ -269,13 +327,13 @@ export default function ImportarClientes() {
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Importar clientes</h1>
-            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha ou do WhatsApp</p>
+            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp ou do Google</p>
           </div>
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
         <div className="flex gap-2">
-          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"]].map(([k, rot]) => (
+          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"]].map(([k, rot]) => (
             <button
               key={k}
               onClick={() => setOrigem(k)}
@@ -290,6 +348,7 @@ export default function ImportarClientes() {
 
         {origem === "planilha" ? <Planilha token={token} campos={campos} />
           : origem === "whatsapp" ? <Whatsapp token={token} empresaSlug={empresaSlug} />
+          : origem === "google" ? <Google token={token} />
           : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
