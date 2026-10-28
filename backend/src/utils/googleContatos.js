@@ -1,4 +1,4 @@
-// Le contatos exportados do Google Contatos ou do Outlook (CSV ou vCard .vcf) e devolve {nome, telefone, email}.
+// Le contatos exportados do Google Contatos, Outlook ou iCloud (CSV ou vCard .vcf) e devolve {nome, telefone, email}.
 const { parseCsv } = require("./importCadastros");
 const { normalizarTelefone } = require("../services/whatsappNotify");
 const { MAX_CONTATOS } = require("./whatsappContatos");
@@ -49,11 +49,17 @@ function lerVcf(buffer) {
     for (const linha of bloco.split(/\r?\n/)) {
       const [chave, ...resto] = linha.split(":");
       const valor = resto.join(":").trim();
-      const campo = chave.split(";")[0].toUpperCase();
+      // iCloud agrupa propriedades como "item1.TEL;type=CELL": ignora o prefixo do grupo
+      const campo = chave.split(";")[0].replace(/^.*\./, "").toUpperCase();
       if (campo === "FN" && !c.nome) c.nome = valor;
+      else if (campo === "N" && !c.nomeN) {
+        const [sobrenome, nome] = valor.split(";");
+        c.nomeN = [nome, sobrenome].filter(Boolean).join(" ").trim();
+      }
       else if (campo === "TEL" && valor) c.telefones.push(valor);
       else if (campo === "EMAIL" && !c.email) c.email = valor;
     }
+    c.nome = c.nome || c.nomeN;
     brutos.push(c);
   }
   return montar(brutos);

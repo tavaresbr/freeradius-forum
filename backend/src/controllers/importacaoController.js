@@ -79,7 +79,7 @@ exports.importarWhatsapp = async (req, res) => {
 const { gravarContatos } = require("../utils/whatsappContatos");
 const { lerContatosGoogle } = require("../utils/googleContatos");
 
-// POST /api/clientes-import/{google,outlook}/importar  (multipart: arquivo CSV/VCF exportado, simular)
+// POST /api/clientes-import/{google,outlook,icloud}/importar  (multipart: arquivo CSV/VCF exportado, simular)
 const importarContatosArquivo = (origem, nomeOrigem) => async (req, res) => {
   if (!req.file) return res.status(400).json({ message: `Envie o arquivo exportado do ${nomeOrigem} (CSV ou vCard)` });
   const simular = req.body?.simular === true || req.body?.simular === "true";
@@ -99,3 +99,4 @@ const importarContatosArquivo = (origem, nomeOrigem) => async (req, res) => {
 };
 exports.importarGoogle = importarContatosArquivo("google", "Google Contatos");
 exports.importarOutlook = importarContatosArquivo("outlook", "Outlook");
+exports.importarIcloud = importarContatosArquivo("icloud", "iCloud");

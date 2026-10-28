@@ -20,7 +20,7 @@ const upload = multer({
 const comArquivo = (req, res, next) =>
   upload.single("arquivo")(req, res, (err) => (err ? res.status(400).json({ message: err.message }) : next()));
 
-// Contatos do Google/Outlook: CSV ou vCard (.vcf), tambem so em memoria
+// Contatos do Google/Outlook/iCloud: CSV ou vCard (.vcf), tambem so em memoria
 const uploadContatos = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -39,6 +39,7 @@ router.post("/planilha/preview", comArquivo, ctrl.previewPlanilha);
 router.post("/planilha/importar", comArquivo, ctrl.importarPlanilha);
 router.post("/google/importar", promocaoLimiter, comContatos, ctrl.importarGoogle);
 router.post("/outlook/importar", promocaoLimiter, comContatos, ctrl.importarOutlook);
+router.post("/icloud/importar", promocaoLimiter, comContatos, ctrl.importarIcloud);
 router.post("/whatsapp/importar", promocaoLimiter, ctrl.importarWhatsapp);
 
 module.exports = router;
