@@ -1,4 +1,4 @@
-// Le contatos exportados do Google Contatos (CSV "Google" ou vCard .vcf) e devolve {nome, telefone, email}.
+// Le contatos exportados do Google Contatos ou do Outlook (CSV ou vCard .vcf) e devolve {nome, telefone, email}.
 const { parseCsv } = require("./importCadastros");
 const { normalizarTelefone } = require("../services/whatsappNotify");
 const { MAX_CONTATOS } = require("./whatsappContatos");
@@ -28,9 +28,9 @@ function lerCsv(buffer) {
   const nomeCols = cols(/^(firstname|givenname|primeironome|nome)$/);
   const sobrenomeCols = cols(/^(lastname|familyname|sobrenome)$/);
   const nomeCompleto = cols(/^(name|nomecompleto|displayname)$/);
-  const telCols = cols(/^(phone\d*value|telefone\d*valor|phone\d*number|mobilephone|primaryphone|homephone|businessphone|celular|telefone)$/);
-  const emailCols = cols(/^(email\d*value|email\d*valor|emailaddress|email)$/);
-  if (!telCols.length) throw new Error("Não encontrei coluna de telefone no arquivo (use a exportação CSV do Google Contatos)");
+  const telCols = cols(/^(phone\d*value|telefone\d*valor|phone\d*number|mobilephone|primaryphone|homephone|businessphone|otherphone|celular|telefone|telefonecelular|telefoneresidencial|telefonecomercial|telefoneprincipal|outrotelefone)$/);
+  const emailCols = cols(/^(email\d*value|email\d*valor|emailaddress|email1address|enderecodeemail|enderecodeemail1|email)$/);
+  if (!telCols.length) throw new Error("Não encontrei coluna de telefone no arquivo (use a exportação CSV do Google Contatos ou do Outlook)");
   const brutos = linhas.map((l) => {
     const nome = nomeCompleto.map((h) => l[h]).find(Boolean)
       || [...nomeCols, ...sobrenomeCols].map((h) => l[h]).filter(Boolean).join(" ");

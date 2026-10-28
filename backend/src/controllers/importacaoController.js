@@ -79,9 +79,9 @@ exports.importarWhatsapp = async (req, res) => {
 const { gravarContatos } = require("../utils/whatsappContatos");
 const { lerContatosGoogle } = require("../utils/googleContatos");
 
-// POST /api/clientes-import/google/importar  (multipart: arquivo CSV/VCF do Google Contatos, simular)
-exports.importarGoogle = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "Envie o arquivo exportado do Google Contatos (CSV ou vCard)" });
+// POST /api/clientes-import/{google,outlook}/importar  (multipart: arquivo CSV/VCF exportado, simular)
+const importarContatosArquivo = (origem, nomeOrigem) => async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: `Envie o arquivo exportado do ${nomeOrigem} (CSV ou vCard)` });
   const simular = req.body?.simular === true || req.body?.simular === "true";
   let lido;
   try {
@@ -90,10 +90,12 @@ exports.importarGoogle = async (req, res) => {
     return res.status(400).json({ message: err.message || "Não foi possível ler o arquivo" });
   }
   try {
-    const resumo = await gravarContatos(req.empresa_id, lido.contatos, "google", { dryRun: simular, invalidos: lido.invalidos });
+    const resumo = await gravarContatos(req.empresa_id, lido.contatos, origem, { dryRun: simular, invalidos: lido.invalidos });
     res.json({ success: true, simulacao: simular, ...resumo });
   } catch (err) {
-    console.error("Erro ao importar contatos do Google:", err.message);
+    console.error(`Erro ao importar contatos (${origem}):`, err.message);
     res.status(500).json({ message: "Erro ao importar contatos" });
   }
 };
+exports.importarGoogle = importarContatosArquivo("google", "Google Contatos");
+exports.importarOutlook = importarContatosArquivo("outlook", "Outlook");
