@@ -179,18 +179,22 @@ export default function LgpdCadastros() {
                 <option value="0">Recusados</option>
               </select>
             </label>
+            {opcoes.aps.length > 0 && (
             <label className="block text-xs text-gray-400">Ponto de acesso
               <select value={filtros.ap} onChange={mudaFiltro("ap")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Todos</option>
                 {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac}</option>)}
               </select>
             </label>
+            )}
+            {opcoes.ssids.length > 0 && (
             <label className="block text-xs text-gray-400">SSID
               <select value={filtros.ssid} onChange={mudaFiltro("ssid")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Todos</option>
                 {opcoes.ssids.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
+            )}
             <label className="block text-xs text-gray-400">De
               <input type="date" value={filtros.de} max={filtros.ate || undefined} onChange={mudaFiltro("de")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </label>

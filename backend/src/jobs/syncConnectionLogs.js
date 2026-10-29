@@ -20,6 +20,39 @@ const { parseCalledStationId, aprenderAccessPoint } = require('../utils/apInfo')
 
 const EPOCH = '1970-01-01 00:00:00';
 
+// Cadastros (leads) sem AP/SSID: Omada/UniFi gravam no cadastro pelo contexto do portal, mas o MikroTik nao tem
+// contexto; o dado so aparece no radacct depois da 1a conexao (-> connection_logs). Completa SO o que esta
+// NULL (nunca sobrescreve o que o portal capturou), pela sessao mais recente do MAC. `desdeDias` limita a
+// janela da varredura (null = todo o historico, usado no backfill manual).
+async function completarApDosLeads(conn, desdeDias = 1) {
+  const janela = desdeDias ? 'AND inicio_conexao >= DATE_SUB(NOW(), INTERVAL ? DAY)' : '';
+  const params = desdeDias ? [desdeDias] : [];
+  try {
+    const [r] = await conn.execute(
+      `UPDATE leads l
+       JOIN (
+         SELECT cl.empresa_id, cl.mac, cl.ap_mac, cl.ssid
+         FROM connection_logs cl
+         JOIN (
+           SELECT empresa_id, mac, MAX(inicio_conexao) AS ini
+           FROM connection_logs
+           WHERE mac <> '' AND (ap_mac IS NOT NULL OR ssid IS NOT NULL) ${janela}
+           GROUP BY empresa_id, mac
+         ) u ON u.empresa_id = cl.empresa_id AND u.mac = cl.mac AND u.ini = cl.inicio_conexao
+         WHERE cl.ap_mac IS NOT NULL OR cl.ssid IS NOT NULL
+       ) c ON c.empresa_id = l.empresa_id
+          AND c.mac COLLATE utf8mb4_unicode_ci = l.mac COLLATE utf8mb4_unicode_ci
+       SET l.ap_mac = c.ap_mac, l.ssid = c.ssid
+       WHERE l.ap_mac IS NULL AND l.ssid IS NULL AND l.mac IS NOT NULL AND l.mac <> ''`,
+      params
+    );
+    return r?.affectedRows || 0;
+  } catch (err) {
+    console.warn('[syncConnectionLogs] completarApDosLeads falhou:', err.message);
+    return 0;
+  }
+}
+
 async function syncConnectionLogs() {
   const conn = await db.getConnection();
 
@@ -172,6 +205,9 @@ async function syncConnectionLogs() {
       [maxCursor, syncId]
     );
 
+    const leadsAtualizados = await completarApDosLeads(conn);
+    if (leadsAtualizados) console.log(`[syncConnectionLogs] AP/SSID completados em ${leadsAtualizados} cadastro(s).`);
+
     console.log(`[syncConnectionLogs] Processadas ${inseridas}, ignoradas ${ignoradas}. Cursor -> ${maxCursor}`);
     return { synced: inseridas, ignored: ignoradas, cursor: maxCursor };
   } catch (err) {
@@ -183,11 +219,20 @@ async function syncConnectionLogs() {
 }
 
 module.exports = syncConnectionLogs;
+module.exports.completarApDosLeads = completarApDosLeads;
 
 // Run directly
 if (require.main === module) {
   syncConnectionLogs()
-    .then((result) => {
+    .then(async (result) => {
+      // Rodando na mao: tambem completa AP/SSID dos cadastros antigos (todo o historico).
+      const conn = await db.getConnection();
+      try {
+        const n = await completarApDosLeads(conn, null);
+        console.log(`[syncConnectionLogs] Backfill AP/SSID: ${n} cadastro(s).`);
+      } finally {
+        conn.release();
+      }
       console.log('[syncConnectionLogs] Concluido:', result);
       process.exit(0);
     })
