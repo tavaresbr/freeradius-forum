@@ -2,6 +2,7 @@ const db = require("../../db");
 const { criarPortaisPadrao, criarPlanosPadrao } = require("../utils/empresaSetup");
 const { criarTrial } = require("../utils/assinatura");
 const { atribuirPerfil, perfilDoAdmin } = require("../utils/perfis");
+const { montarAlertas, diasSemConexaoValido } = require("../utils/alertasPlataforma");
 const { sanitizarEmpresa, cnpjDuplicado, MSG_CNPJ_DUPLICADO, cpfDuplicado, MSG_CPF_DUPLICADO } = require("../utils/empresaCadastro");
 
 function gerarSlug(nome) {
@@ -30,6 +31,65 @@ exports.listarEmpresas = async (req, res) => {
   } catch (err) {
     console.error("Erro ao listar empresas:", err);
     res.status(500).json({ message: "Erro ao listar empresas" });
+  }
+};
+
+// Cache curto: a checagem do WhatsApp chama a Evolution uma vez por empresa.
+let cacheAlertas = { chave: null, em: 0, dados: null };
+const CACHE_ALERTAS_MS = 2 * 60 * 1000;
+
+// Cada fonte falha sozinha (tabela ausente, Evolution fora): o painel segue com o que conseguiu ler.
+async function seguro(fn, padrao) {
+  try { return await fn(); } catch (err) { console.error("[alertas-empresas]", err.message); return padrao; }
+}
+
+exports.alertasEmpresas = async (req, res) => {
+  try {
+    const dias = diasSemConexaoValido(req.query.dias);
+    if (cacheAlertas.dados && cacheAlertas.chave === dias && Date.now() - cacheAlertas.em < CACHE_ALERTAS_MS) {
+      return res.json(cacheAlertas.dados);
+    }
+
+    const [empresas] = await db.query(`
+      SELECT e.id, e.ativo, e.criado_em,
+        (SELECT COUNT(*) FROM mikrotiks WHERE empresa_id = e.id) AS total_mikrotiks
+      FROM empresas e`);
+
+    const offline = new Map();
+    const linhasEq = await seguro(async () => (await db.query(`
+      SELECT s.empresa_id, SUM(s.online = 0) AS offline, COUNT(*) AS total, MAX(s.verificado_em) AS verificado_em
+      FROM equipamento_status s JOIN mikrotiks m ON m.id = s.mikrotik_id AND m.empresa_id = s.empresa_id
+      GROUP BY s.empresa_id`))[0], []);
+    for (const r of linhasEq) {
+      offline.set(r.empresa_id, { offline: Number(r.offline) || 0, total: Number(r.total) || 0, verificado_em: r.verificado_em });
+    }
+
+    // Omada External RADIUS manda o IP do controller como NAS (nao o do equipamento): so conta quem casa por IP.
+    const ultimaConexao = new Map();
+    const linhasCx = await seguro(async () => (await db.query(`
+      SELECT m.empresa_id, MAX(ra.acctstarttime) AS ultima
+      FROM mikrotiks m JOIN radacct ra ON ra.nasipaddress COLLATE utf8mb4_unicode_ci = m.ip COLLATE utf8mb4_unicode_ci
+      GROUP BY m.empresa_id`))[0], []);
+    for (const r of linhasCx) ultimaConexao.set(r.empresa_id, r.ultima);
+
+    const whatsapp = new Map();
+    const comWhats = await seguro(async () => (await db.query(
+      "SELECT empresa_id FROM empresa_configs WHERE config_type = 'whatsapp'"))[0], []);
+    const { instanciaConectada } = require("./whatsappController");
+    const fila = comWhats.map((r) => r.empresa_id).filter((id) => empresas.some((e) => e.id === id && e.ativo));
+    await Promise.all(Array.from({ length: Math.min(5, fila.length) }, async () => {
+      while (fila.length) {
+        const id = fila.shift();
+        whatsapp.set(id, await instanciaConectada(id));
+      }
+    }));
+
+    const dados = montarAlertas({ empresas, offline, ultimaConexao, whatsapp, dias });
+    cacheAlertas = { chave: dias, em: Date.now(), dados };
+    res.json(dados);
+  } catch (err) {
+    console.error("Erro ao calcular alertas das empresas:", err);
+    res.status(500).json({ message: "Erro ao calcular alertas" });
   }
 };
 
