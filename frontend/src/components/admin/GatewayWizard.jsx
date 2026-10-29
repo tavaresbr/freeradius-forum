@@ -268,6 +268,9 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                   <label className={labelCls}>Senha API</label>
                   <input type="password" className={inputCls} value={form.senha} onChange={(e) => set("senha", e.target.value)} />
                 </div>
+                <p className="text-xs font-medium text-red-500">
+                  Atenção: o usuário e a senha da API devem ser exatamente os mesmos configurados no MikroTik. Você pode alterá-los ou usar o padrão, mas se mudar, altere também no equipamento.
+                </p>
                 <div>
                   <label className={labelCls}>Endereço Hotspot (preenchido pelo wizard de Hotspot)</label>
                   <input className={inputCls} value={form.end_hotspot} onChange={(e) => set("end_hotspot", e.target.value)} placeholder="hotspot.minharede.com" />
