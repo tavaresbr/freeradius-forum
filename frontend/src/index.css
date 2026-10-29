@@ -222,3 +222,9 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* Tema escuro: linhas de tabela sem cor de borda explicita usavam o cinza claro padrao (linhas brancas gritantes) */
 [data-theme="escuro"] .painel table tr { border-color: rgb(148 163 184 / .16); }
+
+/* Celular: campos de formulario do painel com 16 px (abaixo disso o iOS da zoom ao focar) */
+@media (max-width: 767px) {
+  .painel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .painel select, .painel textarea,
+  .super-pagina input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .super-pagina select, .super-pagina textarea { font-size: 16px; }
+}
