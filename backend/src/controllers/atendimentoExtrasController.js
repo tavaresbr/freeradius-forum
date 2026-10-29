@@ -5,6 +5,7 @@ const db = require("../../db");
 const svc = require("../services/whatsappAtendimento");
 const { normalizarTelefone } = require("../services/whatsappNotify");
 const wpp = require("./whatsappController");
+const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -201,9 +202,10 @@ async function leadDaConversa(empresaId, conversa) {
     if (l) return l;
   }
   if (conversa.telefone && ultimos10(conversa.telefone).length === 10) {
+    const expr = await exprTelefoneFim10();
     const [rows] = await db.query(
       `SELECT * FROM leads WHERE empresa_id = ? AND telefone IS NOT NULL AND telefone <> ''
-         AND RIGHT(REGEXP_REPLACE(telefone, '[^0-9]', ''), 10) = ? ORDER BY id LIMIT 1`,
+         AND ${expr} = ? ORDER BY id LIMIT 1`,
       [empresaId, ultimos10(conversa.telefone)]
     );
     if (rows[0]) return rows[0];
@@ -324,16 +326,17 @@ exports.novaConversa = async (req, res) => {
     const fim = ultimos10(telefone);
 
     // quem pediu para sair das mensagens nao recebe contato iniciado pela empresa
+    const expr = await exprTelefoneFim10();
     const [opt] = await db.query(
       `SELECT id FROM leads WHERE empresa_id = ? AND whatsapp_optout = 1 AND telefone IS NOT NULL
-         AND RIGHT(REGEXP_REPLACE(telefone, '[^0-9]', ''), 10) = ? LIMIT 1`,
+         AND ${expr} = ? LIMIT 1`,
       [req.empresa_id, fim]
     ).catch(() => [[]]);
     if (opt.length) return res.status(409).json({ error: "Este contato pediu para não receber mensagens (SAIR)." });
 
     let [[conversa]] = await db.query(
       `SELECT * FROM whatsapp_conversas WHERE empresa_id = ? AND telefone IS NOT NULL
-         AND RIGHT(REGEXP_REPLACE(telefone, '[^0-9]', ''), 10) = ? ORDER BY id LIMIT 1`,
+         AND RIGHT(telefone, 10) = ? ORDER BY id LIMIT 1`,
       [req.empresa_id, fim]
     );
     let criada = false;

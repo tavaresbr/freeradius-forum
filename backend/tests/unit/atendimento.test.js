@@ -184,3 +184,17 @@ test('envio que falha na Evolution marca a mensagem como erro e responde 502', a
     assert.ok(db.calls.some((x) => /SET status = 'erro'/.test(x.sql)));
   } finally { axios.post = postOrig; fim(); }
 });
+
+test('lista de conversas sem a migration 048: 503 dizendo o que rodar (nao o erro generico)', async () => {
+  const fim = semLog();
+  try {
+    const db = criarDb(() => { throw Object.assign(new Error("Table 'x.whatsapp_conversas' doesn't exist"), { code: 'ER_NO_SUCH_TABLE', errno: 1146 }); });
+    limpar();
+    const c = carregar('src/controllers/atendimentoController.js', { db, extras: { 'src/controllers/whatsappController.js': ctrlWpp() } });
+    const res = criarRes();
+    await c.listarConversas(criarReq({ empresa_id: 7, query: {} }), res);
+    assert.strictEqual(res.statusCode, 503);
+    assert.match(res.body.error, /migrations 048 e 049/);
+    assert.ok(!res.body.error.includes('x.whatsapp_conversas'), 'sem vazar o erro do MySQL');
+  } finally { fim(); }
+});

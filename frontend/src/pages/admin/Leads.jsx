@@ -22,6 +22,24 @@ const statusLabels = {
   descartado: "Descartado",
 };
 
+const LIMITE = 50;
+
+const ORIGENS = {
+  whatsapp: "WhatsApp", google: "Google Contatos", outlook: "Outlook", icloud: "iCloud", planilha: "Planilha",
+  importacao: "Importação", sgp: "SGP", lgpd: "Portal LGPD", lead: "Portal Lead", lead_passivo: "Lead passivo",
+  manual: "Cadastro manual", site: "Site", voucher: "Voucher", cliente: "Portal Planos",
+};
+const rotuloOrigem = (o) => ORIGENS[o] || (o ? o.charAt(0).toUpperCase() + o.slice(1) : "-");
+
+// 5593999990000 (com DDI) ou 93999990000 -> (93) 99999-0000; formato desconhecido fica como esta
+const telefoneLista = (t) => {
+  let d = String(t || "").replace(/\D/g, "");
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return t || "-";
+};
+
 const tabs = [
   { key: "todos", label: "Todos" },
   { key: "novo", label: "Novo" },
@@ -73,8 +91,15 @@ export default function Leads() {
   const { empresaSlug } = useParams();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [busca, setBusca] = useState(""); // o que esta digitado
+  const [search, setSearch] = useState(""); // busca aplicada (500 ms depois de parar de digitar)
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [origemFilter, setOrigemFilter] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [resumo, setResumo] = useState(null);
+  const [erroLista, setErroLista] = useState("");
+  const reqRef = useRef(0);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [aba, setAba] = useState("dados");
@@ -112,33 +137,76 @@ export default function Leads() {
     }
   };
 
-  const fetchLeads = useCallback(async () => {
+  const carregarResumo = useCallback(async () => {
     try {
-      setLoading(true);
       const params = new URLSearchParams();
       if (statusFilter !== "todos") params.append("status", statusFilter);
+      if (origemFilter) params.append("origem", origemFilter);
+      if (search) params.append("q", search);
+      const res = await fetch(`${API}/api/leads/resumo?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setResumo(await res.json());
+    } catch { /* os contadores so somem; a lista segue */ }
+  }, [token, statusFilter, origemFilter, search]);
+
+  const fetchLeads = useCallback(async () => {
+    const id = ++reqRef.current; // resposta atrasada de uma busca antiga nao sobrescreve a atual
+    setLoading(true);
+    setErroLista("");
+    try {
+      const params = new URLSearchParams({ limit: String(LIMITE), page: String(pagina) });
+      if (statusFilter !== "todos") params.append("status", statusFilter);
+      if (origemFilter) params.append("origem", origemFilter);
       if (search) params.append("q", search);
 
-      const res = await fetch(`${API}/api/leads?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setLeads(Array.isArray(data) ? data : []);
+      const res = await fetch(`${API}/api/leads?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => null);
+      if (id !== reqRef.current) return;
+      if (!res.ok || !data || !Array.isArray(data.itens)) {
+        setErroLista((data && (data.message || data.error)) || `Não foi possível carregar os clientes (HTTP ${res.status}).`);
+        setLeads([]);
+        setTotal(0);
+        return;
+      }
+      setLeads(data.itens);
+      setTotal(data.total);
+      // excluiu o ultimo da pagina: volta para a ultima que existe
+      if (data.itens.length === 0 && data.total > 0 && pagina > 1) setPagina(Math.ceil(data.total / LIMITE));
     } catch (err) {
+      if (id !== reqRef.current) return;
       console.error("Erro ao buscar clientes:", err);
+      setErroLista("Erro de conexão com o servidor.");
+      setLeads([]);
+      setTotal(0);
     } finally {
-      setLoading(false);
+      if (id === reqRef.current) setLoading(false);
     }
-  }, [token, statusFilter, search]);
+  }, [token, statusFilter, origemFilter, search, pagina]);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
+  useEffect(() => {
+    carregarResumo();
+  }, [carregarResumo]);
+
+  // depois de editar/excluir/mudar status: lista e contadores
+  const recarregar = () => { fetchLeads(); carregarResumo(); };
+
+  // busca: espera 500 ms depois da ultima tecla e volta para a pagina 1
+  useEffect(() => {
+    if (busca.trim() === search) return undefined;
+    const t = setTimeout(() => { setSearch(busca.trim()); setPagina(1); }, 500);
+    return () => clearTimeout(t);
+  }, [busca, search]);
+
+  const mudarStatus = (k) => { setStatusFilter(k); setPagina(1); };
+  const mudarOrigem = (o) => { setOrigemFilter(o); setPagina(1); };
+
   // a selecao vale para a lista que esta na tela: mudou filtro/busca, recomeca
   useEffect(() => {
     setSelecionados(new Set());
-  }, [statusFilter, search]);
+  }, [statusFilter, origemFilter, search, pagina]);
 
   const todosMarcados = leads.length > 0 && leads.every((l) => selecionados.has(l.id));
   const algunsMarcados = leads.some((l) => selecionados.has(l.id));
@@ -182,7 +250,7 @@ export default function Leads() {
       setSelecionados(new Set());
       setStatusMassa("");
       setMsgMassa({ ok: true, texto: `${data.afetados ?? ids.length} ${rotulo || "cadastro(s) atualizado(s)."}` });
-      fetchLeads();
+      recarregar();
     } catch (err) {
       console.error("Erro na ação em massa:", err);
       setMsgMassa({ ok: false, texto: "Erro de conexão com o servidor. Tente novamente." });
@@ -201,7 +269,7 @@ export default function Leads() {
         },
         body: JSON.stringify({ status: newStatus }),
       });
-      fetchLeads();
+      recarregar();
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
     }
@@ -216,7 +284,7 @@ export default function Leads() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ whatsapp_optout: sair }),
       });
-      fetchLeads();
+      recarregar();
     } catch (err) {
       console.error("Erro ao atualizar opt-out:", err);
     }
@@ -229,7 +297,7 @@ export default function Leads() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchLeads();
+      recarregar();
     } catch (err) {
       console.error("Erro ao deletar cadastro:", err);
     }
@@ -296,7 +364,7 @@ export default function Leads() {
         return;
       }
       setShowModal(false);
-      fetchLeads();
+      recarregar();
     } catch (err) {
       console.error("Erro ao salvar cadastro:", err);
       setErro("Erro de conexão ao salvar");
@@ -375,7 +443,7 @@ export default function Leads() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => mudarStatus(tab.key)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                 statusFilter === tab.key
                   ? "bg-blue-900/30 text-blue-400 border border-blue-800/50"
@@ -383,17 +451,19 @@ export default function Leads() {
               }`}
             >
               {tab.label}
+              {resumo && <span className="ml-1.5 opacity-70">({tab.key === "todos" ? resumo.total : resumo.por_status[tab.key] ?? 0})</span>}
             </button>
           ))}
         </div>
 
         {/* Search */}
-        <div className="relative">
+        <div className="relative flex flex-col sm:flex-row gap-3">
+         <div className="relative">
           <input
             type="text"
             placeholder="Buscar por nome, email, CPF, telefone ou ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
             className="w-full sm:w-96 px-4 py-2 pl-10 bg-[#1a1d27] border border-gray-800 rounded-lg text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-800 text-sm"
           />
           <svg
@@ -409,6 +479,19 @@ export default function Leads() {
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
+         </div>
+         {resumo && resumo.por_origem.length > 0 && (
+          <select
+            value={origemFilter}
+            onChange={(e) => mudarOrigem(e.target.value)}
+            aria-label="Filtrar por origem"
+            className="px-3 py-2 bg-[#1a1d27] border border-gray-800 rounded-lg text-gray-300 text-sm focus:outline-none focus:border-blue-800"
+          >
+            <option value="">Todas as origens</option>
+            {resumo.por_origem.map((o) => <option key={o.origem} value={o.origem}>{`${rotuloOrigem(o.origem)} (${o.total})`}</option>)}
+            {origemFilter && !resumo.por_origem.some((o) => o.origem === origemFilter) && <option value={origemFilter}>{rotuloOrigem(origemFilter)}</option>}
+          </select>
+         )}
         </div>
 
         {msgMassa && (
@@ -434,7 +517,7 @@ export default function Leads() {
         {/* Ações em massa */}
         {selecionados.size > 0 && (
           <div className="flex flex-wrap items-center gap-3 bg-blue-900/20 border border-blue-800/50 rounded-xl px-4 py-3 text-sm">
-            <span className="text-blue-300 font-medium">{selecionados.size} selecionado(s)</span>
+            <span className="text-blue-300 font-medium">{selecionados.size} selecionado(s) nesta página</span>
             <select
               value={statusMassa}
               onChange={(e) => setStatusMassa(e.target.value)}
@@ -510,7 +593,16 @@ export default function Leads() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {erroLista ? (
+                  <tr>
+                    <td colSpan="10" className="text-center py-8">
+                      <p className="text-red-400 text-sm mb-3">{erroLista}</p>
+                      <button onClick={fetchLeads} className="px-4 py-2 bg-[#1a1d27] border border-gray-700 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer">
+                        Tentar de novo
+                      </button>
+                    </td>
+                  </tr>
+                ) : loading && leads.length === 0 ? (
                   <tr>
                     <td colSpan="10" className="text-center py-8 text-gray-500">
                       Carregando...
@@ -541,7 +633,7 @@ export default function Leads() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-400">{lead.email || "-"}</td>
-                      <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{lead.telefone || "-"}</td>
+                      <td className="px-4 py-3 text-gray-400 hidden md:table-cell whitespace-nowrap">{telefoneLista(lead.telefone)}</td>
                       <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">{doc(lead)}</td>
                       <td className="px-4 py-3 text-gray-400 hidden xl:table-cell">
                         {lead.cidade ? `${lead.cidade}${lead.uf ? `/${lead.uf}` : ""}` : "-"}
@@ -560,7 +652,7 @@ export default function Leads() {
                         </select>
                       </td>
                       <td className="px-4 py-3 text-gray-400 hidden md:table-cell capitalize">
-                        {lead.sistema_origem || lead.origem}
+                        {rotuloOrigem(lead.sistema_origem || lead.origem)}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell">{formatDate(lead.criado_em)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -590,6 +682,31 @@ export default function Leads() {
               </tbody>
             </table>
           </div>
+          {total > 0 && !erroLista && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-800 text-sm text-gray-400">
+              <span>
+                Mostrando {(pagina - 1) * LIMITE + 1}–{Math.min(pagina * LIMITE, total)} de {total}
+                {loading && <span className="ml-2 text-gray-500">atualizando…</span>}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  disabled={pagina <= 1 || loading}
+                  className="px-3 py-1.5 bg-[#1a1d27] border border-gray-700 text-gray-300 rounded-md text-xs hover:bg-[#252b3b] disabled:opacity-40 cursor-pointer"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs">Página {pagina} de {Math.max(1, Math.ceil(total / LIMITE))}</span>
+                <button
+                  onClick={() => setPagina((p) => p + 1)}
+                  disabled={pagina >= Math.ceil(total / LIMITE) || loading}
+                  className="px-3 py-1.5 bg-[#1a1d27] border border-gray-700 text-gray-300 rounded-md text-xs hover:bg-[#252b3b] disabled:opacity-40 cursor-pointer"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

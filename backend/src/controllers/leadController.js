@@ -401,38 +401,75 @@ function sanitizarCadastro(body) {
   return { dados: d };
 }
 
+// Colunas da lista (e do formulario de edicao): sem lgpd_termo (texto longo), mac, ip, ap_mac, ssid etc.
+const COLUNAS_LISTA = [
+  "id", "tipo_pessoa", "nome", "razao_social", "cpf", "cnpj", "rg", "data_nascimento", "email", "telefone",
+  "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "id_externo", "status", "observacoes",
+  "origem", "sistema_origem", "whatsapp_optout", "lgpd_aceite", "criado_em",
+].join(", ");
+
+const STATUS_LEAD = ["novo", "contactado", "convertido", "descartado"];
+
+/** WHERE comum da lista e do resumo. `ignorar` tira um filtro (ex.: o resumo por status ignora o de status). */
+function filtrosLeads(req, ignorar = []) {
+  const { status, q, origem } = req.query;
+  const where = ["empresa_id = ?"];
+  const params = [req.empresa_id];
+  if (!ignorar.includes("status") && typeof status === "string" && status && status !== "todos") {
+    where.push("status = ?");
+    params.push(status);
+  }
+  if (!ignorar.includes("origem") && typeof origem === "string" && origem && origem !== "todas") {
+    where.push("(origem = ? OR sistema_origem = ?)");
+    params.push(origem, origem);
+  }
+  if (typeof q === "string" && q.trim()) {
+    where.push("(nome LIKE ? OR email LIKE ? OR cpf LIKE ? OR cnpj LIKE ? OR telefone LIKE ? OR id_externo LIKE ?)");
+    const like = `%${q.trim().slice(0, 80).replace(/[\\%_]/g, "\\$&")}%`;
+    params.push(like, like, like, like, like, like);
+  }
+  return { where: where.join(" AND "), params };
+}
+
 exports.listarLeads = async (req, res) => {
   try {
-    const { status, q } = req.query;
-    let query = "SELECT * FROM leads WHERE empresa_id = ?";
-    const params = [req.empresa_id];
+    const { where, params } = filtrosLeads(req);
+    const query = `SELECT ${COLUNAS_LISTA} FROM leads WHERE ${where} ORDER BY criado_em DESC, id DESC`;
 
-    if (status && status !== "todos") {
-      query += " AND status = ?";
-      params.push(status);
-    }
-
-    if (q) {
-      query += " AND (nome LIKE ? OR email LIKE ? OR cpf LIKE ? OR cnpj LIKE ? OR telefone LIKE ? OR id_externo LIKE ?)";
-      const search = `%${q}%`;
-      params.push(search, search, search, search, search, search);
-    }
-
-    query += " ORDER BY criado_em DESC";
-
-    // Paginacao opcional (sem limit = comportamento antigo, lista completa)
+    // Paginacao opcional: sem `limit` = comportamento antigo (array completo); com `limit` = { itens, total, ... }
     const limit = Math.min(parseInt(req.query.limit, 10) || 0, 1000);
-    if (limit > 0) {
-      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-      query += " LIMIT ? OFFSET ?";
-      params.push(limit, (page - 1) * limit);
+    if (limit <= 0) {
+      const [rows] = await db.query(query, params);
+      return res.json(rows);
     }
-
-    const [rows] = await db.query(query, params);
-    res.json(rows);
+    const pagina = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const [itens] = await db.query(`${query} LIMIT ? OFFSET ?`, [...params, limit, (pagina - 1) * limit]);
+    const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM leads WHERE ${where}`, params);
+    res.json({ itens, total: Number(total), pagina, limite: limit });
   } catch (err) {
     console.error("Erro ao listar leads:", err);
     res.status(500).json({ message: "Erro ao listar leads" });
+  }
+};
+
+// GET /api/leads/resumo?q=&origem=&status=  (contadores das abas e do filtro de origem)
+exports.resumoLeads = async (req, res) => {
+  try {
+    const porStatusF = filtrosLeads(req, ["status"]);
+    const porOrigemF = filtrosLeads(req, ["origem"]);
+    const [porStatus] = await db.query(`SELECT status, COUNT(*) AS total FROM leads WHERE ${porStatusF.where} GROUP BY status`, porStatusF.params);
+    const [porOrigem] = await db.query(
+      `SELECT COALESCE(NULLIF(sistema_origem, ''), origem) AS origem, COUNT(*) AS total FROM leads WHERE ${porOrigemF.where}
+        GROUP BY COALESCE(NULLIF(sistema_origem, ''), origem) ORDER BY total DESC`,
+      porOrigemF.params
+    );
+    const por_status = Object.fromEntries(STATUS_LEAD.map((st) => [st, 0]));
+    let total = 0;
+    for (const r of porStatus) { total += Number(r.total); if (r.status in por_status) por_status[r.status] = Number(r.total); }
+    res.json({ total, por_status, por_origem: porOrigem.filter((r) => r.origem).map((r) => ({ origem: r.origem, total: Number(r.total) })) });
+  } catch (err) {
+    console.error("Erro ao resumir leads:", err);
+    res.status(500).json({ message: "Erro ao carregar o resumo" });
   }
 };
 

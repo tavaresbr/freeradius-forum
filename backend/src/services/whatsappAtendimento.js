@@ -5,6 +5,7 @@ const db = require("../../db");
 const { normalizarTelefone } = require("./whatsappNotify");
 const wpp = require("../controllers/whatsappController");
 const midiaUtil = require("../utils/whatsappMidia");
+const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 
 const MAX_TEXTO = 4000;
 const STATUS_ORDEM = ["enviando", "enviada", "entregue", "lida"];
@@ -78,9 +79,10 @@ function extrairMensagem(data) {
 async function leadPorTelefone(empresaId, telefone) {
   const fim = ultimos10(telefone);
   if (fim.length < 10) return null;
+  const expr = await exprTelefoneFim10();
   const [rows] = await db.query(
     `SELECT id, nome FROM leads WHERE empresa_id = ? AND telefone IS NOT NULL AND telefone <> ''
-       AND RIGHT(REGEXP_REPLACE(telefone, '[^0-9]', ''), 10) = ? ORDER BY id LIMIT 1`,
+       AND ${expr} = ? ORDER BY id LIMIT 1`,
     [empresaId, fim]
   );
   return rows[0] || null;
@@ -103,10 +105,11 @@ async function aplicarOptOut(empresaId, m) {
   if (m.fromMe || m.tipo !== "texto" || !m.telefone) return;
   if (m.texto.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "") !== "sair") return;
   try {
+    const expr = await exprTelefoneFim10();
     await db.query(
       `UPDATE leads SET whatsapp_optout = 1, whatsapp_optout_em = NOW()
         WHERE empresa_id = ? AND whatsapp_optout = 0 AND telefone IS NOT NULL
-          AND RIGHT(REGEXP_REPLACE(telefone, '[^0-9]', ''), 10) = ?`,
+          AND ${expr} = ?`,
       [empresaId, ultimos10(m.telefone)]
     );
   } catch (err) {
