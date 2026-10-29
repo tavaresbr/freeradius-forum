@@ -304,6 +304,7 @@ async function saveConfig(req, res) {
       ...(atual.automacao ? { automacao: atual.automacao } : {}),
       ...(atual.aviso_expiracao ? { aviso_expiracao: atual.aviso_expiracao } : {}),
       ...(atual.alerta_equipamentos ? { alerta_equipamentos: atual.alerta_equipamentos } : {}),
+      ...(atual.chatbot ? { chatbot: atual.chatbot } : {}),
     });
 
     if (existing) {

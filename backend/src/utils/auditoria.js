@@ -26,6 +26,7 @@ const REGRAS = [
   ["PUT", /^\/api\/atendimento\/automacao$/, "config.salvar", "automacao"],
   ["PUT", /^\/api\/atendimento\/aviso-expiracao$/, "config.salvar", "aviso_expiracao"],
   ["PUT", /^\/api\/alertas-equipamentos$/, "config.salvar", "alerta_equipamentos"],
+  ["PUT", /^\/api\/atendimento\/chatbot$/, "config.salvar", "chatbot"],
   ["POST", /^\/api\/limpeza\/([a-z_-]+)$/, "limpeza.executar", "limpeza"],
   ["DELETE", /^\/api\/limpeza\/([a-z_-]+)$/, "limpeza.executar", "limpeza"],
   ["POST", /^\/api\/vouchers\/massa(-filtro)?$/, "voucher.massa", "voucher"],
