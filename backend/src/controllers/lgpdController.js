@@ -11,6 +11,7 @@ const { resolverApDoContexto } = require("../utils/apInfo");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { normalizarMac } = require("../utils/entradaSegura");
 const { temColuna } = require("../utils/schemaCache");
+const { gerarContatos, FORMATOS: FORMATOS_CONTATOS } = require("../utils/exportarContatos");
 
 exports.lgpdLogin = async (req, res) => {
   try {
@@ -347,6 +348,34 @@ exports.getFiltrosLgpd = async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar filtros LGPD:", err);
     res.status(500).json({ message: "Erro ao buscar filtros" });
+  }
+};
+
+// Exporta os cadastros FILTRADOS como contatos (Google Contatos, Outlook ou vCard).
+// ?formato=google|outlook|vcard + os mesmos filtros da tela (origem, aceite, de, ate, ap, ssid, equipamento)
+exports.exportarContatosLgpd = async (req, res) => {
+  try {
+    const formato = String(req.query.formato || "");
+    if (!FORMATOS_CONTATOS[formato]) return res.status(400).json({ message: "Formato inválido (use google, outlook ou vcard)" });
+    const temEq = await temColuna("leads", "mikrotik_id");
+    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id, { comEquipamento: temEq });
+    const [rows] = await db.query(
+      `SELECT l.nome, l.email, l.telefone FROM leads l
+       WHERE ${where} AND l.telefone IS NOT NULL AND l.telefone <> ''
+       ORDER BY ${DATA_EXPR} DESC
+       LIMIT 50000`,
+      params
+    );
+    const r = gerarContatos(rows, formato);
+    res.setHeader("Content-Type", r.mime);
+    res.setHeader("Content-Disposition", `attachment; filename=${r.arquivo}`);
+    res.setHeader("X-Total-Contatos", String(r.total));
+    res.setHeader("Access-Control-Expose-Headers", "X-Total-Contatos");
+    res.send(r.conteudo);
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ message: err.message });
+    console.error("Erro ao exportar contatos LGPD:", err);
+    res.status(500).json({ message: "Erro ao exportar contatos." });
   }
 };
 

@@ -185,6 +185,7 @@ app.get('/api/auth/download-token', auth, tenant, exigeAssinatura, (req, res, ne
 app.get('/api/leads/export', verifyDownloadToken('leads'), exigeRecurso('exportacao'), leadCtrlDl.exportarLeadsCSV);
 app.get('/api/leads/export-contatos', verifyDownloadToken('leads'), exigeRecurso('exportacao'), leadCtrlDl.exportarContatos);
 app.get('/api/lgpd/export', verifyDownloadToken('leads'), require('./src/controllers/lgpdController').exportarLgpdCSV);
+app.get('/api/lgpd/export-contatos', verifyDownloadToken('leads'), exigeRecurso('exportacao'), require('./src/controllers/lgpdController').exportarContatosLgpd);
 app.get('/api/portais/:id/preview', verifyDownloadToken('portais'), portalCtrlDl.previewPortal);
 
 app.use('/api/planos', auth, tenant, exigeAssinatura, checkPermissao('planos'), planRoutes)

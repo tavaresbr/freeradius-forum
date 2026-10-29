@@ -9,6 +9,7 @@ const REGRAS = [
   ["DELETE", /^\/api\/leads\/(\d+)$/, "cliente.excluir", "cliente"],
   ["GET", /^\/api\/leads\/export$/, "cliente.exportar", "cliente"],
   ["GET", /^\/api\/leads\/export-contatos$/, "cliente.exportar", "cliente"],
+  ["GET", /^\/api\/lgpd\/export-contatos$/, "cliente.exportar", "cliente"],
   ["POST", /^\/api\/planos$/, "plano.criar", "plano"],
   ["PUT", /^\/api\/planos\/(\d+)$/, "plano.editar", "plano"],
   ["DELETE", /^\/api\/planos\/(\d+)$/, "plano.excluir", "plano"],
