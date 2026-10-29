@@ -194,6 +194,7 @@ app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboa
 app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), whatsappRoutes);
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
 app.use("/api/atendimento", auth, tenant, exigeAssinatura, checkPermissao('leads'), exigeRecurso('whatsapp'), atendimentoRoutes);
+app.use("/api/avisos-operacionais", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), require("./src/routes/avisoOperacionalRoutes"));
 app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), promocaoWhatsappRoutes);
 app.use("/api/alertas-equipamentos", auth, tenant, exigeAssinatura, checkPermissao('mikrotiks'), exigeRecurso('whatsapp'), require("./src/routes/alertaEquipamentosRoutes"));
 app.use("/api/auditoria", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), require("./src/routes/auditoriaRoutes"));

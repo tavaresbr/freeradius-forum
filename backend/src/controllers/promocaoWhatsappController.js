@@ -4,6 +4,7 @@ const db = require("../../db");
 const { instanciaConectada, enviarMensagemEstrita } = require("./whatsappController");
 const { normalizarTelefone } = require("../services/whatsappNotify");
 const p = require("../utils/promocaoWhatsapp");
+const { temColuna } = require("../utils/schemaCache");
 
 const MSG_DESCONECTADO = "O WhatsApp da empresa não está conectado. Conecte a instância na tela WhatsApp e tente de novo.";
 
@@ -131,8 +132,10 @@ exports.cancelar = async (req, res) => {
 
 exports.listar = async (req, res) => {
   try {
+    // Avisos operacionais (tipo 'aviso') tem tela propria; sem a migration 057 nao ha coluna e tudo e' promocao.
+    const soPromocoes = (await temColuna("promocao_envios", "tipo")) ? " AND tipo = 'promocao'" : "";
     const [rows] = await db.execute(
-      "SELECT id, nome, status, total, enviados, falhas, ignorados, criado_em, iniciado_em, concluido_em FROM promocao_envios WHERE empresa_id = ? ORDER BY id DESC LIMIT 100",
+      `SELECT id, nome, status, total, enviados, falhas, ignorados, criado_em, iniciado_em, concluido_em FROM promocao_envios WHERE empresa_id = ?${soPromocoes} ORDER BY id DESC LIMIT 100`,
       [req.empresa_id]
     );
     res.json({ success: true, data: rows });

@@ -49,7 +49,7 @@ export default function AdminLayout({ children }) {
 
   // SaaS Fase 2: tela de recurso que o plano/adicionais nao incluem (super admin nunca e' bloqueado).
   const rota = location.pathname.slice(basePath.length);
-  const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp|atendimento)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
+  const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp|aviso-operacional|atendimento)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
     : /^\/campanhas(\/|$)/.test(rota) ? ["campanhas", "Campanhas"]
     : /^\/dominio(\/|$)/.test(rota) ? ["dominio", "Domínio próprio"] : null;
   const recursoBloqueado = !isSuperAdmin && recursoDaRota && assinatura?.recursos?.[recursoDaRota[0]] === false ? recursoDaRota[1] : null;
@@ -207,6 +207,7 @@ export default function AdminLayout({ children }) {
       children: [
         { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
         { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
+        { key: "configuracoes", title: "Aviso operacional", path: `${basePath}/aviso-operacional` },
       ],
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

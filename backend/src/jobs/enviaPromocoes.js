@@ -6,6 +6,7 @@ const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
 const { montarMensagem } = require("../utils/promocaoWhatsapp");
+const { montarMensagemAviso } = require("../utils/avisoOperacional");
 
 const LOTE = 4;
 const INTERVALO_MIN_MS = 8000;
@@ -78,15 +79,17 @@ async function processarEnvio(envio, { dormirFn }) {
       }
     }
 
-    const mensagem = montarMensagem(envio.mensagem, d.nome);
+    // Aviso operacional nao leva o rodape de marketing ("responda SAIR")
+    const aviso = envio.tipo === "aviso";
+    const mensagem = aviso ? montarMensagemAviso(envio.mensagem, d.nome) : montarMensagem(envio.mensagem, d.nome);
     try {
       await enviarMensagemEstrita(d.telefone, mensagem, envio.empresa_id);
       await db.execute("UPDATE promocao_destinatarios SET status = 'enviado', enviado_em = NOW() WHERE id = ?", [d.id]);
-      await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: "promocao", referencia_id: envio.id, status: "ok" });
+      await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: aviso ? "aviso_operacional" : "promocao", referencia_id: envio.id, status: "ok" });
     } catch (err) {
       const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
       await db.execute("UPDATE promocao_destinatarios SET status = 'erro', erro_msg = ? WHERE id = ?", [msg, d.id]);
-      await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: "promocao", referencia_id: envio.id, status: "erro", erro_msg: msg });
+      await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: aviso ? "aviso_operacional" : "promocao", referencia_id: envio.id, status: "erro", erro_msg: msg });
     }
 
     if (i < pendentes.length - 1) await dormirFn(intervaloAleatorio());
@@ -102,7 +105,7 @@ async function enviaPromocoes(opts = {}) {
   const dormirFn = opts.dormir || dormir;
   try {
     const [envios] = await db.execute(
-      "SELECT id, empresa_id, mensagem FROM promocao_envios WHERE status = 'em_andamento' ORDER BY id ASC"
+      "SELECT * FROM promocao_envios WHERE status = 'em_andamento' ORDER BY id ASC"
     );
     const empresasAtendidas = new Set();
     for (const envio of envios) {
