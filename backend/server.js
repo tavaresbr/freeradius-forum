@@ -107,6 +107,8 @@ const corsOptions = {
 }
 app.use(cors(corsOptions))
 app.use(express.json({ limit: '1mb' }))
+// Auditoria do painel: registra (depois da resposta) quem fez acoes sensiveis; ver utils/auditoria.js
+app.use('/api', require('./src/utils/auditoria').auditoriaMiddleware)
 app.use(require('./src/middleware/hostPortal'))  // dominio proprio de empresa: so o portal (sem login/registro do painel)
 
 // Servir arquivos de campanhas (publicos, com cache de 1 dia)
@@ -193,6 +195,7 @@ app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configur
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
 app.use("/api/atendimento", auth, tenant, exigeAssinatura, checkPermissao('leads'), exigeRecurso('whatsapp'), atendimentoRoutes);
 app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), promocaoWhatsappRoutes);
+app.use("/api/auditoria", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), require("./src/routes/auditoriaRoutes"));
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);
 app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
