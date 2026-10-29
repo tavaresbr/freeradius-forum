@@ -28,7 +28,7 @@ const acoes = [
 const PALAVRA_CONFIRMACAO = "LIMPAR";
 
 export default function Configuracoes() {
-  const { isSuperAdmin, user } = useAuth();
+  const { user } = useAuth();
   const { empresaSlug } = useParams();
   const [modal, setModal] = useState(null);
   const [confirmacao, setConfirmacao] = useState("");
@@ -71,7 +71,6 @@ export default function Configuracoes() {
 
       <IdentidadeSite empresa={empresaSlug || user?.empresa_slug || "default"} />
 
-      {isSuperAdmin && <IdentidadeSite />}
 
       <div className="space-y-4">
         {acoes.map((acao) => (

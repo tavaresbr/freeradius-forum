@@ -28,6 +28,7 @@ function upload(campo, tipoNome, mimes, maxBytes, msgTipo) {
     fileFilter: (req, file, cb) => (mimes[file.mimetype] ? cb(null, true) : cb(new Error(msgTipo))),
   }).single(campo);
   return (req, res, next) => mw(req, res, (err) => {
+    if (err) console.error(`[branding-empresa] upload ${tipoNome} empresa=${req.empresa_id}:`, err.message);
     if (err) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ message: err.code === "LIMIT_FILE_SIZE" ? `Arquivo maior que ${Math.round(maxBytes / 1024)} KB.` : err.message });
     // o mimetype vem do cliente: confere a assinatura real do arquivo
     if (req.file && !arquivoConfere(req.file.path, req.file.mimetype)) {
