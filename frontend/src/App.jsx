@@ -30,6 +30,7 @@ import GruposPermissao from "./pages/admin/GruposPermissao";
 import WhatsApp from "./pages/admin/WhatsApp";
 import Atendimento from "./pages/admin/Atendimento";
 import AtendimentoRelatorios from "./pages/admin/AtendimentoRelatorios";
+import Auditoria from "./pages/admin/Auditoria";
 import PromocoesWhatsapp from "./pages/admin/PromocoesWhatsapp";
 import Vouchers from "./pages/admin/Vouchers";
 import Voucher from "./pages/public/Voucher";
@@ -134,6 +135,7 @@ function App() {
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/atendimento" element={<RotaPrivada><Atendimento /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/auditoria" element={<RotaPrivada><Auditoria /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/atendimento/relatorios" element={<RotaPrivada><AtendimentoRelatorios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/whatsapp" element={<RotaPrivada><WhatsApp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vouchers" element={<RotaPrivada><Vouchers /></RotaPrivada>} />
