@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
+import LinkPainel from "../../components/public/LinkPainel";
 import useBranding from "../../hooks/useBranding";
 import useSeo from "../../hooks/useSeo";
 import { Wifi, Zap, ShieldCheck, BarChart3, Check, MessageCircle, Layout, Router, Users, Image as Imagem } from "lucide-react";
@@ -95,7 +96,7 @@ export default function ApexHome() {
               Captive portal, pagamentos por PIX e cartão, LGPD e Marco Civil em um só sistema para provedores e estabelecimentos.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-              <Link to="/registro" className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg shadow-orange-500/20">Começar teste grátis</Link>
+              <LinkPainel to="/registro" className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg shadow-orange-500/20">Começar teste grátis</LinkPainel>
               <a href={`https://wa.me/${WHATSAPP}`} rel="noopener" className="border border-apex-500 text-apex-700 hover:bg-apex-50 px-8 py-3 rounded-lg font-semibold inline-flex items-center justify-center gap-2">
                 <MessageCircle size={18} /> Falar com a equipe
               </a>
@@ -176,7 +177,7 @@ export default function ApexHome() {
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />Todos os recursos incluídos</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />7 dias grátis, sem cartão</li>
                   </ul>
-                  <Link to={cadastro(p)} className="mt-6 text-center bg-apex-500 hover:bg-apex-600 text-white py-3 rounded-lg font-semibold">Testar grátis</Link>
+                  <LinkPainel to={cadastro(p)} className="mt-6 text-center bg-apex-500 hover:bg-apex-600 text-white py-3 rounded-lg font-semibold">Testar grátis</LinkPainel>
                 </div>
               );
             })}
