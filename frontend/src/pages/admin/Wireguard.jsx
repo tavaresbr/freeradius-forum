@@ -287,7 +287,7 @@ export default function Wireguard() {
 
         {/* Table */}
         <div className="bg-[#1e2330] rounded-xl overflow-hidden border border-gray-800">
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-[#1a1d27] text-xs uppercase text-gray-500 font-semibold tracking-wide">
                 <tr>
@@ -340,6 +340,43 @@ export default function Wireguard() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="md:hidden divide-y divide-gray-800">
+            {status?.clients?.map((client) => {
+              const isOnline = client.latestHandshakeAt && (new Date() - new Date(client.latestHandshakeAt)) < 180000;
+              return (
+                <div key={client.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-white break-words min-w-0">{client.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                      <span className={`text-sm ${isOnline ? 'text-green-400' : 'text-gray-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                    <span>{client.address}</span>
+                    <span className="px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded border border-blue-800/50">MikroTik</span>
+                    <span>Handshake: {client.latestHandshakeAt ? new Date(client.latestHandshakeAt).toLocaleString() : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs">
+                      <span className="text-green-400">↓ {formatBytes(client.transferRx)}</span> &nbsp; <span className="text-blue-400">↑ {formatBytes(client.transferTx)}</span>
+                    </span>
+                    <div className="flex gap-4">
+                      <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300 p-1" title="Ver Script Mikrotik">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                      </button>
+                      <button onClick={() => handleDelete(client.id)} className="text-red-500 hover:text-red-400 p-1" title="Deletar">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {(!status?.clients || status.clients.length === 0) && (
+              <p className="p-6 text-center text-gray-500 text-sm">Nenhum peer cadastrado.</p>
+            )}
           </div>
         </div>
       </div>

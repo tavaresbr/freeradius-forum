@@ -354,6 +354,39 @@ const carregarMikrotiks = async () => {
     carregarPortais();
   }, []);
 
+  const renderAcoes = (m) => {
+    const isMikrotik = !m.tipo || m.tipo === "mikrotik";
+    return (
+        <div className="flex flex-wrap gap-1.5">
+          {isMikrotik && (
+            <>
+              <button onClick={() => abrirWizard(m.id)} title="Enviar Hotspot" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoHotspot === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-blue-600 text-white hover:bg-blue-500'}`} disabled={enviandoHotspot === m.id}>
+                {enviandoHotspot === m.id ? "Enviando..." : "Hotspot"}
+              </button>
+              <button onClick={() => enviarLogin(m.id)} title="Enviar login.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
+                {enviandoLogin === m.id ? "Enviando..." : "Login"}
+              </button>
+              <button onClick={() => enviarStatus(m.id)} title="Enviar status.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoStatus === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-teal-700 text-white hover:bg-teal-600'}`} disabled={enviandoStatus === m.id}>
+                {enviandoStatus === m.id ? "Enviando..." : "Status"}
+              </button>
+            </>
+          )}
+          {m.tipo === "omada" && (
+            <button onClick={() => abrirApiOmada(m)} title="API do controller (captura de nomes de APs)"
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${m.controller_url ? "bg-purple-700 text-white hover:bg-purple-600" : "border border-purple-800/60 text-purple-400 hover:bg-purple-900/20"}`}>
+              API
+            </button>
+          )}
+          <button onClick={() => testarConexao(m.id)} title="Testar" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Testar</button>
+          {isMikrotik && (
+            <button onClick={() => abrirInfo(m.id)} title="Info" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Info</button>
+          )}
+          <button onClick={() => editar(m)} title="Editar" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Editar</button>
+          <button onClick={() => remover(m.id)} title="Remover" className="border border-red-800/50 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-900/20 cursor-pointer">Remover</button>
+        </div>
+    );
+  };
+
   return (
     <AdminLayout>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
@@ -362,7 +395,7 @@ const carregarMikrotiks = async () => {
           <button
             onClick={aplicarPadroesEmTodos}
             disabled={aplicandoPadroes}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow disabled:opacity-50"
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow disabled:opacity-50 w-full sm:w-auto"
             title="Keepalive 30 min, atualização RADIUS a cada 5 min e timeout RADIUS 3s em todos os MikroTik"
           >
             {aplicandoPadroes ? "Aplicando..." : "Aplicar padrões em todos"}
@@ -393,11 +426,12 @@ const carregarMikrotiks = async () => {
         </div>
       )}
 
-      <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6">
+      <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 md:p-6">
         <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
           <span className="text-gray-300">📶</span> Equipamentos Cadastrados
         </h2>
         {erro && <p className="text-red-600 mb-4">{erro}</p>}
+        <div className="hidden md:block">
         <table className="w-full text-left text-sm">
           <thead className="text-gray-500 border-b border-gray-800">
             <tr>
@@ -439,38 +473,43 @@ const carregarMikrotiks = async () => {
                 </td>
                 <td className="p-2">{m.usuarios_ativos}</td>
                 <td className="p-2">
-                  <div className="flex gap-1">
-                    {isMikrotik && (
-                      <>
-                        <button onClick={() => abrirWizard(m.id)} title="Enviar Hotspot" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoHotspot === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-blue-600 text-white hover:bg-blue-500'}`} disabled={enviandoHotspot === m.id}>
-                          {enviandoHotspot === m.id ? "Enviando..." : "Hotspot"}
-                        </button>
-                        <button onClick={() => enviarLogin(m.id)} title="Enviar login.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
-                          {enviandoLogin === m.id ? "Enviando..." : "Login"}
-                        </button>
-                        <button onClick={() => enviarStatus(m.id)} title="Enviar status.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoStatus === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-teal-700 text-white hover:bg-teal-600'}`} disabled={enviandoStatus === m.id}>
-                          {enviandoStatus === m.id ? "Enviando..." : "Status"}
-                        </button>
-                      </>
-                    )}
-                    {m.tipo === "omada" && (
-                      <button onClick={() => abrirApiOmada(m)} title="API do controller (captura de nomes de APs)"
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${m.controller_url ? "bg-purple-700 text-white hover:bg-purple-600" : "border border-purple-800/60 text-purple-400 hover:bg-purple-900/20"}`}>
-                        API
-                      </button>
-                    )}
-                    <button onClick={() => testarConexao(m.id)} title="Testar" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Testar</button>
-                    {isMikrotik && (
-                      <button onClick={() => abrirInfo(m.id)} title="Info" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Info</button>
-                    )}
-                    <button onClick={() => editar(m)} title="Editar" className="border border-gray-700 text-gray-300 px-2 py-1 rounded text-xs hover:bg-[#252b3b] cursor-pointer">Editar</button>
-                    <button onClick={() => remover(m.id)} title="Remover" className="border border-red-800/50 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-900/20 cursor-pointer">Remover</button>
-                  </div>
+                  {renderAcoes(m)}
                 </td>
               </tr>
             );})}
           </tbody>
         </table>
+        </div>
+        <div className="md:hidden space-y-3">
+          {mikrotiks.map((m) => {
+            const badge = TIPO_BADGES[m.tipo] || TIPO_BADGES.mikrotik;
+            return (
+              <div key={m.id} className="bg-[#151821] border border-gray-800 rounded-lg p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium text-white break-words min-w-0">{m.nome}</span>
+                  {m.status === "loading" ? (
+                    <span className="text-gray-500 text-xs shrink-0">Verificando...</span>
+                  ) : (
+                    <span className={`text-xs px-3 py-1 rounded-full text-white shrink-0 ${m.status === "online" ? "bg-green-600" : "bg-red-600"}`}>
+                      {m.status === "online" ? "Online" : "Offline"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                  <span className={`px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
+                  <span>{m.ip}</span>
+                  {m.portal_nome ? (
+                    <span className="px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
+                  ) : (
+                    <span className="text-gray-600">Sem portal</span>
+                  )}
+                  <span>Usuários ativos: {m.usuarios_ativos}</span>
+                </div>
+                {renderAcoes(m)}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {showInfoModal && mikrotikInfo && (
