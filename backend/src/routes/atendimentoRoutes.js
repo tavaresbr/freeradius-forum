@@ -1,7 +1,8 @@
 const express = require("express");
 const multer = require("multer");
 const c = require("../controllers/atendimentoController");
-const { atendimentoEnvioLimiter } = require("../middleware/rateLimiters");
+const x = require("../controllers/atendimentoExtrasController");
+const { atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
 
@@ -20,5 +21,22 @@ router.get("/midia/:id", c.servirMidia);
 router.put("/conversas/:id", c.atualizarConversa);
 router.post("/conversas/:id/lida", c.marcarLida);
 router.get("/nao-lidas", c.naoLidas);
+
+// Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
+router.post("/conversas", novaConversaLimiter, x.novaConversa);
+router.post("/conversas/:id/notas", x.criarNota);
+router.put("/conversas/:id/etiquetas", x.definirEtiquetasDaConversa);
+router.get("/conversas/:id/cliente", x.clienteDaConversa);
+router.post("/conversas/:id/vincular", x.vincularCliente);
+router.post("/conversas/:id/criar-cliente", x.criarClienteDaConversa);
+router.get("/clientes", x.buscarClientes);
+router.get("/etiquetas", x.listarEtiquetas);
+router.post("/etiquetas", x.criarEtiqueta);
+router.put("/etiquetas/:id", x.atualizarEtiqueta);
+router.delete("/etiquetas/:id", x.excluirEtiqueta);
+router.get("/respostas-rapidas", x.listarRespostas);
+router.post("/respostas-rapidas", x.criarResposta);
+router.put("/respostas-rapidas/:id", x.atualizarResposta);
+router.delete("/respostas-rapidas/:id", x.excluirResposta);
 
 module.exports = router;

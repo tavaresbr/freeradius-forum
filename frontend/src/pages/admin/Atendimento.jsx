@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import MidiaMensagem from "../../components/admin/atendimento/MidiaMensagem";
+import GerenciarEtiquetas from "../../components/admin/atendimento/GerenciarEtiquetas";
+import GerenciarRespostas from "../../components/admin/atendimento/GerenciarRespostas";
+import NovaConversa from "../../components/admin/atendimento/NovaConversa";
+import PainelCliente from "../../components/admin/atendimento/PainelCliente";
 
 const FILTROS = [
   ["aberta", "Abertas"],
@@ -58,6 +62,14 @@ export default function Atendimento() {
   const [erroEnvio, setErroEnvio] = useState("");
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeEdit, setNomeEdit] = useState("");
+  const [etiquetas, setEtiquetas] = useState([]);
+  const [respostas, setRespostas] = useState([]);
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState("");
+  const [modo, setModo] = useState("resposta"); // resposta | nota
+  const [modal, setModal] = useState(null); // etiquetas | respostas | nova
+  const [menuEtiquetas, setMenuEtiquetas] = useState(false);
+  const [cliente, setCliente] = useState(null);
+  const [painelAberto, setPainelAberto] = useState(false);
   const [webhook, setWebhook] = useState(null); // null = desconhecido, true/false
   const [ativando, setAtivando] = useState(false);
   const [msgWebhook, setMsgWebhook] = useState("");
@@ -73,6 +85,7 @@ export default function Atendimento() {
     if (filtro === "nao_lidas") { params.set("status", "aberta"); params.set("nao_lidas", "1"); }
     else params.set("status", filtro);
     if (busca.trim()) params.set("q", busca.trim());
+    if (filtroEtiqueta) params.set("etiqueta", filtroEtiqueta);
     try {
       const res = await fetch(`/api/atendimento/conversas?${params}`, { headers });
       const data = await res.json().catch(() => ({}));
@@ -85,7 +98,7 @@ export default function Atendimento() {
       setCarregando(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, busca, token]);
+  }, [filtro, busca, filtroEtiqueta, token]);
 
   const carregarMensagens = useCallback(async (id) => {
     if (!id) return;
@@ -140,6 +153,32 @@ export default function Atendimento() {
     if (noFimRef.current) fimRef.current?.scrollIntoView({ block: "end" });
   }, [mensagens]);
 
+  const carregarEtiquetas = useCallback(async () => {
+    try {
+      const res = await fetch("/api/atendimento/etiquetas", { headers });
+      if (res.ok) setEtiquetas((await res.json()).etiquetas || []);
+    } catch { /* segue sem etiquetas */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+  const carregarRespostas = useCallback(async () => {
+    try {
+      const res = await fetch("/api/atendimento/respostas-rapidas", { headers });
+      if (res.ok) setRespostas((await res.json()).respostas || []);
+    } catch { /* segue sem respostas */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+  const carregarCliente = useCallback(async (id) => {
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/atendimento/conversas/${id}/cliente`, { headers });
+      if (res.ok && selRef.current === id) setCliente(await res.json());
+    } catch { /* o painel mostra so o basico */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => { carregarEtiquetas(); carregarRespostas(); }, [carregarEtiquetas, carregarRespostas]);
+  useEffect(() => { setCliente(null); setPainelAberto(false); setMenuEtiquetas(false); setModo("resposta"); if (selecionadaId) carregarCliente(selecionadaId); }, [selecionadaId, carregarCliente]);
+
   // o webhook so e' consultado por quem tem acesso a configuracao do WhatsApp (senao ignora)
   useEffect(() => {
     fetch("/api/whatsapp/webhook/status", { headers })
@@ -182,12 +221,14 @@ export default function Atendimento() {
 
   const enviar = async () => {
     const t = texto.trim();
-    if ((!t && !arquivo) || enviando || !selecionadaId) return;
+    if ((!t && (modo === "nota" || !arquivo)) || enviando || !selecionadaId) return;
     setEnviando(true);
     setErroEnvio("");
     try {
       let res;
-      if (arquivo) {
+      if (modo === "nota") {
+        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/notas`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
+      } else if (arquivo) {
         const fd = new FormData();
         fd.append("arquivo", arquivo);
         fd.append("legenda", t);
@@ -200,7 +241,7 @@ export default function Atendimento() {
       else { setTexto(""); setArquivo(null); }
       noFimRef.current = true;
       await carregarMensagens(selecionadaId);
-      carregarConversas();
+      if (modo !== "nota") carregarConversas();
     } catch {
       setErroEnvio("Erro de conexão");
     } finally {
@@ -214,10 +255,29 @@ export default function Atendimento() {
     await Promise.all([carregarMensagens(selecionadaId), carregarConversas()]);
   };
 
+  const alternarEtiqueta = async (et) => {
+    if (!conversa) return;
+    const atuais = (conversa.etiquetas || []).map((x) => x.id);
+    const ids = atuais.includes(et.id) ? atuais.filter((i) => i !== et.id) : [...atuais, et.id];
+    await fetch(`/api/atendimento/conversas/${conversa.id}/etiquetas`, { method: "PUT", headers, body: JSON.stringify({ ids }) });
+    await Promise.all([carregarMensagens(conversa.id), carregarConversas()]);
+  };
+
+  // "/" no inicio da caixa abre as respostas rapidas filtradas pelo que vem depois
+  const sugestoes = modo === "resposta" && texto.startsWith("/") && !texto.includes("\n")
+    ? respostas.filter((r) => { const q = texto.slice(1).toLowerCase(); return !q || r.atalho.includes(q) || r.titulo.toLowerCase().includes(q); }).slice(0, 6)
+    : [];
+  const aplicarResposta = (r) => {
+    const primeiro = (conversa?.nome || "").trim().split(/\s+/)[0] || "cliente";
+    setTexto(r.texto.replace(/\{\{\s*nome\s*\}\}/gi, primeiro).replace(/\{\{\s*empresa\s*\}\}/gi, cliente?.empresa || ""));
+  };
+
   const salvarNome = async () => {
     await alterar({ nome: nomeEdit });
     setEditandoNome(false);
   };
+
+  const abrirConversa = (id) => { setModal(null); setFiltro("aberta"); setSelecionadaId(id); carregarConversas(); };
 
   const inputCls = "w-full px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-blue-800 text-sm";
 
@@ -226,7 +286,12 @@ export default function Atendimento() {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-white">WhatsApp</h1>
-          <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
+            <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
+            <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
+            <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
+          </div>
         </div>
 
         {webhook === false && (
@@ -246,6 +311,12 @@ export default function Atendimento() {
           <aside className={`${selecionadaId ? "hidden md:flex" : "flex"} flex-col w-full md:w-80 md:shrink-0 border-r border-gray-800 min-w-0`}>
             <div className="p-3 space-y-2 border-b border-gray-800">
               <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar nome ou telefone" className={inputCls} />
+              {etiquetas.length > 0 && (
+                <select value={filtroEtiqueta} onChange={(e) => setFiltroEtiqueta(e.target.value)} className={inputCls} aria-label="Filtrar por etiqueta">
+                  <option value="">Todas as etiquetas</option>
+                  {etiquetas.map((et) => <option key={et.id} value={et.id}>{et.nome}</option>)}
+                </select>
+              )}
               <div className="flex gap-1 flex-wrap">
                 {FILTROS.map(([k, rot]) => (
                   <button
@@ -273,6 +344,11 @@ export default function Atendimento() {
                     <span className={`text-sm truncate ${c.nao_lidas > 0 ? "font-semibold text-white" : "text-gray-200"}`}>{titulo(c)}</span>
                     <span className="text-xs text-gray-500 shrink-0">{hora(c.ultima_msg_em)}</span>
                   </div>
+                  {c.etiquetas?.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-1">
+                      {c.etiquetas.map((et) => <span key={et.id} className="px-1.5 py-0.5 rounded text-[10px] text-white" style={{ background: et.cor }}>{et.nome}</span>)}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-gray-400 truncate">{c.ultima_msg_previa || ""}</span>
                     {c.nao_lidas > 0 && (
@@ -285,7 +361,8 @@ export default function Atendimento() {
           </aside>
 
           {/* Conversa */}
-          <section className={`${selecionadaId ? "flex" : "hidden md:flex"} flex-col flex-1 min-w-0`}>
+          <section className={`${selecionadaId ? "flex" : "hidden md:flex"} flex-1 min-w-0`}>
+           <div className="flex flex-col flex-1 min-w-0">
             {!selecionadaId ? (
               <div className="flex-1 flex items-center justify-center text-center p-6">
                 <p className="text-gray-500 text-sm">Selecione uma conversa para responder.</p>
@@ -316,6 +393,9 @@ export default function Atendimento() {
                     )}
                   </div>
                   {conversa && (
+                    <button onClick={() => setPainelAberto((v) => !v)} className="xl:hidden px-3 py-1.5 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer">Cliente</button>
+                  )}
+                  {conversa && (
                     <button
                       onClick={() => alterar({ status: conversa.status === "aberta" ? "resolvida" : "aberta" })}
                       className="px-3 py-1.5 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer"
@@ -325,10 +405,39 @@ export default function Atendimento() {
                   )}
                 </header>
 
+                {conversa && (
+                  <div className="px-4 py-2 border-b border-gray-800 flex items-center gap-2 flex-wrap relative">
+                    {(conversa.etiquetas || []).map((et) => <span key={et.id} className="px-2 py-0.5 rounded text-xs text-white" style={{ background: et.cor }}>{et.nome}</span>)}
+                    <button onClick={() => setMenuEtiquetas((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer">+ etiqueta</button>
+                    {menuEtiquetas && (
+                      <div className="absolute left-4 top-full mt-1 z-20 w-56 max-h-60 overflow-y-auto bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-2 space-y-1">
+                        {etiquetas.length === 0 && <p className="text-xs text-gray-500 p-2">Nenhuma etiqueta. Crie em "Etiquetas".</p>}
+                        {etiquetas.map((et) => {
+                          const marcada = (conversa.etiquetas || []).some((x) => x.id === et.id);
+                          return (
+                            <button key={et.id} onClick={() => alternarEtiqueta(et)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#252b3b] text-left cursor-pointer">
+                              <span className="w-3 h-3 rounded-full shrink-0" style={{ background: et.cor }} />
+                              <span className="flex-1 text-sm text-gray-200 truncate">{et.nome}</span>
+                              <span className="text-xs text-green-400">{marcada ? "✓" : ""}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {painelAberto && conversa && (
+                  <div className="xl:hidden border-b border-gray-800 max-h-64 overflow-y-auto">
+                    <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
+                  </div>
+                )}
+
                 <div ref={listaRef} onScroll={aoRolar} className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#0f111a]">
                   {mensagens.map((m) => (
-                    <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : "justify-end"}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : "bg-green-700/80 text-white"}`}>
+                    <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : m.direcao === "nota" ? "justify-center" : "justify-end"}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : m.direcao === "nota" ? "bg-yellow-100 text-yellow-900 border border-yellow-300" : "bg-green-700/80 text-white"}`}>
+                        {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? ` · ${m.autor}` : ""} (o cliente não vê)</p>}
                         {m.tem_midia
                           ? <div className="mb-1"><MidiaMensagem mensagem={m} /></div>
                           : m.tipo !== "texto" && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
@@ -336,6 +445,7 @@ export default function Atendimento() {
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}
+                          {m.direcao === "out" && m.autor && <span className="opacity-70">· {m.autor}</span>}
                         </div>
                         {m.status === "erro" && <p className="text-xs text-red-200 mt-1">{m.erro || "Falha no envio"}</p>}
                       </div>
@@ -344,7 +454,26 @@ export default function Atendimento() {
                   <div ref={fimRef} />
                 </div>
 
-                <footer className="p-3 border-t border-gray-800">
+                <footer className={`p-3 border-t border-gray-800 relative ${modo === "nota" ? "bg-yellow-50" : ""}`}>
+                  <div className="flex gap-1 mb-2">
+                    {[["resposta", "Responder"], ["nota", "Nota interna"]].map(([k, rot]) => (
+                      <button key={k} onClick={() => { setModo(k); if (k === "nota") setArquivo(null); }}
+                        className={`px-3 py-1 rounded-full text-xs cursor-pointer ${modo === k ? (k === "nota" ? "bg-yellow-200 text-yellow-900 border border-yellow-400" : "bg-blue-900/30 text-blue-400 border border-blue-800/50") : "bg-[#0f111a] text-gray-400 border border-gray-800 hover:bg-[#252b3b]"}`}>
+                        {rot}
+                      </button>
+                    ))}
+                    {modo === "resposta" && <button onClick={() => setModal("respostas")} className="ml-auto text-xs text-blue-400 hover:text-blue-300 cursor-pointer">⚡ gerenciar respostas</button>}
+                  </div>
+                  {sugestoes.length > 0 && (
+                    <div className="absolute left-3 right-3 bottom-full mb-1 z-20 bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg overflow-hidden">
+                      {sugestoes.map((r) => (
+                        <button key={r.id} onClick={() => aplicarResposta(r)} className="w-full text-left px-3 py-2 hover:bg-[#252b3b] border-b border-gray-800 last:border-0 cursor-pointer">
+                          <span className="text-xs text-blue-300">/{r.atalho}</span> <span className="text-sm text-gray-200">{r.titulo}</span>
+                          <span className="block text-xs text-gray-500 truncate">{r.texto}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {erroEnvio && <p className="text-xs text-red-400 mb-2">{erroEnvio}</p>}
                   {arquivo && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-[#0f111a] border border-gray-800 text-sm text-gray-300">
@@ -356,24 +485,36 @@ export default function Atendimento() {
                   )}
                   <div className="flex gap-2 items-end">
                     <input ref={arquivoRef} type="file" onChange={escolherArquivo} className="hidden" accept={EXT_ACEITAS.map((x) => `.${x}`).join(",")} />
-                    <button onClick={() => arquivoRef.current?.click()} disabled={enviando} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Anexar arquivo" title="Anexar arquivo">📎</button>
+                    <button onClick={() => arquivoRef.current?.click()} disabled={enviando || modo === "nota"} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Anexar arquivo" title="Anexar arquivo">📎</button>
                     <textarea
                       value={texto}
                       onChange={(e) => setTexto(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+                      onKeyDown={(e) => {
+                        if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && sugestoes.length) { e.preventDefault(); aplicarResposta(sugestoes[0]); return; }
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); }
+                      }}
                       rows={2}
                       maxLength={4000}
-                      placeholder={arquivo ? "Legenda (opcional)" : "Digite a mensagem (Enter envia, Shift+Enter quebra a linha)"}
+                      placeholder={modo === "nota" ? "Nota interna: só a equipe vê" : arquivo ? "Legenda (opcional)" : "Digite a mensagem — / abre as respostas rápidas (Enter envia)"}
                       className={`${inputCls} resize-none`}
                     />
-                    <button onClick={enviar} disabled={enviando || (!texto.trim() && !arquivo)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer">
-                      {enviando ? "..." : "Enviar"}
+                    <button onClick={enviar} disabled={enviando || (!texto.trim() && (modo === "nota" || !arquivo))} className={`px-4 py-2 ${modo === "nota" ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"} text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer`}>
+                      {enviando ? "..." : modo === "nota" ? "Salvar nota" : "Enviar"}
                     </button>
                   </div>
                 </footer>
               </>
             )}
+           </div>
+           {selecionadaId && conversa && (
+             <aside className="hidden xl:block w-72 shrink-0 border-l border-gray-800 overflow-y-auto">
+               <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
+             </aside>
+           )}
           </section>
+          {modal === "etiquetas" && <GerenciarEtiquetas headers={headers} etiquetas={etiquetas} onFechar={() => setModal(null)} onMudou={async () => { await carregarEtiquetas(); carregarConversas(); if (selecionadaId) carregarMensagens(selecionadaId); }} />}
+          {modal === "respostas" && <GerenciarRespostas headers={headers} respostas={respostas} onFechar={() => setModal(null)} onMudou={carregarRespostas} />}
+          {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
         </div>
       </div>
     </AdminLayout>
