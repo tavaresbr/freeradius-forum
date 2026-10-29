@@ -22,6 +22,23 @@ async function conversaDaEmpresa(req, res) {
   return c;
 }
 
+/** Coloca `etiquetas: [{id, nome, cor}]` em cada conversa (uma consulta so). Sem a migration 049 segue sem etiquetas. */
+async function anexarEtiquetas(empresaId, conversas) {
+  conversas.forEach((c) => { c.etiquetas = []; });
+  if (!conversas.length) return;
+  try {
+    const ids = conversas.map((c) => c.id);
+    const [rows] = await db.query(
+      `SELECT ce.conversa_id, e.id, e.nome, e.cor FROM whatsapp_conversa_etiquetas ce
+         JOIN whatsapp_etiquetas e ON e.id = ce.etiqueta_id AND e.empresa_id = ce.empresa_id
+        WHERE ce.empresa_id = ? AND ce.conversa_id IN (${ids.map(() => "?").join(",")}) ORDER BY e.nome`,
+      [empresaId, ...ids]
+    );
+    const porConversa = new Map(conversas.map((c) => [c.id, c.etiquetas]));
+    for (const r of rows) porConversa.get(r.conversa_id)?.push({ id: r.id, nome: r.nome, cor: r.cor });
+  } catch (err) { /* tabela nova ausente */ }
+}
+
 // GET /api/atendimento/conversas?status=aberta|resolvida|todas&nao_lidas=1&q=&pagina=1
 exports.listarConversas = async (req, res) => {
   try {
@@ -32,6 +49,11 @@ exports.listarConversas = async (req, res) => {
     const params = [req.empresa_id];
     if (status) { where.push("status = ?"); params.push(status); }
     if (req.query.nao_lidas === "1") where.push("nao_lidas > 0");
+    const etiqueta = parseInt(req.query.etiqueta, 10);
+    if (Number.isInteger(etiqueta)) {
+      where.push("id IN (SELECT conversa_id FROM whatsapp_conversa_etiquetas WHERE empresa_id = ? AND etiqueta_id = ?)");
+      params.push(req.empresa_id, etiqueta);
+    }
     const q = String(req.query.q || "").trim().slice(0, 60);
     if (q) {
       where.push("(nome LIKE ? OR telefone LIKE ? OR ultima_msg_previa LIKE ?)");
@@ -44,7 +66,9 @@ exports.listarConversas = async (req, res) => {
         ORDER BY ultima_msg_em DESC, id DESC LIMIT ? OFFSET ?`,
       [...params, limite + 1, (pagina - 1) * limite]
     );
-    res.json({ conversas: rows.slice(0, limite), tem_mais: rows.length > limite });
+    const conversas = rows.slice(0, limite);
+    await anexarEtiquetas(req.empresa_id, conversas);
+    res.json({ conversas, tem_mais: rows.length > limite });
   } catch (err) {
     erro500(res, err, "Erro ao listar conversas");
   }
@@ -58,11 +82,14 @@ exports.listarMensagens = async (req, res) => {
     const limite = inteiro(req.query.limite, 60, 1, 200);
     const antes = parseInt(req.query.antes_de, 10);
     const [rows] = await db.query(
-      `SELECT id, direcao, tipo, texto, midia_nome, midia_mime, (midia_mime IS NOT NULL) AS tem_midia, status, erro, admin_id, criado_em
-         FROM whatsapp_mensagens WHERE empresa_id = ? AND conversa_id = ? ${Number.isInteger(antes) ? "AND id < ?" : ""}
-        ORDER BY id DESC LIMIT ?`,
+      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor
+         FROM whatsapp_mensagens m LEFT JOIN admins a ON a.id = m.admin_id
+        WHERE m.empresa_id = ? AND m.conversa_id = ? ${Number.isInteger(antes) ? "AND m.id < ?" : ""}
+        ORDER BY m.id DESC LIMIT ?`,
       Number.isInteger(antes) ? [req.empresa_id, conversa.id, antes, limite + 1] : [req.empresa_id, conversa.id, limite + 1]
     );
+    const [soConversa] = [[conversa]];
+    await anexarEtiquetas(req.empresa_id, soConversa);
     res.json({ conversa, mensagens: rows.slice(0, limite).reverse(), tem_mais: rows.length > limite });
   } catch (err) {
     erro500(res, err, "Erro ao listar mensagens");

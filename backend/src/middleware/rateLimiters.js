@@ -151,6 +151,16 @@ const atendimentoEnvioLimiter = rateLimit({
   handler: jsonHandler('Muitas mensagens em pouco tempo. Aguarde um instante.'),
 });
 
+// Iniciar conversa com quem nao escreveu primeiro: poucas por hora e por usuario (risco de bloqueio do numero).
+const novaConversaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `nova:${req.user?.id || ipKeyGenerator(req.ip)}`,
+  handler: jsonHandler('Muitas conversas novas em pouco tempo. Aguarde antes de iniciar outras.'),
+});
+
 const publicApiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 min
   limit: 120,
@@ -247,4 +257,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { whatsappWebhookLimiter, atendimentoEnvioLimiter, cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { novaConversaLimiter, whatsappWebhookLimiter, atendimentoEnvioLimiter, cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };
