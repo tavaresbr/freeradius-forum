@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import MidiaMensagem from "../../components/admin/atendimento/MidiaMensagem";
@@ -62,6 +62,8 @@ export default function Atendimento() {
   const [enviando, setEnviando] = useState(false);
   const [arquivo, setArquivo] = useState(null);
   const arquivoRef = useRef(null);
+  const caixaRef = useRef(null);
+  const [altura, setAltura] = useState(null); // altura da caixa de conversas = o que sobra da tela
   const [gravando, setGravando] = useState(false);
   const [segundos, setSegundos] = useState(0);
   const gravRef = useRef({ rec: null, stream: null, chunks: [], timer: null, enviar: false, conversaId: null });
@@ -225,6 +227,19 @@ export default function Atendimento() {
     setErroEnvio("");
     setArquivo(f);
   };
+
+  // a caixa ocupa ate o fim da tela (descontando o respiro do painel), sem sobra embaixo
+  useLayoutEffect(() => {
+    const ajustar = () => {
+      const el = caixaRef.current;
+      if (!el) return;
+      const respiro = window.innerWidth >= 1024 ? 32 : 16;
+      setAltura(Math.max(420, Math.floor(window.innerHeight - el.getBoundingClientRect().top - respiro)));
+    };
+    ajustar();
+    window.addEventListener("resize", ajustar);
+    return () => window.removeEventListener("resize", ajustar);
+  }, [webhook, msgWebhook, erroLista]);
 
   const postarMidia = (f, legenda, conversaId) => {
     const fd = new FormData();
@@ -391,7 +406,7 @@ export default function Atendimento() {
           </div>
         )}
 
-        <div className="flex bg-[#1a1d27] border border-gray-800 rounded-xl overflow-hidden h-[72vh] min-h-[420px]">
+        <div ref={caixaRef} style={altura ? { height: altura } : undefined} className="flex bg-[#1a1d27] border border-gray-800 rounded-xl overflow-hidden h-[72vh] min-h-[420px]">
           {/* Lista */}
           <aside className={`${selecionadaId ? "hidden md:flex" : "flex"} flex-col w-full md:w-80 md:shrink-0 border-r border-gray-800 min-w-0`}>
             <div className="p-3 space-y-2 border-b border-gray-800">
