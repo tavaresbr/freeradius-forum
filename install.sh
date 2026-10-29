@@ -482,6 +482,8 @@ services:
     restart: always
     ports:
       - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - SERVER_URL=https://${DOMAIN_EVOLUTION}
       - DOCKER_ENV=true
