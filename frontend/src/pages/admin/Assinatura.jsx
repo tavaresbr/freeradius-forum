@@ -10,6 +10,8 @@ const COR = {
 };
 const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const limite = (v) => (v == null ? "ilimitado" : v);
+// "2 equipamentos", "1 administrador", "Portais ilimitados"
+const qtd = (v, um, varios) => (v == null ? `${varios[0].toUpperCase()}${varios.slice(1)} ilimitados` : `${v} ${Number(v) === 1 ? um : varios}`);
 
 export default function Assinatura() {
   const { isSuperAdmin, user } = useAuth();
@@ -179,11 +181,11 @@ export default function Assinatura() {
         )}
 
         {st && (
-          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 grid gap-4 sm:grid-cols-4 text-sm">
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 grid grid-cols-2 gap-4 sm:grid-cols-4 text-sm">
             <div><p className="text-gray-500">Status</p><span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs ${COR[st.status] || COR.vencida}`}>{ROTULO[st.status] || st.status}</span></div>
             <div><p className="text-gray-500">Plano</p><p className="text-white mt-1">{st.plano_nome || "—"}</p></div>
             <div><p className="text-gray-500">{st.status === "trial" ? "Teste até" : "Vencimento"}</p><p className="text-white mt-1">{fim}</p></div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <p className="text-gray-500">Uso</p>
               <p className="text-white mt-1">{st.uso?.equipamentos ?? 0}/{limite(st.max_equipamentos)} equipamentos{st.extras?.equipamentos > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_equipamentos)} do plano + {st.extras.equipamentos})</span>}</p>
               {st.max_portais !== undefined && <p className="text-white">{st.uso?.portais ?? 0}/{limite(st.max_portais)} portais{st.extras?.portais > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_portais)} do plano + {st.extras.portais})</span>}</p>}
@@ -200,7 +202,7 @@ export default function Assinatura() {
             {escolhido.extra > 0 && <div className="mt-3">{caixaAviso(aviso(escolhido.extra))}</div>}
             <div className="flex gap-2 mt-4">
               {[["pix", "PIX"], ["cartao", "Cartão de crédito"]].map(([k, r]) => (
-                <button key={k} onClick={() => { setMetodo(k); setErro(""); }} className={`px-4 py-2 rounded-lg text-sm ${metodo === k ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-300"}`}>{r}</button>
+                <button key={k} onClick={() => { setMetodo(k); setErro(""); }} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm ${metodo === k ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-300"}`}>{r}</button>
               ))}
             </div>
             {metodo === "pix" ? (
@@ -213,11 +215,11 @@ export default function Assinatura() {
               <p className="mt-4 text-sm text-red-400">Não foi possível carregar a verificação de segurança. Recarregue a página ou use PIX.</p>
             ) : (
               <form onSubmit={pagarCartao} className="mt-4 space-y-3" autoComplete="off">
-                <input required inputMode="numeric" placeholder="Número do cartão" maxLength={23} value={cartao.numero} onChange={(e) => setCartao({ ...cartao, numero: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
-                <input required placeholder="Nome impresso no cartão" value={cartao.nome} onChange={(e) => setCartao({ ...cartao, nome: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                <input required inputMode="numeric" placeholder="Número do cartão" autoComplete="cc-number" maxLength={23} value={cartao.numero} onChange={(e) => setCartao({ ...cartao, numero: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                <input required placeholder="Nome impresso no cartão" autoComplete="cc-name" value={cartao.nome} onChange={(e) => setCartao({ ...cartao, nome: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 <div className="grid grid-cols-2 gap-3">
-                  <input required placeholder="Validade MM/AA" maxLength={5} value={cartao.validade} onChange={(e) => { let v = e.target.value.replace(/[^\d/]/g, ""); if (v.length === 2 && !v.includes("/") && e.nativeEvent.inputType !== "deleteContentBackward") v += "/"; setCartao({ ...cartao, validade: v }); }} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
-                  <input required inputMode="numeric" placeholder="CVV" maxLength={4} value={cartao.cvv} onChange={(e) => setCartao({ ...cartao, cvv: e.target.value })} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                  <input required placeholder="Validade MM/AA" autoComplete="cc-exp" inputMode="numeric" maxLength={5} value={cartao.validade} onChange={(e) => { let v = e.target.value.replace(/[^\d/]/g, ""); if (v.length === 2 && !v.includes("/") && e.nativeEvent.inputType !== "deleteContentBackward") v += "/"; setCartao({ ...cartao, validade: v }); }} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
+                  <input required inputMode="numeric" placeholder="CVV" autoComplete="cc-csc" maxLength={4} value={cartao.cvv} onChange={(e) => setCartao({ ...cartao, cvv: e.target.value })} className="bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <input required inputMode="numeric" placeholder="CPF do titular" maxLength={14} value={cartao.cpf} onChange={(e) => setCartao({ ...cartao, cpf: e.target.value })} className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm" />
                 <button disabled={pagandoCartao} className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium">{pagandoCartao ? "Processando..." : `Pagar ${brl(escolhido.valor)}`}</button>
@@ -240,7 +242,7 @@ export default function Assinatura() {
                 <h2 className="text-lg font-bold text-white">PIX – {cobranca.plano} ({brl(cobranca.valor)})</h2>
                 <img alt="QR Code PIX" className="mx-auto mt-4 w-52 h-52 bg-white p-2 rounded-lg" src={`data:image/png;base64,${cobranca.qr_code_base64}`} />
                 <textarea readOnly value={cobranca.copia_cola} rows={3} className="mt-4 w-full bg-[#0d1117] border border-gray-700 text-gray-300 rounded-lg p-2 text-xs" />
-                <div className="mt-3 flex gap-3 justify-center">
+                <div className="mt-3 flex flex-wrap gap-3 justify-center">
                   <button onClick={copiar} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm">{copiado ? "Copiado!" : "Copiar código"}</button>
                   <button onClick={() => { clearInterval(timer.current); setCobranca(null); }} className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg text-sm">Cancelar</button>
                 </div>
@@ -256,9 +258,9 @@ export default function Assinatura() {
                 <p className="text-sm text-gray-500">{p.descricao}</p>
                 <p className="mt-3 text-3xl font-extrabold text-white">{brl(p.valor)}<span className="text-sm text-gray-500 font-normal"> / {p.ciclo_dias} dias</span></p>
                 <ul className="mt-3 text-sm text-gray-300 space-y-1 flex-1">
-                  <li>✓ {limite(p.max_equipamentos)} equipamentos</li>
-                  <li>✓ {limite(p.max_admins)} administradores</li>
-                  {p.max_portais !== undefined && <li>✓ {limite(p.max_portais)} portais</li>}
+                  <li>✓ {qtd(p.max_equipamentos, "equipamento", "equipamentos")}</li>
+                  <li>✓ {qtd(p.max_admins, "administrador", "administradores")}</li>
+                  {p.max_portais !== undefined && <li>✓ {qtd(p.max_portais, "portal", "portais")}</li>}
                   {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     p[k] !== undefined && <li key={k} className={p[k] ? "" : "opacity-50"}>{p[k] ? "✓" : "—"} {r}</li>
                   ))}
