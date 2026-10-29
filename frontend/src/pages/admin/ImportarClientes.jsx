@@ -337,6 +337,75 @@ function Sgp({ empresaSlug }) {
   );
 }
 
+function Exportar({ token }) {
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState({ tipo: "", texto: "" });
+
+  const baixar = async (formato, nomeArquivo) => {
+    setBusy(formato);
+    setMsg({ tipo: "", texto: "" });
+    try {
+      const t = await fetch(`${API}/api/auth/download-token?para=leads`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!t.ok) throw new Error("Sessão expirada. Faça login novamente.");
+      const { token: dl } = await t.json();
+      const qs = new URLSearchParams({ token: dl, formato });
+      if (status) qs.set("status", status);
+      const r = await fetch(`${API}/api/leads/export-contatos?${qs}`);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(r.status === 403 && d.code === "RECURSO_NAO_CONTRATADO" ? "A exportação da base não está incluída no seu plano." : d.message || d.error || "Não foi possível exportar.");
+      }
+      const total = r.headers.get("X-Total-Contatos");
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nomeArquivo;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsg({ tipo: "ok", texto: total === "0" ? "Nenhum cliente com telefone válido para exportar." : `${total || ""} contato(s) exportado(s).` });
+    } catch (e) {
+      setMsg({ tipo: "erro", texto: e.message || "Não foi possível exportar." });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const opcoes = [
+    ["google", "Google Contatos (CSV)", "contatos-google.csv", <>Em <strong>contacts.google.com</strong> use <strong>Importar</strong> e escolha este arquivo.</>],
+    ["outlook", "Outlook (CSV)", "contatos-outlook.csv", <>No Outlook use <strong>Arquivo &gt; Abrir e Exportar &gt; Importar/Exportar</strong> e escolha este arquivo.</>],
+    ["vcard", "iCloud / celular (vCard .vcf)", "contatos.vcf", <>Em <strong>icloud.com/contacts</strong> use a engrenagem &gt; <strong>Importar vCard</strong>. Serve também para Android e iPhone.</>],
+  ];
+
+  return (
+    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 space-y-4">
+      <p className="text-gray-400 text-sm">Baixe seus clientes como lista de contatos (nome, telefone e e-mail). Só entram clientes com telefone válido, sem repetir o mesmo número.</p>
+      <div className="max-w-xs">
+        <label className="block text-sm text-gray-400 mb-1">Quais clientes</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
+          <option value="">Todos</option>
+          <option value="novo">Novos</option>
+          <option value="contactado">Contactados</option>
+          <option value="convertido">Convertidos</option>
+          <option value="descartado">Descartados</option>
+        </select>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {opcoes.map(([k, rot, arquivo, ajuda]) => (
+          <div key={k} className="border border-gray-800 rounded-lg p-4 space-y-3">
+            <button onClick={() => baixar(k, arquivo)} disabled={!!busy} className={btnPrimary + " w-full"}>
+              {busy === k ? "Gerando..." : `Exportar ${rot}`}
+            </button>
+            <p className="text-xs text-gray-500">{ajuda}</p>
+          </div>
+        ))}
+      </div>
+      {msg.texto && <p className={`text-sm ${msg.tipo === "erro" ? "text-red-400" : "text-green-400"}`}>{msg.texto}</p>}
+      <p className="text-xs text-gray-500">Os contatos são dados pessoais dos seus clientes (LGPD): use só para a finalidade informada a eles e não compartilhe o arquivo.</p>
+    </div>
+  );
+}
+
 export default function ImportarClientes() {
   const { empresaSlug } = useParams();
   const [origem, setOrigem] = useState("planilha");
@@ -355,14 +424,14 @@ export default function ImportarClientes() {
       <div className="space-y-6 max-w-4xl">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-white">Importar clientes</h1>
-            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google, do Outlook ou do iCloud</p>
+            <h1 className="text-2xl font-bold text-white">Importar e exportar contatos</h1>
+            <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google, do Outlook ou do iCloud, ou exporte seus clientes como contatos</p>
           </div>
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"], ["icloud", "iCloud"]].map(([k, rot]) => (
+          {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"], ["icloud", "iCloud"], ["exportar", "Exportar contatos"]].map(([k, rot]) => (
             <button
               key={k}
               onClick={() => setOrigem(k)}
@@ -380,6 +449,7 @@ export default function ImportarClientes() {
           : origem === "google" ? <Google token={token} />
           : origem === "outlook" ? <Outlook token={token} />
           : origem === "icloud" ? <Icloud token={token} />
+          : origem === "exportar" ? <Exportar token={token} />
           : <Sgp empresaSlug={empresaSlug} />}
       </div>
     </AdminLayout>
