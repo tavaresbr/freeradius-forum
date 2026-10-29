@@ -5,6 +5,7 @@ const auto = require("../services/whatsappAutomacao");
 const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
 const bot = require("../utils/chatbot");
+const posCompra = require("../utils/posCompra");
 const { renderTemplate, normalizarTelefone, gravarLog } = require("../services/whatsappNotify");
 const { enviarMensagemEstrita } = require("./whatsappController");
 const { linkPlanosDoCliente } = require("../utils/linkPlanos");
@@ -168,5 +169,34 @@ exports.salvarChatbot = async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     erro500(res, err, "Erro ao salvar o chatbot");
+  }
+};
+
+// GET /api/atendimento/pos-compra
+exports.obterPosCompra = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    let pronto = true;
+    try { await db.query("SELECT 1 FROM whatsapp_pos_compra LIMIT 1"); } catch (err) { if (err.code === "ER_NO_SUCH_TABLE") pronto = false; else throw err; }
+    res.json({ pos_compra: posCompra.mesclarComPadrao(cfg.pos_compra), pronto });
+  } catch (err) { erro500(res, err, "Erro ao buscar o pós-compra"); }
+};
+
+// PUT /api/atendimento/pos-compra { ativo, horas_apos, msg_agradecimento, link_avaliacao, msg_avaliacao_alta, alerta_nota_baixa:{ativo,telefones} }
+exports.salvarPosCompra = async (req, res) => {
+  try {
+    const pos = posCompra.validarPosCompra(req.body);
+    if (pos.ativo || pos.alerta_nota_baixa.ativo || pos.link_avaliacao) {
+      try { await db.query("SELECT 1 FROM whatsapp_pos_compra LIMIT 1"); }
+      catch (err) {
+        if (err.code === "ER_NO_SUCH_TABLE") return res.status(503).json({ error: "Recurso indisponível: rode a migration 059 (node migrations/059_whatsapp_pos_compra.js)." });
+        throw err;
+      }
+    }
+    await auto.salvarChave(req.empresa_id, "pos_compra", pos);
+    res.json({ success: true, pos_compra: pos });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar o pós-compra");
   }
 };

@@ -666,6 +666,12 @@ cron.schedule('*/5 * * * *', () => {
   alertaEquipamentos().catch(err => console.error('[CRON] Erro alertaEquipamentos:', err.message));
 });
 
+// Agradecimento pos-compra por WhatsApp (so empresas que ligaram; desligado por padrao)
+const posCompra = require('./src/jobs/posCompra');
+cron.schedule('*/10 * * * *', () => {
+  posCompra().catch(err => console.error('[CRON] Erro posCompra:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));
