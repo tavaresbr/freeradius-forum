@@ -7,14 +7,34 @@ export default function LgpdCadastros() {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const FILTROS_VAZIOS = { origem: "", aceite: "", de: "", ate: "", ap: "", ssid: "" };
+  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+  const [opcoes, setOpcoes] = useState({ origens: [], ssids: [], aps: [] });
 
   const token = localStorage.getItem("admin_token");
+
+  const filtrosAtivos = Object.values(filtros).some(Boolean);
+  const queryFiltros = () => {
+    const p = new URLSearchParams();
+    Object.entries(filtros).forEach(([k, v]) => { if (v) p.set(k, v); });
+    return p.toString();
+  };
+  const mudaFiltro = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
+
+  useEffect(() => {
+    fetch("/api/lgpd/filtros", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setOpcoes(d); })
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/lgpd", {
+        setErro("");
+        const qs = queryFiltros();
+        const res = await fetch(`/api/lgpd${qs ? `?${qs}` : ""}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -25,14 +45,14 @@ export default function LgpdCadastros() {
         setRegistros(data);
         setFilteredRegistros(data);
       } catch (err) {
-        setErro("Erro ao buscar registros LGPD");
+        setErro(err.message || "Erro ao buscar registros LGPD");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [token]);
+  }, [token, filtros]);
 
   useEffect(() => {
     const filtered = registros.filter((r) => {
@@ -56,7 +76,8 @@ export default function LgpdCadastros() {
       });
       if (!r.ok) throw new Error("token");
       const { token: dl } = await r.json();
-      window.open(`/api/lgpd/export?token=${dl}`, "_blank");
+      const qs = queryFiltros();
+      window.open(`/api/lgpd/export?token=${dl}${qs ? `&${qs}` : ""}`, "_blank");
     } catch (err) {
       console.error("Erro ao exportar LGPD:", err);
       alert("Não foi possível exportar. Faça login novamente.");
@@ -110,7 +131,7 @@ export default function LgpdCadastros() {
             onClick={handleExport}
             className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded shadow text-sm font-medium cursor-pointer"
           >
-            Exportar CSV
+            {filtrosAtivos ? "Exportar CSV (filtrado)" : "Exportar CSV"}
           </button>
         </div>
 
@@ -144,6 +165,44 @@ export default function LgpdCadastros() {
               className="w-full pl-10 pr-4 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />
           </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block text-xs text-gray-400">Origem
+              <select value={filtros.origem} onChange={mudaFiltro("origem")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todas</option>
+                {opcoes.origens.map((o) => <option key={o} value={o}>{(ORIGEM_LABELS[o] || { label: o }).label}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">Status do aceite
+              <select value={filtros.aceite} onChange={mudaFiltro("aceite")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todos</option>
+                <option value="1">Aceitos</option>
+                <option value="0">Recusados</option>
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">Ponto de acesso
+              <select value={filtros.ap} onChange={mudaFiltro("ap")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todos</option>
+                {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">SSID
+              <select value={filtros.ssid} onChange={mudaFiltro("ssid")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todos</option>
+                {opcoes.ssids.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs text-gray-400">De
+              <input type="date" value={filtros.de} max={filtros.ate || undefined} onChange={mudaFiltro("de")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </label>
+            <label className="block text-xs text-gray-400">Até
+              <input type="date" value={filtros.ate} min={filtros.de || undefined} onChange={mudaFiltro("ate")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </label>
+          </div>
+          {filtrosAtivos && (
+            <button type="button" onClick={() => setFiltros(FILTROS_VAZIOS)} className="mt-3 text-sm text-blue-400 hover:text-blue-300">
+              Limpar filtros
+            </button>
+          )}
         </div>
 
         {/* Error Alert */}

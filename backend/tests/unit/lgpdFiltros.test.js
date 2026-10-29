@@ -1,0 +1,84 @@
+// Filtros da tela Cadastros LGPD (e do CSV): sempre empresa_id do tenant, placeholders e validacao.
+const test = require('node:test');
+const assert = require('node:assert');
+const { criarDb, carregar, criarReq, criarRes } = require('../helpers/mocks');
+
+const silencia = () => { const l = console.error; console.error = () => {}; return () => { console.error = l; }; };
+const ctrl = (db) => carregar('src/controllers/lgpdController.js', {
+  db,
+  extras: {
+    'src/utils/leadUtils.js': {},
+    'src/utils/apInfo.js': { resolverApDoContexto: async () => ({}) },
+    'src/services/whatsappNotify.js': { notificarLiberacao: async () => {} },
+    'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({}) },
+    'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async () => ({}) },
+  },
+});
+
+test('sem filtro: so empresa_id do tenant', () => {
+  const { montarFiltrosLgpd } = ctrl(criarDb());
+  const f = montarFiltrosLgpd({}, 7);
+  assert.deepStrictEqual(f.params, [7]);
+  assert.ok(!/\bAND l\.(origem = \?|ssid|ap_mac)/.test(f.where));
+});
+
+test('cada filtro vira AND com placeholder e empresa_id nunca vem da query', () => {
+  const { montarFiltrosLgpd } = ctrl(criarDb());
+  const f = montarFiltrosLgpd({ empresa_id: '99', origem: 'portal_lead', aceite: '0', de: '2026-10-01', ate: '2026-10-31', ap: 'AA:BB:CC:DD:EE:FF', ssid: 'Wi-Fi Loja' }, 7);
+  assert.strictEqual(f.params[0], 7);
+  assert.deepStrictEqual(f.params.slice(1), ['portal_lead', 0, '2026-10-01 00:00:00', '2026-10-31 00:00:00', 'AA:BB:CC:DD:EE:FF', 'Wi-Fi Loja']);
+  assert.match(f.where, /l\.origem = \?/);
+  assert.match(f.where, /l\.lgpd_aceite = \?/);
+  assert.match(f.where, /DATE_ADD\(\?, INTERVAL 1 DAY\)/);
+  assert.match(f.where, /l\.ap_mac = \?/);
+  assert.match(f.where, /l\.ssid = \?/);
+  assert.ok(!f.where.includes('portal_lead'));
+});
+
+test('valores invalidos viram 400', () => {
+  const { montarFiltrosLgpd } = ctrl(criarDb());
+  const ruins = [
+    { origem: "x' OR 1=1 --" }, { aceite: '2' }, { de: '2026-02-30' }, { de: 'ontem' },
+    { de: '2026-10-10', ate: '2026-10-01' }, { de: '2024-01-01', ate: '2026-10-01' },
+    { ap: 'nao-e-mac' }, { ssid: 'x'.repeat(65) },
+  ];
+  for (const q of ruins) assert.throws(() => montarFiltrosLgpd(q, 1), (e) => e.status === 400, JSON.stringify(q));
+  assert.throws(() => montarFiltrosLgpd({ origem: ['a'] }, 1), (e) => e.status === 400);
+});
+
+test('getAllLgpd e exportarLgpdCSV usam os filtros; invalido responde 400 sem consultar', async () => {
+  const db = criarDb(async () => [[]]);
+  const c = ctrl(db);
+  const res = criarRes();
+  await c.getAllLgpd(criarReq({ empresa_id: 3, query: { origem: 'lgpd', aceite: '1' } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(db.calls[0].params, [3, 'lgpd', 1]);
+
+  const res2 = criarRes();
+  await c.exportarLgpdCSV(criarReq({ empresa_id: 3, query: { ssid: 'Loja' } }), res2);
+  assert.deepStrictEqual(db.calls[1].params, [3, 'Loja']);
+  assert.match(db.calls[1].sql, /l\.ssid = \?/);
+
+  const antes = db.calls.length;
+  const restaura = silencia();
+  const res3 = criarRes();
+  await c.getAllLgpd(criarReq({ empresa_id: 3, query: { aceite: 'x' } }), res3);
+  const res4 = criarRes();
+  await c.exportarLgpdCSV(criarReq({ empresa_id: 3, query: { de: 'foo' } }), res4);
+  restaura();
+  assert.strictEqual(res3.statusCode, 400);
+  assert.strictEqual(res4.statusCode, 400);
+  assert.strictEqual(db.calls.length, antes);
+});
+
+test('getFiltrosLgpd escopa por empresa e devolve origens, ssids e aps', async () => {
+  const db = criarDb(async (sql) => {
+    if (/DISTINCT l\.origem/.test(sql)) return [[{ origem: 'lgpd' }]];
+    if (/DISTINCT l\.ssid/.test(sql)) return [[{ ssid: 'Loja' }]];
+    return [[{ ap_mac: 'AA:BB:CC:DD:EE:FF', ap_nome: 'AP1' }]];
+  });
+  const res = criarRes();
+  await ctrl(db).getFiltrosLgpd(criarReq({ empresa_id: 4 }), res);
+  assert.deepStrictEqual(res.body, { origens: ['lgpd'], ssids: ['Loja'], aps: [{ ap_mac: 'AA:BB:CC:DD:EE:FF', ap_nome: 'AP1' }] });
+  assert.ok(db.calls.every((c) => c.params[0] === 4 && /l\.empresa_id = \?/.test(c.sql)));
+});
