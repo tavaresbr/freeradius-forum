@@ -424,6 +424,27 @@ async function atualizarLeadExistente(leadId, empresaId, dados = {}) {
   await db.execute(query, params);
 }
 
+/**
+ * Grava o EQUIPAMENTO (mikrotiks.id) do aceite no lead, so se ainda estiver NULL (o 1o aceite manda) e so se o
+ * equipamento for da empresa (o mikrotik_id vem do cliente: nunca confiavel). Melhor esforco: sem a migration 056
+ * (coluna ausente) ou com qualquer erro, o cadastro/login do portal segue normalmente.
+ */
+async function gravarEquipamentoLead(empresaId, { cpf, mac }, mikrotikId) {
+  const id = Number(mikrotikId);
+  const chave = cpf ? ["cpf", cpf] : mac ? ["mac", mac] : null;
+  if (!empresaId || !Number.isInteger(id) || id <= 0 || !chave) return;
+  try {
+    const [[mtk]] = await db.execute("SELECT id FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, empresaId]);
+    if (!mtk) return;
+    await db.execute(
+      `UPDATE leads SET mikrotik_id = ? WHERE empresa_id = ? AND ${chave[0]} = ? AND mikrotik_id IS NULL`,
+      [id, empresaId, chave[1]]
+    );
+  } catch (err) {
+    if (!/Unknown column/i.test(err.message || "")) console.warn("[gravarEquipamentoLead]", err.message);
+  }
+}
+
 // Mesmo default exibido no portal quando o admin nao customizou (PortalEditor/CadastroLGPD)
 const TEXTO_LGPD_DEFAULT = "Aceito os termos da Lei Geral de Proteção de Dados (LGPD) e autorizo o tratamento dos meus dados pessoais, incluindo a data de nascimento, que será utilizada para confirmar minha identidade e recuperar meu cadastro. *";
 
@@ -495,4 +516,4 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, dispositivoJaUsouAcesso, acessoEhGratis, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, dispositivoJaUsouAcesso, acessoEhGratis, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
