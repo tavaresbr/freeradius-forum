@@ -4,6 +4,7 @@ const axios = require("axios");
 const db = require("../../db");
 const { normalizarTelefone } = require("./whatsappNotify");
 const wpp = require("../controllers/whatsappController");
+const midiaUtil = require("../utils/whatsappMidia");
 
 const MAX_TEXTO = 4000;
 const STATUS_ORDEM = ["enviando", "enviada", "entregue", "lida"];
@@ -54,8 +55,16 @@ function extrairMensagem(data) {
     texto = doc.caption || "";
   }
   texto = String(texto || "").slice(0, MAX_TEXTO);
+  // Midia: tipo/nome do arquivo informados no payload (so guardados se o tipo for aceito)
+  let midia = null;
+  if (["imagem", "audio", "video", "documento"].includes(tipo)) {
+    const arq = chave === "documentWithCaptionMessage" ? corpo.message?.documentMessage || {} : corpo;
+    const mime = midiaUtil.mimeAceito(arq.mimetype);
+    if (mime) midia = { mime, nome: midiaUtil.nomeSeguro(arq.fileName) };
+  }
   return {
     waId: String(key.id).slice(0, 120),
+    midia,
     fromMe: !!key.fromMe,
     ...contato,
     nome: key.fromMe ? null : String(data.pushName || "").trim().slice(0, 150) || null,
@@ -110,9 +119,10 @@ async function registrarMensagem(empresaId, data) {
   if (!m) return { ignorada: true };
   const conversaId = await obterOuCriarConversa(empresaId, m);
   const [ins] = await db.query(
-    `INSERT IGNORE INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [empresaId, conversaId, m.waId, m.fromMe ? "out" : "in", m.tipo, m.texto || null, m.fromMe ? "enviada" : "entregue", m.quando]
+    `INSERT IGNORE INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, criado_em, midia_mime, midia_nome)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [empresaId, conversaId, m.waId, m.fromMe ? "out" : "in", m.tipo, m.texto || null, m.fromMe ? "enviada" : "entregue", m.quando,
+      m.midia?.mime || null, m.midia?.nome || null]
   );
   if (!ins.affectedRows) return { duplicada: true, conversaId };
   // Mensagem do cliente reabre a conversa e conta como nao lida; resposta feita pelo celular nao.
@@ -124,7 +134,37 @@ async function registrarMensagem(empresaId, data) {
     [m.quando, m.previa, m.fromMe ? 0 : 1, m.fromMe ? 0 : 1, m.nome, conversaId, empresaId]
   );
   await aplicarOptOut(empresaId, m);
+  if (m.midia) {
+    // Falha ao baixar nao perde a mensagem: o painel tenta de novo ao abrir a midia.
+    try { await baixarMidia(empresaId, { id: ins.insertId, wa_id: m.waId, midia_mime: m.midia.mime }); }
+    catch (err) { console.warn("[atendimento] midia nao baixada:", err?.response?.status || err.message); }
+  }
   return { conversaId };
+}
+
+/**
+ * Baixa a midia de uma mensagem recebida pela Evolution (base64) e grava em disco.
+ * @param {{id, wa_id, midia_mime}} msg linha de whatsapp_mensagens (da empresa)
+ * @returns {Promise<string|null>} caminho relativo gravado
+ */
+async function baixarMidia(empresaId, msg) {
+  const evo = await wpp.getEvolutionConfig(empresaId);
+  if (!evo.apiKey) throw new Error("WhatsApp sem chave de API configurada");
+  const r = await axios.post(
+    `${evo.apiUrl}/chat/getBase64FromMediaMessage/${evo.instanceName}`,
+    { message: { key: { id: msg.wa_id } } },
+    { headers: { apikey: evo.apiKey, "Content-Type": "application/json" }, timeout: 60000, maxContentLength: midiaUtil.MAX_BYTES * 2, maxBodyLength: midiaUtil.MAX_BYTES * 2 }
+  );
+  const b64 = String(r.data?.base64 || "").replace(/^data:[^,]*,/, "");
+  if (!b64) throw new Error("Evolution nao devolveu a midia");
+  const buf = Buffer.from(b64, "base64");
+  const arq = midiaUtil.validarArquivo(buf, r.data?.mimetype || msg.midia_mime, null);
+  const rel = await midiaUtil.salvarArquivo(empresaId, buf, arq.ext);
+  await db.query(
+    "UPDATE whatsapp_mensagens SET midia_path = ?, midia_mime = ? WHERE id = ? AND empresa_id = ?",
+    [rel, arq.mime, msg.id, empresaId]
+  );
+  return rel;
 }
 
 const STATUS_EVOLUTION = { SERVER_ACK: "enviada", DELIVERY_ACK: "entregue", READ: "lida", PLAYED: "lida" };
@@ -213,27 +253,41 @@ async function statusWebhook(empresaId) {
 // --- Envio ---
 
 /**
- * Envia texto pela instancia da empresa e grava a mensagem. A linha nasce "enviando"; o webhook
+ * Envia texto ou midia pela instancia da empresa e grava a mensagem. A linha nasce "enviando"; o webhook
  * (fromMe) pode gravar o mesmo wa_id antes de a resposta da Evolution chegar — nesse caso a linha
  * temporaria e' descartada (UNIQUE empresa+wa_id).
+ * @param {{tipo?: string, texto?: string, midia?: {buffer: Buffer, mime: string, ext: string, nome: string|null}}} conteudo
  */
-async function enviarTexto(empresaId, adminId, conversa, texto) {
+async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null } = {}) {
   const evo = await wpp.getEvolutionConfig(empresaId);
   if (!evo.apiKey) throw Object.assign(new Error("WhatsApp sem chave de API configurada"), { status: 400 });
   const temp = `tmp_${crypto.randomUUID()}`;
+  const rel = midia ? await midiaUtil.salvarArquivo(empresaId, midia.buffer, midia.ext) : null;
   const [ins] = await db.query(
-    `INSERT INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, admin_id)
-     VALUES (?, ?, ?, 'out', 'texto', ?, 'enviando', ?)`,
-    [empresaId, conversa.id, temp, texto, adminId || null]
+    `INSERT INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, midia_path, midia_mime, midia_nome, status, admin_id)
+     VALUES (?, ?, ?, 'out', ?, ?, ?, ?, ?, 'enviando', ?)`,
+    [empresaId, conversa.id, temp, tipo, texto || null, rel, midia?.mime || null, midia?.nome || null, adminId || null]
   );
   const id = ins.insertId;
   const numero = conversa.telefone ? wpp.formatarNumeroComNonoDigito(conversa.telefone) : conversa.jid;
+  const headers = { apikey: evo.apiKey, "Content-Type": "application/json" };
   try {
-    const r = await axios.post(
-      `${evo.apiUrl}/message/sendText/${evo.instanceName}`,
-      { number: numero, text: texto },
-      { headers: { apikey: evo.apiKey, "Content-Type": "application/json" }, timeout: 20000 }
-    );
+    let r;
+    if (!midia) {
+      r = await axios.post(`${evo.apiUrl}/message/sendText/${evo.instanceName}`, { number: numero, text: texto }, { headers, timeout: 20000 });
+    } else if (tipo === "audio") {
+      r = await axios.post(`${evo.apiUrl}/message/sendWhatsAppAudio/${evo.instanceName}`,
+        { number: numero, audio: midia.buffer.toString("base64") }, { headers, timeout: 60000 });
+    } else {
+      r = await axios.post(`${evo.apiUrl}/message/sendMedia/${evo.instanceName}`, {
+        number: numero,
+        mediatype: tipo === "imagem" ? "image" : tipo === "video" ? "video" : "document",
+        mimetype: midia.mime,
+        caption: texto || undefined,
+        media: midia.buffer.toString("base64"),
+        fileName: midia.nome || `arquivo.${midia.ext}`,
+      }, { headers, timeout: 60000 });
+    }
     const waId = r.data?.key?.id;
     if (waId) {
       try {
@@ -248,7 +302,7 @@ async function enviarTexto(empresaId, adminId, conversa, texto) {
     }
     await db.query(
       "UPDATE whatsapp_conversas SET ultima_msg_em = NOW(), ultima_msg_previa = ?, nao_lidas = 0 WHERE id = ? AND empresa_id = ?",
-      [texto.replace(/\s+/g, " ").slice(0, 200), conversa.id, empresaId]
+      [(texto || PREVIA[tipo] || "Mensagem").replace(/\s+/g, " ").slice(0, 200), conversa.id, empresaId]
     );
     return { id };
   } catch (err) {
@@ -258,7 +312,9 @@ async function enviarTexto(empresaId, adminId, conversa, texto) {
   }
 }
 
+const enviarTexto = (empresaId, adminId, conversa, texto) => enviarMensagem(empresaId, adminId, conversa, { tipo: "texto", texto });
+
 module.exports = {
   MAX_TEXTO, extrairMensagem, resolverContato, normalizarEvento, processarWebhook, registrarMensagem, atualizarStatus,
-  obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, enviarTexto,
+  obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, enviarTexto, enviarMensagem, baixarMidia,
 };

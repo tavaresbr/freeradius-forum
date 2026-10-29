@@ -161,8 +161,8 @@ test('controller: conversa de outra empresa = 404; envio valida texto e usa empr
     assert.strictEqual(enviado.body.number, '5593999990000');
     const ins = db.calls.find((x) => /INSERT INTO whatsapp_mensagens/.test(x.sql));
     assert.strictEqual(ins.params[0], 7);
-    assert.strictEqual(ins.params[3], 'Olá!');
-    assert.strictEqual(ins.params[4], 3);
+    assert.strictEqual(ins.params[4], 'Olá!');
+    assert.strictEqual(ins.params[8], 3);
     assert.ok(db.calls.some((x) => /SET wa_id = \?, status = 'enviada'/.test(x.sql) && x.params[0] === 'WAID9'));
   } finally { axios.post = postOrig; fim(); }
 });

@@ -1,6 +1,8 @@
 // Atendimento por WhatsApp: caixa de entrada compartilhada da empresa (todas as queries por empresa_id).
 const db = require("../../db");
+const fs = require("fs");
 const svc = require("../services/whatsappAtendimento");
+const midiaUtil = require("../utils/whatsappMidia");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -56,7 +58,7 @@ exports.listarMensagens = async (req, res) => {
     const limite = inteiro(req.query.limite, 60, 1, 200);
     const antes = parseInt(req.query.antes_de, 10);
     const [rows] = await db.query(
-      `SELECT id, direcao, tipo, texto, midia_nome, status, erro, admin_id, criado_em
+      `SELECT id, direcao, tipo, texto, midia_nome, midia_mime, (midia_mime IS NOT NULL) AS tem_midia, status, erro, admin_id, criado_em
          FROM whatsapp_mensagens WHERE empresa_id = ? AND conversa_id = ? ${Number.isInteger(antes) ? "AND id < ?" : ""}
         ORDER BY id DESC LIMIT ?`,
       Number.isInteger(antes) ? [req.empresa_id, conversa.id, antes, limite + 1] : [req.empresa_id, conversa.id, limite + 1]
@@ -80,6 +82,62 @@ exports.enviarMensagem = async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message, mensagem_id: err.mensagemId });
     erro500(res, err, "Erro ao enviar mensagem");
+  }
+};
+
+// POST /api/atendimento/conversas/:id/midia  (multipart: arquivo, legenda)
+exports.enviarMidia = async (req, res) => {
+  try {
+    const conversa = await conversaDaEmpresa(req, res);
+    if (!conversa) return;
+    if (!req.file) return res.status(400).json({ error: "Escolha um arquivo para enviar" });
+    const legenda = typeof req.body?.legenda === "string" ? req.body.legenda.trim().slice(0, 1000) : "";
+    let arq;
+    try {
+      arq = midiaUtil.validarArquivo(req.file.buffer, req.file.mimetype, req.file.originalname);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
+    const r = await svc.enviarMensagem(req.empresa_id, req.user.id, conversa, {
+      tipo: arq.tipo, texto: legenda, midia: { buffer: req.file.buffer, mime: arq.mime, ext: arq.ext, nome: arq.nome },
+    });
+    res.json({ success: true, id: r.id });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message, mensagem_id: err.mensagemId });
+    erro500(res, err, "Erro ao enviar arquivo");
+  }
+};
+
+// GET /api/atendimento/midia/:id  (autenticada; escopada por empresa)
+exports.servirMidia = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Mídia inválida" });
+    const [[msg]] = await db.query(
+      "SELECT id, wa_id, direcao, midia_path, midia_mime, midia_nome FROM whatsapp_mensagens WHERE id = ? AND empresa_id = ? AND midia_mime IS NOT NULL",
+      [id, req.empresa_id]
+    );
+    if (!msg) return res.status(404).json({ error: "Mídia não encontrada" });
+    let rel = msg.midia_path;
+    if (!rel && msg.direcao === "in") {
+      try { rel = await svc.baixarMidia(req.empresa_id, msg); }
+      catch (err) { return res.status(502).json({ error: "Não foi possível baixar a mídia agora. Tente de novo em instantes." }); }
+    }
+    const abs = midiaUtil.caminhoAbsoluto(rel);
+    if (!abs) return res.status(404).json({ error: "Mídia não encontrada" });
+    let buf;
+    try { buf = await fs.promises.readFile(abs); }
+    catch { return res.status(404).json({ error: "Arquivo não encontrado no servidor" }); }
+    const mime = midiaUtil.mimeAceito(msg.midia_mime);
+    if (!mime) return res.status(404).json({ error: "Mídia não encontrada" });
+    const nome = encodeURIComponent(msg.midia_nome || `arquivo.${midiaUtil.TIPOS[mime].ext}`);
+    res.setHeader("Content-Type", mime);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("Content-Disposition", `${midiaUtil.INLINE(mime) ? "inline" : "attachment"}; filename*=UTF-8''${nome}`);
+    res.send(buf);
+  } catch (err) {
+    erro500(res, err, "Erro ao carregar a mídia");
   }
 };
 

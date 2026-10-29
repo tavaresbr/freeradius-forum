@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import MidiaMensagem from "../../components/admin/atendimento/MidiaMensagem";
 
 const FILTROS = [
   ["aberta", "Abertas"],
   ["nao_lidas", "Não lidas"],
   ["resolvida", "Resolvidas"],
 ];
+
+const MAX_ARQUIVO = 16 * 1024 * 1024;
+const EXT_ACEITAS = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "ogg", "mp3", "m4a", "aac", "wav", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "zip"];
+const tamanho = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const hora = (v) => {
   if (!v) return "";
@@ -48,6 +53,8 @@ export default function Atendimento() {
   const [mensagens, setMensagens] = useState([]);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [arquivo, setArquivo] = useState(null);
+  const arquivoRef = useRef(null);
   const [erroEnvio, setErroEnvio] = useState("");
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeEdit, setNomeEdit] = useState("");
@@ -110,6 +117,7 @@ export default function Atendimento() {
     setMensagens([]);
     setConversa(null);
     setErroEnvio("");
+    setArquivo(null);
     setEditandoNome(false);
     noFimRef.current = true;
     if (!selecionadaId) return;
@@ -161,16 +169,35 @@ export default function Atendimento() {
     if (el) noFimRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
 
+  const escolherArquivo = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (!EXT_ACEITAS.includes(ext)) { setErroEnvio("Tipo de arquivo não permitido. Use imagem, vídeo MP4, áudio, PDF, Office, TXT, CSV ou ZIP."); return; }
+    if (f.size > MAX_ARQUIVO) { setErroEnvio("Arquivo muito grande (máximo 16 MB)."); return; }
+    setErroEnvio("");
+    setArquivo(f);
+  };
+
   const enviar = async () => {
     const t = texto.trim();
-    if (!t || enviando || !selecionadaId) return;
+    if ((!t && !arquivo) || enviando || !selecionadaId) return;
     setEnviando(true);
     setErroEnvio("");
     try {
-      const res = await fetch(`/api/atendimento/conversas/${selecionadaId}/mensagens`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
+      let res;
+      if (arquivo) {
+        const fd = new FormData();
+        fd.append("arquivo", arquivo);
+        fd.append("legenda", t);
+        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/midia`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      } else {
+        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/mensagens`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setErroEnvio(data.error || "Erro ao enviar");
-      else setTexto("");
+      else { setTexto(""); setArquivo(null); }
       noFimRef.current = true;
       await carregarMensagens(selecionadaId);
       carregarConversas();
@@ -302,7 +329,9 @@ export default function Atendimento() {
                   {mensagens.map((m) => (
                     <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : "justify-end"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : "bg-green-700/80 text-white"}`}>
-                        {m.tipo !== "texto" && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
+                        {m.tem_midia
+                          ? <div className="mb-1"><MidiaMensagem mensagem={m} /></div>
+                          : m.tipo !== "texto" && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
                         {m.texto}
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
@@ -317,17 +346,27 @@ export default function Atendimento() {
 
                 <footer className="p-3 border-t border-gray-800">
                   {erroEnvio && <p className="text-xs text-red-400 mb-2">{erroEnvio}</p>}
+                  {arquivo && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-[#0f111a] border border-gray-800 text-sm text-gray-300">
+                      <span>📎</span>
+                      <span className="truncate flex-1 min-w-0">{arquivo.name}</span>
+                      <span className="text-xs text-gray-500 shrink-0">{tamanho(arquivo.size)}</span>
+                      <button onClick={() => setArquivo(null)} className="text-gray-400 hover:text-red-400 cursor-pointer" aria-label="Remover arquivo">✕</button>
+                    </div>
+                  )}
                   <div className="flex gap-2 items-end">
+                    <input ref={arquivoRef} type="file" onChange={escolherArquivo} className="hidden" accept={EXT_ACEITAS.map((x) => `.${x}`).join(",")} />
+                    <button onClick={() => arquivoRef.current?.click()} disabled={enviando} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Anexar arquivo" title="Anexar arquivo">📎</button>
                     <textarea
                       value={texto}
                       onChange={(e) => setTexto(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
                       rows={2}
                       maxLength={4000}
-                      placeholder="Digite a mensagem (Enter envia, Shift+Enter quebra a linha)"
+                      placeholder={arquivo ? "Legenda (opcional)" : "Digite a mensagem (Enter envia, Shift+Enter quebra a linha)"}
                       className={`${inputCls} resize-none`}
                     />
-                    <button onClick={enviar} disabled={enviando || !texto.trim()} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer">
+                    <button onClick={enviar} disabled={enviando || (!texto.trim() && !arquivo)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer">
                       {enviando ? "..." : "Enviar"}
                     </button>
                   </div>
