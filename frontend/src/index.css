@@ -196,3 +196,17 @@ html { -webkit-text-size-adjust: 100%; }
   .painel table:not([data-sem-cartoes]) tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
   .painel table:not([data-sem-cartoes]) tbody td:has(button) { justify-content: flex-start; }
 }
+
+/* Celular (<768px): modais (overlay fixed inset-0 z-50) cabem na tela e rolam por dentro; grids de 2 colunas viram 1 */
+@media (max-width: 767px) {
+  .fixed.inset-0.z-50 { padding: .75rem; overflow-y: auto; align-items: center; }
+  .fixed.inset-0.z-50 > div {
+    width: 100%; max-width: 100%; margin: auto; box-sizing: border-box;
+    max-height: calc(100dvh - 1.5rem); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .fixed.inset-0.z-50 .grid-cols-2:not(.sempre-2-colunas),
+  .fixed.inset-0.z-50 .grid-cols-3:not(.sempre-2-colunas) { grid-template-columns: minmax(0, 1fr); }
+  .fixed.inset-0.z-50 .col-span-2 { grid-column: auto; }
+  .fixed.inset-0.z-50 input, .fixed.inset-0.z-50 select, .fixed.inset-0.z-50 textarea { max-width: 100%; font-size: 16px; }
+  .fixed.inset-0.z-50 pre, .fixed.inset-0.z-50 table { max-width: 100%; }
+}
