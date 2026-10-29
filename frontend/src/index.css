@@ -163,7 +163,7 @@
 /* Logo enviada (fundo transparente, texto azul-escuro) fica sem fundo; no tema escuro ganha um halo branco fino para o texto escuro continuar legivel */
 [data-theme="escuro"] .tema-site img.logo-enviada { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgb(255 255 255 / .85)); }
 
-/* Celular: tabelas do painel rolam na horizontal em vez de esticar a pagina */
+/* Tablet/celular: tabelas do painel rolam na horizontal em vez de esticar a pagina */
 @media (max-width: 1023px) {
   .painel table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .painel pre { max-width: 100%; overflow-x: auto; }
@@ -171,3 +171,42 @@
   .painel img { max-width: 100%; }
 }
 html { -webkit-text-size-adjust: 100%; }
+
+/* Celular (<768px): cada linha da tabela vira um cartao; o rotulo vem de data-label (hooks/useTabelasMobile.js).
+   Tabela com data-sem-cartoes continua rolando na horizontal. */
+@media (max-width: 767px) {
+  .painel table:not([data-sem-cartoes]) { overflow: visible; }
+  .painel table:not([data-sem-cartoes]) thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .painel table:not([data-sem-cartoes]) tbody,
+  .painel table:not([data-sem-cartoes]) tfoot { display: block; }
+  .painel table:not([data-sem-cartoes]) tbody tr {
+    display: block; margin-bottom: .75rem; padding: .5rem .75rem;
+    border: 1px solid rgb(107 114 128 / .35); border-radius: .5rem;
+  }
+  .painel table:not([data-sem-cartoes]) tbody td {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem .75rem;
+    min-width: 0; padding: .35rem 0 !important; border: 0; text-align: right; overflow-wrap: anywhere; white-space: normal;
+  }
+  .painel table:not([data-sem-cartoes]) tbody td[data-label]::before {
+    content: attr(data-label); flex: 0 0 auto; max-width: 45%; text-align: left;
+    font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; opacity: .65;
+  }
+  .painel table:not([data-sem-cartoes]) tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
+  .painel table:not([data-sem-cartoes]) tbody td:has(button) { justify-content: flex-start; }
+}
+
+/* Celular (<768px): modais (overlay fixed inset-0 z-50) cabem na tela e rolam por dentro; grids de 2 colunas viram 1 */
+@media (max-width: 767px) {
+  .fixed.inset-0.z-50 { padding: .75rem; overflow-y: auto; align-items: center; }
+  .fixed.inset-0.z-50 > div {
+    width: 100%; max-width: 100%; margin: auto; box-sizing: border-box;
+    max-height: calc(100dvh - 1.5rem); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .fixed.inset-0.z-50 .grid-cols-2:not(.sempre-2-colunas),
+  .fixed.inset-0.z-50 .grid-cols-3:not(.sempre-2-colunas) { grid-template-columns: minmax(0, 1fr); }
+  .fixed.inset-0.z-50 .col-span-2 { grid-column: auto; }
+  .fixed.inset-0.z-50 input, .fixed.inset-0.z-50 select, .fixed.inset-0.z-50 textarea { max-width: 100%; font-size: 16px; }
+  .fixed.inset-0.z-50 pre, .fixed.inset-0.z-50 table { max-width: 100%; }
+}

@@ -1,5 +1,6 @@
 import RecursoBloqueado from "./RecursoBloqueado";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import MarcaApex from "../public/MarcaApex";
@@ -22,6 +23,8 @@ export default function AdminLayout({ children }) {
 
   const slug = empresaSlug || user?.empresa_slug || 'default';
   const basePath = `/admin/${slug}`;
+  const mainRef = useRef(null);
+  useTabelasMobile(mainRef);
 
   // SaaS: status da assinatura da empresa (super admin nunca e' bloqueado).
   // Vencida alem da carencia -> so a tela de Assinatura fica acessivel.
@@ -527,7 +530,7 @@ export default function AdminLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 min-w-0 p-4 lg:p-8 text-gray-300">
+        <main ref={mainRef} className="flex-1 min-w-0 p-4 lg:p-8 text-gray-300">
           {mostrarAvisoWhatsapp && (
             <div className="mb-4 bg-yellow-900/30 border border-yellow-700/50 text-yellow-200 rounded-lg px-4 py-3 flex items-start gap-3">
               <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
