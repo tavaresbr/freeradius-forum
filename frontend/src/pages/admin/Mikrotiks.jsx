@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import GatewayWizard from "../../components/admin/GatewayWizard";
+import TrilhaAtivacao, { progresso } from "../../components/admin/TrilhaAtivacao";
 
 // Badges por tipo de gateway (default mikrotik pra linhas antigas sem tipo)
 const TIPO_BADGES = {
@@ -25,6 +26,8 @@ export default function Mikrotiks() {
   const [erro, setErro] = useState("");
   const [aplicandoPadroes, setAplicandoPadroes] = useState(false);
   const [resultadoPadroes, setResultadoPadroes] = useState(null); // [{id, nome, ok, mensagem}]
+  const [trilhas, setTrilhas] = useState({}); // { [id]: { etapas, concluidas, total } }
+  const [trilhaAberta, setTrilhaAberta] = useState(null);
 
   // API do controller Omada (captura de nomes de APs — o portal segue 100% RADIUS)
   const [apiGw, setApiGw] = useState(null); // gateway do modal aberto (null = fechado)
@@ -207,7 +210,15 @@ export default function Mikrotiks() {
     }
   };
 
-const carregarMikrotiks = async () => {
+const carregarTrilhas = async () => {
+  try {
+    const res = await fetch("/api/mikrotiks/trilha", { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setTrilhas((await res.json()).data || {});
+  } catch { /* trilha e' complementar: a tela segue sem ela */ }
+};
+
+const carregarMikrotiks = async (abrirMaisNovo = false) => {
+  carregarTrilhas();
   try {
     const res = await fetch("/api/mikrotiks", {
       headers: { Authorization: `Bearer ${token}` }
@@ -216,6 +227,7 @@ const carregarMikrotiks = async () => {
 
     // Inicia todos com status "loading"
     const mikrotiksComStatus = data.map(m => ({ ...m, status: "loading" }));
+    if (abrirMaisNovo && data.length) setTrilhaAberta(Math.max(...data.map(m => m.id)));
     setMikrotiks(mikrotiksComStatus);
 
     // Testa conexão de cada Mikrotik
@@ -268,6 +280,7 @@ const carregarMikrotiks = async () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
+      setMikrotiks(prev => prev.map(i => i.id === id ? { ...i, status: res.ok ? "online" : "offline" } : i));
 
       if (res.ok) {
         alert("✅ Conexão bem-sucedida com o Mikrotik.");
@@ -354,10 +367,36 @@ const carregarMikrotiks = async () => {
     carregarPortais();
   }, []);
 
+  const botaoTrilha = (m) => {
+    const t = trilhas[m.id];
+    if (!t) return null;
+    const { ok, total, completo } = progresso(t, m.status);
+    return (
+      <button
+        onClick={() => setTrilhaAberta(trilhaAberta === m.id ? null : m.id)}
+        className={`px-2 py-1 rounded text-xs font-medium border cursor-pointer ${completo ? "border-green-700 text-green-400" : "border-amber-600/70 text-amber-400"}`}
+        title="Trilha de ativação do equipamento"
+      >
+        {completo ? "✓ Ativo" : `Trilha ${ok}/${total}`}
+      </button>
+    );
+  };
+
+  const renderTrilha = (m) => (
+    <TrilhaAtivacao
+      trilha={trilhas[m.id]}
+      status={m.status}
+      onTestar={() => testarConexao(m.id)}
+      onHotspot={() => abrirWizard(m.id)}
+      onEditar={() => editar(m)}
+    />
+  );
+
   const renderAcoes = (m) => {
     const isMikrotik = !m.tipo || m.tipo === "mikrotik";
     return (
         <div className="flex flex-wrap gap-1.5">
+          <span className="hidden md:inline-flex">{botaoTrilha(m)}</span>
           {isMikrotik && (
             <>
               <button onClick={() => abrirWizard(m.id)} title="Enviar Hotspot" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoHotspot === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-blue-600 text-white hover:bg-blue-500'}`} disabled={enviandoHotspot === m.id}>
@@ -409,6 +448,36 @@ const carregarMikrotiks = async () => {
         </div>
       </div>
 
+      {mikrotiks.length > 0 && Object.keys(trilhas).length > 0 && (() => {
+        const info = mikrotiks.map((m) => ({ m, ...progresso(trilhas[m.id], m.status) })).filter((x) => trilhas[x.m.id]);
+        const ativos = info.filter((x) => x.completo).length;
+        const pend = info.filter((x) => !x.completo);
+        return (
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold text-white">Ativação dos equipamentos</h3>
+              <span className="text-sm text-gray-400">{ativos} de {info.length} ativos</span>
+            </div>
+            {pend.length === 0 ? (
+              <p className="text-sm text-green-400 mt-2">Todos os equipamentos estão ativos.</p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-sm">
+                {pend.map(({ m, ok, total }) => {
+                  const prox = trilhas[m.id].etapas.find((e) => e.estado === "pendente" && e.chave !== "conectividade") || trilhas[m.id].etapas.find((e) => e.estado === "pendente");
+                  return (
+                    <li key={m.id} className="flex flex-wrap items-center gap-x-2">
+                      <button onClick={() => setTrilhaAberta(m.id)} className="text-blue-400 hover:underline text-left cursor-pointer">{m.nome}</button>
+                      <span className="text-gray-500">{ok}/{total}</span>
+                      {prox && <span className="text-amber-400">Próximo: {prox.titulo}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
+
       {resultadoPadroes && (
         <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 mb-6">
           <div className="flex justify-between items-center mb-2">
@@ -449,7 +518,8 @@ const carregarMikrotiks = async () => {
               const badge = TIPO_BADGES[m.tipo] || TIPO_BADGES.mikrotik;
               const isMikrotik = !m.tipo || m.tipo === "mikrotik";
               return (
-              <tr key={m.id} className="border-b hover:bg-[#151821]">
+              <React.Fragment key={m.id}>
+              <tr className="border-b hover:bg-[#151821]">
                 <td className="p-2 font-medium text-white">{m.nome}</td>
                 <td className="p-2">
                   <span className={`text-xs px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
@@ -471,11 +541,17 @@ const carregarMikrotiks = async () => {
                     </span>
                   )}
                 </td>
-                <td className="p-2">{m.usuarios_ativos}</td>
+                <td className="p-2">{trilhas[m.id]?.usuarios_ativos ?? m.usuarios_ativos ?? 0}</td>
                 <td className="p-2">
                   {renderAcoes(m)}
                 </td>
               </tr>
+              {trilhaAberta === m.id && (
+                <tr className="border-b">
+                  <td colSpan={7} className="p-3">{renderTrilha(m)}</td>
+                </tr>
+              )}
+              </React.Fragment>
             );})}
           </tbody>
         </table>
@@ -503,8 +579,10 @@ const carregarMikrotiks = async () => {
                   ) : (
                     <span className="text-gray-500">Sem portal</span>
                   )}
-                  <span>Usuários ativos: {m.usuarios_ativos}</span>
+                  <span>Usuários ativos: {trilhas[m.id]?.usuarios_ativos ?? m.usuarios_ativos ?? 0}</span>
                 </div>
+                {botaoTrilha(m)}
+                {trilhaAberta === m.id && renderTrilha(m)}
                 {renderAcoes(m)}
               </div>
             );
@@ -630,7 +708,7 @@ const carregarMikrotiks = async () => {
       <GatewayWizard
         open={showGwWizard}
         onClose={() => { setShowGwWizard(false); setEditandoGw(null); }}
-        onSaved={() => { setShowGwWizard(false); setEditandoGw(null); carregarMikrotiks(); }}
+        onSaved={() => { const novo = !editandoGw; setShowGwWizard(false); setEditandoGw(null); carregarMikrotiks(novo); }}
         portais={portais}
         token={token}
         editando={editandoGw}
