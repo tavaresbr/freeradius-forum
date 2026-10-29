@@ -67,7 +67,7 @@ export default function IdentidadeSite({ empresa = "" }) {
     try {
       const r = await fetch(url, opts);
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.message || d.error || "Erro ao salvar");
+      if (!r.ok) throw new Error(d.message || d.error || `Erro ao salvar (HTTP ${r.status})`);
       await recarregar();
       setMsg({ ok: true, texto: ok });
     } catch (e) {
@@ -120,8 +120,8 @@ export default function IdentidadeSite({ empresa = "" }) {
       <h2 className="text-lg font-semibold">{modoEmpresa ? "Identidade da empresa" : "Identidade do site"}</h2>
       <p className="text-sm text-gray-500 mb-4">
         {modoEmpresa
-          ? "Logo da sua empresa no painel e na tela de login da sua empresa. Não altera as outras empresas; o que você não enviar usa o padrão da plataforma."
-          : "Nome e logo da plataforma (site, login e painel). Vale para todas as empresas que não enviarem a sua."}
+          ? "Esta identidade vale só para a sua empresa (painel e tela de login da sua empresa). Não altera as outras; o que você não enviar usa o padrão da plataforma."
+          : "Identidade PADRÃO da plataforma (site, login e painel): aparece para as empresas que não enviaram a delas."}
       </p>
       {modoEmpresa && (
         <div className="mb-4 text-sm">
