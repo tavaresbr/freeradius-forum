@@ -165,7 +165,7 @@ export default function Pagamentos() {
                 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2
                 ${filtro === "todos" 
                   ? "bg-blue-600 text-white" 
-                  : "bg-gray-100 text-gray-300 hover:bg-gray-200"
+                  : "bg-[#252b3b] text-gray-300 hover:opacity-80"
                 }
               `}
             >
@@ -180,7 +180,7 @@ export default function Pagamentos() {
                 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2
                 ${filtro === "aprovados" 
                   ? "bg-green-600 text-white shadow-md" 
-                  : "bg-gray-100 text-gray-300 hover:bg-gray-200"
+                  : "bg-[#252b3b] text-gray-300 hover:opacity-80"
                 }
               `}
             >
@@ -195,7 +195,7 @@ export default function Pagamentos() {
                 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2
                 ${filtro === "pendentes" 
                   ? "bg-yellow-500 text-white shadow-md" 
-                  : "bg-gray-100 text-gray-300 hover:bg-gray-200"
+                  : "bg-[#252b3b] text-gray-300 hover:opacity-80"
                 }
               `}
             >

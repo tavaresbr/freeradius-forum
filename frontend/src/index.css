@@ -72,7 +72,7 @@
 [data-theme="claro"] .painel input::placeholder,
 [data-theme="claro"] .painel textarea::placeholder { color: #9ca3af; }
 /* titulos e textos brancos viram escuros, exceto sobre fundos coloridos */
-[data-theme="claro"] .painel .text-white:not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]):not([class*="bg-orange"]):not([class*="bg-apex"]):not([class*="bg-yellow"]):not([class*="bg-purple"]):not([class*="bg-indigo"]):not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-black"]) { color: #0c4a6e; }
+[data-theme="claro"] .painel .text-white:not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]):not([class*="bg-orange"]):not([class*="bg-apex"]):not([class*="bg-yellow"]):not([class*="bg-purple"]):not([class*="bg-indigo"]):not([class*="bg-emerald"]):not([class*="bg-amber"]):not([class*="bg-black"]):not([class*="bg-teal"]):not([class*="bg-cyan"]):not([class*="bg-sky"]):not([class*="bg-rose"]):not([class*="bg-pink"]):not([class*="bg-violet"]):not([class*="bg-fuchsia"]):not([class*="bg-lime"]) { color: #0c4a6e; }
 [data-theme="claro"] .painel .bg-blue-600 .text-white,
 [data-theme="claro"] .painel [class*="bg-green-"] .text-white,
 [data-theme="claro"] .painel [class*="bg-red-"] .text-white,
@@ -210,3 +210,6 @@ html { -webkit-text-size-adjust: 100%; }
   .fixed.inset-0.z-50 input, .fixed.inset-0.z-50 select, .fixed.inset-0.z-50 textarea { max-width: 100%; font-size: 16px; }
   .fixed.inset-0.z-50 pre, .fixed.inset-0.z-50 table { max-width: 100%; }
 }
+
+/* Tema escuro: linhas de tabela sem cor de borda explicita usavam o cinza claro padrao (linhas brancas gritantes) */
+[data-theme="escuro"] .painel table tr { border-color: rgb(148 163 184 / .16); }
