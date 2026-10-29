@@ -141,6 +141,16 @@ const whatsappWebhookLimiter = rateLimit({
   handler: jsonHandler('Muitas requisicoes.'),
 });
 
+// Sugestao de resposta por IA: custo real por chamada, limite por usuario logado.
+const sugestaoIaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `adm:${req.user?.id || ipKeyGenerator(req.ip)}`,
+  handler: jsonHandler('Muitas sugestões em pouco tempo. Tente novamente mais tarde.'),
+});
+
 // Envio de mensagens no atendimento: por usuario logado (evita disparo em massa pela tela).
 const atendimentoEnvioLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -257,4 +267,4 @@ const cpfLookupPorIp = rateLimit({
 
 const cpfLookupLimiters = [cpfLookupPorIp, cpfLookupPorDispositivo, cpfLookupPorCpf];
 
-module.exports = { novaConversaLimiter, whatsappWebhookLimiter, atendimentoEnvioLimiter, cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };
+module.exports = { sugestaoIaLimiter, novaConversaLimiter, whatsappWebhookLimiter, atendimentoEnvioLimiter, cartaoHotspotLimiters, voucherFalhasLimiters, loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, campanhaMetricaLimiter, promocaoLimiter, dominioLimiter, updateCheckLimiter, cpfLookupLimiters };

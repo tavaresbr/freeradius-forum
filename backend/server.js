@@ -649,6 +649,12 @@ cron.schedule('*/2 * * * *', () => {
   avisaExpiracao().catch(err => console.error('[CRON] Erro avisaExpiracao:', err.message));
 });
 
+// Expurgo de midia do atendimento WhatsApp (MIDIA_RETENCAO_DIAS, padrao 90; 0 desliga), todo dia 03:30
+const expurgaMidia = require('./src/jobs/expurgaMidia');
+cron.schedule('30 3 * * *', () => {
+  expurgaMidia().catch(err => console.error('[CRON] Erro expurgaMidia:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

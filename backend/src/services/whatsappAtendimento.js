@@ -153,6 +153,16 @@ async function registrarMensagem(empresaId, data) {
   if (m.respostaA && await temColuna("whatsapp_mensagens", "resposta_a_wa_id")) {
     await db.query("UPDATE whatsapp_mensagens SET resposta_a_wa_id = ?, resposta_previa = ? WHERE id = ? AND empresa_id = ?", [m.respostaA, m.respostaPrevia, ins.insertId, empresaId]);
   }
+  // Resposta a pesquisa de satisfacao ("1" a "5"): grava a nota sem reabrir a conversa nem contar como nao lida.
+  if (!m.fromMe) {
+    let nota = false;
+    try { nota = await require("./whatsappSatisfacao").capturarNota(empresaId, conversaId, m); }
+    catch (err) { console.warn("[atendimento] nota nao gravada:", err.message); }
+    if (nota) {
+      await db.query("UPDATE whatsapp_conversas SET ultima_msg_em = ?, ultima_msg_previa = ? WHERE id = ? AND empresa_id = ?", [m.quando, m.previa, conversaId, empresaId]);
+      return { conversaId, nota: true };
+    }
+  }
   // Mensagem do cliente reabre a conversa e conta como nao lida; resposta feita pelo celular nao.
   await db.query(
     `UPDATE whatsapp_conversas SET ultima_msg_em = ?, ultima_msg_previa = ?,

@@ -4,6 +4,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 export default function Dashboard() {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState("");
+  const [hoje, setHoje] = useState(null); // numeros do dia (falha silenciosa: o dashboard principal nao depende dele)
 
   const token = localStorage.getItem("admin_token");
 
@@ -27,6 +28,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     carregarDados();
+    fetch("/api/dashboard/hoje", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null)).then((d) => d && setHoje(d)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cards = dados ? [
@@ -87,6 +91,17 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
+          {hoje && (hoje.vendas || hoje.conexoes || hoje.whatsapp) && (
+            <section className="mb-6" aria-label="Hoje">
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">Hoje</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {hoje.vendas && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">Vendas aprovadas</p><p className="text-2xl font-bold text-white">{hoje.vendas.aprovadas}</p><p className="text-xs text-gray-500">{hoje.vendas.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>}
+                {hoje.conexoes && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">Conectados agora</p><p className="text-2xl font-bold text-white">{hoje.conexoes.abertas}</p><p className="text-xs text-gray-500">{hoje.conexoes.novas_hoje} conexões novas hoje</p></div>}
+                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">WhatsApp: conversas abertas</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.abertas}</p><p className="text-xs text-gray-500">{hoje.whatsapp.nao_lidas} mensagens não lidas</p></div>}
+                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">WhatsApp hoje</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.recebidas_hoje}<span className="text-base text-gray-500"> / {hoje.whatsapp.enviadas_hoje}</span></p><p className="text-xs text-gray-500">recebidas / enviadas</p></div>}
+              </div>
+            </section>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
             {cards.map((card, i) => (
               <div key={i} className={`bg-[#1a1d27] rounded-xl p-3 sm:p-5 border ${card.border} hover:border-gray-700 transition-all duration-200`}>

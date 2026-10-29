@@ -83,6 +83,18 @@ export default function Automacao({ headers, onFechar }) {
               </div>
             </>
           )}
+          <div className="border-t border-gray-800 pt-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+              <input type="checkbox" checked={!!cfg.pedir_nota} onChange={(e) => set("pedir_nota", e.target.checked)} /> Pedir nota de 1 a 5 ao resolver a conversa
+            </label>
+            {cfg.pedir_nota && (
+              <textarea value={cfg.msg_pedir_nota} onChange={(e) => set("msg_pedir_nota", e.target.value)} rows={2} maxLength={1000} className={`${inputCls} resize-none`} aria-label="Mensagem da pesquisa de satisfação" />
+            )}
+            <label className="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+              <input type="checkbox" checked={!!cfg.ia_sugestao} onChange={(e) => set("ia_sugestao", e.target.checked)} /> Permitir "✨ Sugerir resposta" por IA
+            </label>
+            {cfg.ia_sugestao && <p className="text-xs text-yellow-500">Ao sugerir, trechos da conversa (sem CPF, telefone ou e-mail) são enviados à Anthropic. Exige a chave de IA configurada no servidor.</p>}
+          </div>
           <p className="text-xs text-yellow-500">Atenção: mensagens automáticas em excesso aumentam o risco de bloqueio do número pelo WhatsApp.</p>
           {erro && <p className="text-sm text-red-400">{erro}</p>}
           {ok && <p className="text-sm text-green-400">Salvo.</p>}
