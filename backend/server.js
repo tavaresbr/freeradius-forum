@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter, voucherFalhasLimiters, whatsappWebhookLimiter } = require('./src/middleware/rateLimiters')
+const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter, voucherFalhasLimiters, cupomFalhasLimiter, whatsappWebhookLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -160,6 +160,7 @@ app.post("/api/lead-portal/passivo", cadastroPortalLimiter, somentePrimitivos, c
 app.post("/api/clientes/cadastro", cadastroPortalLimiter, somentePrimitivos, cadastroCliente);
 
 // Rota pública: resgate de voucher no portal (limite de falhas por IP/MAC contra forca bruta)
+app.post("/api/cupom-portal/validar", leituraPortalLimiter, somentePrimitivos, cupomFalhasLimiter, require("./src/controllers/cuponsController").validarPublico);
 app.post("/api/voucher-portal/resgatar", cadastroPortalLimiter, somentePrimitivos, ...voucherFalhasLimiters, require("./src/controllers/voucherController").resgatar);
 
 // Rota pública para login do portal Wifi/Radius
@@ -192,6 +193,7 @@ app.use("/api/config-mercadopago", auth, tenant, exigeAssinatura, checkPermissao
 app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
 app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
 app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), whatsappRoutes);
+app.use("/api/cupons", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), require("./src/routes/cuponsRoutes"));
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
 app.use("/api/atendimento", auth, tenant, exigeAssinatura, checkPermissao('leads'), exigeRecurso('whatsapp'), atendimentoRoutes);
 app.use("/api/avisos-operacionais", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), require("./src/routes/avisoOperacionalRoutes"));

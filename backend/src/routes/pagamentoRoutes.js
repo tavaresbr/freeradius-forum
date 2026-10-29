@@ -4,7 +4,7 @@ const auth = require("../middleware/auth");
 const tenant = require("../middleware/tenant");
 const exigeAssinatura = require("../middleware/assinatura");
 const checkPermissao = require("../middleware/checkPermissao");
-const { cartaoHotspotLimiters } = require("../middleware/rateLimiters");
+const { cartaoHotspotLimiters, cupomFalhasLimiter } = require("../middleware/rateLimiters");
 const {
   gerarPagamento,
   gerarPagamentoCartao,
@@ -19,8 +19,8 @@ const {
 } = require("../controllers/pagamentoController");
 
 // Rotas públicas (captive portal)
-router.post("/gerar", gerarPagamento);
-router.post("/gerar-cartao", ...cartaoHotspotLimiters, gerarPagamentoCartao);
+router.post("/gerar", cupomFalhasLimiter, gerarPagamento);
+router.post("/gerar-cartao", ...cartaoHotspotLimiters, cupomFalhasLimiter, gerarPagamentoCartao);
 router.post("/mp-device-session/:tipo", proxyDeviceSession);
 router.get("/mp-public-key", obterPublicKey);
 router.post("/notificacao", notificacaoWebhook);

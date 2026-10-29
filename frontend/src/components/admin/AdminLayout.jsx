@@ -208,6 +208,7 @@ export default function AdminLayout({ children }) {
         { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
         { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
         { key: "configuracoes", title: "Aviso operacional", path: `${basePath}/aviso-operacional` },
+        { key: "configuracoes", title: "Cupons", path: `${basePath}/cupons` },
       ],
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

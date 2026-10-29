@@ -58,6 +58,12 @@ export default function Pagamento() {
   const [trialLoading, setTrialLoading] = useState(false);
   const [trialErro, setTrialErro] = useState(null);
 
+  // Cupom de desconto (o servidor valida e calcula; aqui so mostramos o resultado)
+  const [cupomInput, setCupomInput] = useState(() => (searchParams.get("cupom") || "").toUpperCase().slice(0, 32));
+  const [cupomAplicado, setCupomAplicado] = useState(null); // { codigo, valor_final, desconto }
+  const [cupomMsg, setCupomMsg] = useState(null);
+  const [cupomBusy, setCupomBusy] = useState(false);
+
   // Shared state
   const [status, setStatus] = useState("idle");
   const [pagamentoAprovado, setPagamentoAprovado] = useState(false);
@@ -150,6 +156,28 @@ export default function Pagamento() {
     return () => clearInterval(interval);
   }, []);
 
+  const aplicarCupom = async () => {
+    const codigo = cupomInput.trim().toUpperCase();
+    if (!codigo || !plano) return;
+    setCupomBusy(true); setCupomMsg(null);
+    try {
+      const res = await fetch("/api/cupom-portal/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plano_id: id, codigo, cpf: cpf || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setCupomAplicado(null); setCupomMsg(data.message || data.error || "Cupom inválido ou indisponível."); return; }
+      setCupomAplicado({ codigo, valor_final: data.valor_final, desconto: data.desconto });
+    } catch {
+      setCupomAplicado(null); setCupomMsg("Não foi possível validar o cupom. Tente novamente.");
+    } finally {
+      setCupomBusy(false);
+    }
+  };
+
+  const valorExibido = plano ? (cupomAplicado ? cupomAplicado.valor_final : plano.valor) : 0;
+
   const recarregarFingerprint = () => {
     setFingerprintStatus("loading");
     // Remove script atual pra forcar reload
@@ -196,7 +224,7 @@ export default function Pagamento() {
     fetch("/api/pagamentos/gerar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plano_id: id, mac, ip, cpf, mikrotik_id: mikrotikId, cliente_id: clienteId, portal_id: portalId || null }),
+      body: JSON.stringify({ plano_id: id, mac, ip, cpf, mikrotik_id: mikrotikId, cliente_id: clienteId, portal_id: portalId || null, cupom: cupomAplicado ? cupomAplicado.codigo : undefined }),
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
@@ -369,6 +397,7 @@ export default function Pagamento() {
           security_code: cvvD,
           identification_number: cpfDigits,
           plano_id: id,
+          cupom: cupomAplicado ? cupomAplicado.codigo : undefined,
           mac,
           ip,
           cpf: cpfDigits,
@@ -475,13 +504,28 @@ export default function Pagamento() {
       {plano && (
         <div className="mb-6 text-center">
           <h2 className="text-xl font-bold">{plano.nome}</h2>
-          <p className="text-gray-600">R$ {(plano.valor / 100).toFixed(2)}</p>
+          {cupomAplicado ? (
+            <p className="text-gray-600"><span className="line-through text-gray-400 mr-2">R$ {(plano.valor / 100).toFixed(2)}</span><span className="font-semibold text-green-700">R$ {(valorExibido / 100).toFixed(2)}</span></p>
+          ) : (
+            <p className="text-gray-600">R$ {(plano.valor / 100).toFixed(2)}</p>
+          )}
         </div>
       )}
 
       {/* Escolha de metodo */}
       {metodo === null && plano && (
         <div className="w-full max-w-md space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
+            <label htmlFor="cupom" className="block text-sm text-gray-600 mb-1">Tem cupom de desconto?</label>
+            <div className="flex gap-2">
+              <input id="cupom" value={cupomInput} onChange={(e) => { setCupomInput(e.target.value.toUpperCase().replace(/\s/g, "")); setCupomAplicado(null); setCupomMsg(null); }}
+                maxLength={32} autoCapitalize="characters" placeholder="Digite o código" className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-gray-800" />
+              <button type="button" onClick={aplicarCupom} disabled={cupomBusy || !cupomInput.trim()} className="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm disabled:opacity-50">{cupomBusy ? "..." : "Aplicar"}</button>
+            </div>
+            {cupomAplicado && <p className="text-sm text-green-700 mt-1">Cupom aplicado! Você economiza R$ {(cupomAplicado.desconto / 100).toFixed(2).replace(".", ",")}.</p>}
+            {cupomMsg && <p className="text-sm text-red-600 mt-1">{cupomMsg}</p>}
+          </div>
+
           <p className="text-center text-gray-600 mb-4">Escolha a forma de pagamento:</p>
 
           {plano.pagamento_pix_ativo !== false && (
@@ -747,7 +791,7 @@ export default function Pagamento() {
             disabled={cartaoLoading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg disabled:opacity-50"
           >
-            {cartaoLoading ? "Processando..." : (plano ? `Pagar R$ ${(plano.valor / 100).toFixed(2).replace(".", ",")}` : "Pagar")}
+            {cartaoLoading ? "Processando..." : (plano ? `Pagar R$ ${(valorExibido / 100).toFixed(2).replace(".", ",")}` : "Pagar")}
           </button>
 
           <button

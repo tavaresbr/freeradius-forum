@@ -32,6 +32,7 @@ import Atendimento from "./pages/admin/Atendimento";
 import AtendimentoRelatorios from "./pages/admin/AtendimentoRelatorios";
 import Auditoria from "./pages/admin/Auditoria";
 import AvisoOperacional from "./pages/admin/AvisoOperacional";
+import Cupons from "./pages/admin/Cupons";
 import PromocoesWhatsapp from "./pages/admin/PromocoesWhatsapp";
 import Vouchers from "./pages/admin/Vouchers";
 import Voucher from "./pages/public/Voucher";
@@ -141,6 +142,7 @@ function App() {
       <Route path="/admin/:empresaSlug/whatsapp" element={<RotaPrivada><WhatsApp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vouchers" element={<RotaPrivada><Vouchers /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/aviso-operacional" element={<RotaPrivada><AvisoOperacional /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/cupons" element={<RotaPrivada><Cupons /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/promocoes-whatsapp" element={<RotaPrivada><PromocoesWhatsapp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas" element={<RotaPrivada><Campanhas /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas/:id" element={<RotaPrivada><CampanhaEditor /></RotaPrivada>} />
