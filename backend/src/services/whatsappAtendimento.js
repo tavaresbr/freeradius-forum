@@ -7,6 +7,7 @@ const wpp = require("../controllers/whatsappController");
 const midiaUtil = require("../utils/whatsappMidia");
 const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const { normalizarHost } = require("../utils/entradaSegura");
+const { temColuna } = require("../utils/schemaCache");
 
 const MAX_TEXTO = 4000;
 const STATUS_ORDEM = ["enviando", "enviada", "entregue", "lida"];
@@ -26,6 +27,14 @@ const TIPOS = {
 };
 const PREVIA = { imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem" };
 const IGNORADOS = ["reactionMessage", "protocolMessage", "senderKeyDistributionMessage", "messageContextInfo", "editedMessage"];
+
+/** "📍 Localizacao: nome — endereco" + link do mapa (so com coordenadas validas). */
+function textoLocalizacao(loc) {
+  const lat = Number(loc?.degreesLatitude), lng = Number(loc?.degreesLongitude);
+  const nome = [loc?.name, loc?.address].filter(Boolean).join(" — ");
+  const link = Number.isFinite(lat) && Number.isFinite(lng) ? `\nhttps://maps.google.com/?q=${lat},${lng}` : "";
+  return `📍 Localização${nome ? `: ${nome}` : ""}${link}`;
+}
 
 /** { telefone, jid } do contato, ou null para grupos/status/canais. */
 function resolverContato(key) {
@@ -56,7 +65,17 @@ function extrairMensagem(data) {
     const doc = corpo.message?.documentMessage || {};
     texto = doc.caption || "";
   }
+  if (chave === "locationMessage") texto = textoLocalizacao(corpo);
+  if (chave === "contactMessage") texto = `👤 Contato: ${corpo.displayName || ""}`.trim();
   texto = String(texto || "").slice(0, MAX_TEXTO);
+  // Citacao (resposta a uma mensagem anterior)
+  const ctx = corpo.contextInfo || data.contextInfo || msg.contextInfo || {};
+  const respostaA = typeof ctx.stanzaId === "string" && ctx.stanzaId ? ctx.stanzaId.slice(0, 120) : null;
+  const citada = ctx.quotedMessage || {};
+  const respostaPrevia = respostaA
+    ? String(citada.conversation || citada.extendedTextMessage?.text || citada.imageMessage?.caption || citada.videoMessage?.caption || citada.documentMessage?.caption
+      || (citada.imageMessage ? "📷 Imagem" : citada.audioMessage ? "🎤 Áudio" : citada.videoMessage ? "🎥 Vídeo" : citada.documentMessage ? "📄 Documento" : "Mensagem")).replace(/\s+/g, " ").slice(0, 200)
+    : null;
   // Midia: tipo/nome do arquivo informados no payload (so guardados se o tipo for aceito)
   let midia = null;
   if (["imagem", "audio", "video", "documento"].includes(tipo)) {
@@ -67,6 +86,8 @@ function extrairMensagem(data) {
   return {
     waId: String(key.id).slice(0, 120),
     midia,
+    respostaA,
+    respostaPrevia,
     fromMe: !!key.fromMe,
     ...contato,
     nome: key.fromMe ? null : String(data.pushName || "").trim().slice(0, 150) || null,
@@ -129,6 +150,9 @@ async function registrarMensagem(empresaId, data) {
       m.midia?.mime || null, m.midia?.nome || null]
   );
   if (!ins.affectedRows) return { duplicada: true, conversaId };
+  if (m.respostaA && await temColuna("whatsapp_mensagens", "resposta_a_wa_id")) {
+    await db.query("UPDATE whatsapp_mensagens SET resposta_a_wa_id = ?, resposta_previa = ? WHERE id = ? AND empresa_id = ?", [m.respostaA, m.respostaPrevia, ins.insertId, empresaId]);
+  }
   // Mensagem do cliente reabre a conversa e conta como nao lida; resposta feita pelo celular nao.
   await db.query(
     `UPDATE whatsapp_conversas SET ultima_msg_em = ?, ultima_msg_previa = ?,
@@ -292,9 +316,10 @@ async function garantirWebhook(empresaId) {
  * Envia texto ou midia pela instancia da empresa e grava a mensagem. A linha nasce "enviando"; o webhook
  * (fromMe) pode gravar o mesmo wa_id antes de a resposta da Evolution chegar — nesse caso a linha
  * temporaria e' descartada (UNIQUE empresa+wa_id).
- * @param {{tipo?: string, texto?: string, midia?: {buffer: Buffer, mime: string, ext: string, nome: string|null}}} conteudo
+ * @param {{tipo?: string, texto?: string, midia?: {buffer: Buffer, mime: string, ext: string, nome: string|null}, citada?: {waId: string, fromMe: boolean, texto?: string}, especial?: {endpoint: string, corpo: object}}} conteudo
+ * `especial` = envio por outro endpoint da Evolution (sendLocation, sendContact); `texto` e' o que fica gravado.
  */
-async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null } = {}) {
+async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null, citada = null, especial = null } = {}) {
   const evo = await wpp.getEvolutionConfig(empresaId);
   if (!evo.apiKey) throw Object.assign(new Error("WhatsApp sem chave de API configurada"), { status: 400 });
   const temp = `tmp_${crypto.randomUUID()}`;
@@ -305,12 +330,22 @@ async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", te
     [empresaId, conversa.id, temp, tipo, texto || null, rel, midia?.mime || null, midia?.nome || null, adminId || null]
   );
   const id = ins.insertId;
+  if (citada?.waId && await temColuna("whatsapp_mensagens", "resposta_a_wa_id")) {
+    await db.query("UPDATE whatsapp_mensagens SET resposta_a_wa_id = ?, resposta_previa = ? WHERE id = ? AND empresa_id = ?",
+      [String(citada.waId).slice(0, 120), String(citada.texto || "").replace(/\s+/g, " ").slice(0, 200) || null, id, empresaId]);
+  }
   const numero = conversa.telefone ? wpp.formatarNumeroComNonoDigito(conversa.telefone) : conversa.jid;
   const headers = { apikey: evo.apiKey, "Content-Type": "application/json" };
   try {
     let r;
-    if (!midia) {
-      r = await axios.post(`${evo.apiUrl}/message/sendText/${evo.instanceName}`, { number: numero, text: texto }, { headers, timeout: 20000 });
+    if (especial) {
+      r = await axios.post(`${evo.apiUrl}/message/${especial.endpoint}/${evo.instanceName}`, { number: numero, ...especial.corpo }, { headers, timeout: 20000 });
+    } else if (!midia) {
+      const corpoTexto = { number: numero, text: texto };
+      if (citada?.waId) {
+        corpoTexto.quoted = { key: { id: citada.waId, fromMe: !!citada.fromMe, remoteJid: conversa.jid }, message: { conversation: String(citada.texto || "").slice(0, 200) } };
+      }
+      r = await axios.post(`${evo.apiUrl}/message/sendText/${evo.instanceName}`, corpoTexto, { headers, timeout: 20000 });
     } else if (tipo === "audio") {
       r = await axios.post(`${evo.apiUrl}/message/sendWhatsAppAudio/${evo.instanceName}`,
         { number: numero, audio: midia.buffer.toString("base64"), encoding: true }, { headers, timeout: 60000 });
@@ -348,9 +383,9 @@ async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", te
   }
 }
 
-const enviarTexto = (empresaId, adminId, conversa, texto) => enviarMensagem(empresaId, adminId, conversa, { tipo: "texto", texto });
+const enviarTexto = (empresaId, adminId, conversa, texto, opcoes = {}) => enviarMensagem(empresaId, adminId, conversa, { tipo: "texto", texto, ...opcoes });
 
 module.exports = {
-  MAX_TEXTO, extrairMensagem, resolverContato, normalizarEvento, processarWebhook, registrarMensagem, atualizarStatus,
+  MAX_TEXTO, textoLocalizacao, extrairMensagem, resolverContato, normalizarEvento, processarWebhook, registrarMensagem, atualizarStatus,
   obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, garantirWebhook, registrarEvento, baseWebhook, enviarTexto, enviarMensagem, baixarMidia,
 };

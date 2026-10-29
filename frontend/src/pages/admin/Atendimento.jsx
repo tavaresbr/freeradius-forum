@@ -6,6 +6,8 @@ import GerenciarEtiquetas from "../../components/admin/atendimento/GerenciarEtiq
 import GerenciarRespostas from "../../components/admin/atendimento/GerenciarRespostas";
 import NovaConversa from "../../components/admin/atendimento/NovaConversa";
 import PainelCliente from "../../components/admin/atendimento/PainelCliente";
+import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
+import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
   ["aberta", "Abertas"],
@@ -73,6 +75,13 @@ export default function Atendimento() {
   const [etiquetas, setEtiquetas] = useState([]);
   const [respostas, setRespostas] = useState([]);
   const [filtroEtiqueta, setFiltroEtiqueta] = useState("");
+  const [filtroAtendente, setFiltroAtendente] = useState(""); // "" | eu | sem
+  const [atendentes, setAtendentes] = useState([]);
+  const [eu, setEu] = useState(null);
+  const [menuAtendente, setMenuAtendente] = useState(false);
+  const [citando, setCitando] = useState(null); // mensagem que sera citada na proxima resposta
+  const [menuMais, setMenuMais] = useState(false);
+  const [avisoLigado, setAvisoLigado] = useState(avisoAtivo());
   const [modo, setModo] = useState("resposta"); // resposta | nota
   const [modal, setModal] = useState(null); // etiquetas | respostas | nova
   const [menuEtiquetas, setMenuEtiquetas] = useState(false);
@@ -94,6 +103,7 @@ export default function Atendimento() {
     else params.set("status", filtro);
     if (busca.trim()) params.set("q", busca.trim());
     if (filtroEtiqueta) params.set("etiqueta", filtroEtiqueta);
+    if (filtroAtendente) params.set("atendente", filtroAtendente);
     try {
       const res = await fetch(`/api/atendimento/conversas?${params}`, { headers });
       const data = await res.json().catch(() => ({}));
@@ -106,7 +116,7 @@ export default function Atendimento() {
       setCarregando(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, busca, filtroEtiqueta, token]);
+  }, [filtro, busca, filtroEtiqueta, filtroAtendente, token]);
 
   const carregarMensagens = useCallback(async (id) => {
     if (!id) return;
@@ -238,8 +248,42 @@ export default function Atendimento() {
     };
     ajustar();
     window.addEventListener("resize", ajustar);
-    return () => window.removeEventListener("resize", ajustar);
+    // avisos que aparecem/somem acima da caixa (ex.: "WhatsApp desconectado") mudam o tamanho da pagina
+    const obs = typeof ResizeObserver !== "undefined" ? new ResizeObserver(ajustar) : null;
+    obs?.observe(document.body);
+    return () => { window.removeEventListener("resize", ajustar); obs?.disconnect(); };
   }, [webhook, msgWebhook, erroLista]);
+
+  // quem pode ficar com a conversa (admins da empresa)
+  useEffect(() => {
+    fetch("/api/atendimento/atendentes", { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setAtendentes(d.atendentes || []); setEu(d.eu ?? null); } })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { setCitando(null); setMenuAtendente(false); setMenuMais(false); }, [selecionadaId]);
+
+  const donoDaConversa = async (acao, corpo) => {
+    setMenuAtendente(false);
+    setErroEnvio("");
+    try {
+      const res = await fetch(`/api/atendimento/conversas/${selecionadaId}/${acao}`, { method: "POST", headers, body: JSON.stringify(corpo || {}) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setErroEnvio(data.error || "Não foi possível alterar o atendente");
+    } catch {
+      setErroEnvio("Erro de conexão");
+    }
+    await Promise.all([carregarMensagens(selecionadaId), carregarConversas()]);
+  };
+
+  const alternarAviso = async () => {
+    const novo = !avisoLigado;
+    setAvisoLigado(novo);
+    definirAviso(novo);
+    if (novo) { tocarAviso(); await pedirPermissaoNotificacao(); }
+  };
 
   const postarMidia = (f, legenda, conversaId) => {
     const fd = new FormData();
@@ -334,11 +378,11 @@ export default function Atendimento() {
       } else if (arquivo) {
         res = await postarMidia(arquivo, t, selecionadaId);
       } else {
-        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/mensagens`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
+        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/mensagens`, { method: "POST", headers, body: JSON.stringify({ texto: t, responder_a: citando?.id }) });
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setErroEnvio(data.error || "Erro ao enviar");
-      else { setTexto(""); setArquivo(null); }
+      else { setTexto(""); setArquivo(null); setCitando(null); }
       noFimRef.current = true;
       await carregarMensagens(selecionadaId);
       if (modo !== "nota") carregarConversas();
@@ -387,6 +431,7 @@ export default function Atendimento() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-white">WhatsApp</h1>
           <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
@@ -417,6 +462,14 @@ export default function Atendimento() {
                   {etiquetas.map((et) => <option key={et.id} value={et.id}>{et.nome}</option>)}
                 </select>
               )}
+              <div className="flex gap-1 flex-wrap" aria-label="Atendente">
+                {[["", "Todas"], ["eu", "Minhas"], ["sem", "Sem dono"]].map(([k, rot]) => (
+                  <button key={k || "todas"} onClick={() => setFiltroAtendente(k)}
+                    className={`px-3 py-1 rounded-full text-xs cursor-pointer ${filtroAtendente === k ? "bg-green-900/30 text-green-500 border border-green-800/50" : "bg-[#0f111a] text-gray-400 border border-gray-800 hover:bg-[#252b3b]"}`}>
+                    {rot}
+                  </button>
+                ))}
+              </div>
               <div className="flex gap-1 flex-wrap">
                 {FILTROS.map(([k, rot]) => (
                   <button
@@ -449,6 +502,7 @@ export default function Atendimento() {
                       {c.etiquetas.map((et) => <span key={et.id} className="px-1.5 py-0.5 rounded text-[10px] text-white" style={{ background: et.cor }}>{et.nome}</span>)}
                     </div>
                   )}
+                  {c.atendente_id && <p className="text-[11px] text-green-500 mt-0.5 truncate">👤 {c.atendente_id === eu ? "Você" : c.atendente_nome || "Atribuída"}</p>}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-gray-400 truncate">{c.ultima_msg_previa || ""}</span>
                     {c.nao_lidas > 0 && (
@@ -492,6 +546,22 @@ export default function Atendimento() {
                       </p>
                     )}
                   </div>
+                  {conversa && (
+                    <div className="relative">
+                      <button onClick={() => setMenuAtendente((v) => !v)} className="px-3 py-1.5 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer" aria-haspopup="menu" aria-expanded={menuAtendente}>
+                        👤 {conversa.atendente_id ? (conversa.atendente_id === eu ? "Você" : conversa.atendente_nome || "Atribuída") : "Sem atendente"} ▾
+                      </button>
+                      {menuAtendente && (
+                        <div role="menu" className="absolute right-0 top-full mt-1 z-30 w-56 max-h-64 overflow-y-auto bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-1">
+                          {conversa.atendente_id !== eu && <button role="menuitem" onClick={() => donoDaConversa("assumir")} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">Assumir para mim</button>}
+                          {atendentes.filter((a) => a.id !== eu && a.id !== conversa.atendente_id).map((a) => (
+                            <button key={a.id} role="menuitem" onClick={() => donoDaConversa("transferir", { admin_id: a.id })} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer truncate">Transferir para {a.nome || a.email}</button>
+                          ))}
+                          {conversa.atendente_id && <button role="menuitem" onClick={() => donoDaConversa("transferir", { admin_id: null })} className="w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:bg-[#252b3b] cursor-pointer">Liberar (sem atendente)</button>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {conversa && (
                     <button onClick={() => setPainelAberto((v) => !v)} className="xl:hidden px-3 py-1.5 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer">Cliente</button>
                   )}
@@ -537,15 +607,17 @@ export default function Atendimento() {
                   {mensagens.map((m) => (
                     <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : m.direcao === "nota" ? "justify-center" : "justify-end"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : m.direcao === "nota" ? "bg-yellow-100 text-yellow-900 border border-yellow-300" : "bg-green-700/80 text-white"}`}>
+                        {m.resposta_previa && <div className="mb-1 px-2 py-1 border-l-2 border-current bg-black/10 rounded text-xs opacity-80 line-clamp-2">{m.resposta_previa}</div>}
                         {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? ` · ${m.autor}` : ""} (o cliente não vê)</p>}
                         {m.tem_midia
                           ? <div className="mb-1"><MidiaMensagem mensagem={m} /></div>
-                          : m.tipo !== "texto" && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
+                          : m.tipo !== "texto" && !(m.tipo === "outro" && m.texto) && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
                         {m.texto}
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}
                           {m.direcao === "out" && m.autor && <span className="opacity-70">· {m.autor}</span>}
+                          {m.direcao !== "nota" && m.status !== "erro" && <button onClick={() => { setCitando(m); setModo("resposta"); }} className="ml-1 opacity-70 hover:opacity-100 cursor-pointer" aria-label="Responder esta mensagem" title="Responder esta mensagem">↩</button>}
                         </div>
                         {m.status === "erro" && <p className="text-xs text-red-200 mt-1">{m.erro || "Falha no envio"}</p>}
                       </div>
@@ -575,6 +647,13 @@ export default function Atendimento() {
                     </div>
                   )}
                   {erroEnvio && <p className="text-xs text-red-400 mb-2">{erroEnvio}</p>}
+                  {citando && modo === "resposta" && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-[#0f111a] border border-gray-800 border-l-4 border-l-green-600 text-sm text-gray-300">
+                      <span className="shrink-0">↩</span>
+                      <span className="truncate flex-1 min-w-0">Respondendo a: {citando.texto || { imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento" }[citando.tipo] || "mensagem"}</span>
+                      <button onClick={() => setCitando(null)} className="text-gray-400 hover:text-red-400 cursor-pointer" aria-label="Cancelar citação">✕</button>
+                    </div>
+                  )}
                   {arquivo && (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-[#0f111a] border border-gray-800 text-sm text-gray-300">
                       <span>📎</span>
@@ -598,6 +677,15 @@ export default function Atendimento() {
                     {PODE_GRAVAR && (
                       <button onClick={iniciarGravacao} disabled={enviando || modo === "nota" || !!arquivo} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Gravar áudio" title="Gravar áudio">🎤</button>
                     )}
+                    <div className="relative">
+                      <button onClick={() => setMenuMais((v) => !v)} disabled={enviando || modo === "nota"} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Mais opções de envio" title="Enviar localização ou contato" aria-haspopup="menu" aria-expanded={menuMais}>➕</button>
+                      {menuMais && (
+                        <div role="menu" className="absolute left-0 bottom-full mb-1 z-30 w-44 bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-1">
+                          <button role="menuitem" onClick={() => { setMenuMais(false); setModal("local"); }} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">📍 Localização</button>
+                          <button role="menuitem" onClick={() => { setMenuMais(false); setModal("contato"); }} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">👤 Contato</button>
+                        </div>
+                      )}
+                    </div>
                     <textarea
                       value={texto}
                       onChange={(e) => setTexto(e.target.value)}
@@ -627,6 +715,10 @@ export default function Atendimento() {
           </section>
           {modal === "etiquetas" && <GerenciarEtiquetas headers={headers} etiquetas={etiquetas} onFechar={() => setModal(null)} onMudou={async () => { await carregarEtiquetas(); carregarConversas(); if (selecionadaId) carregarMensagens(selecionadaId); }} />}
           {modal === "respostas" && <GerenciarRespostas headers={headers} respostas={respostas} onFechar={() => setModal(null)} onMudou={carregarRespostas} />}
+          {(modal === "local" || modal === "contato") && selecionadaId && (
+            <EnviarEspecial tipo={modal} conversaId={selecionadaId} headers={headers} onFechar={() => setModal(null)}
+              onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
+          )}
           {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
         </div>
       </div>
