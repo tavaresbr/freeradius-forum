@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import MarcaApex from "../public/MarcaApex";
+import MarcaPainel from "./MarcaPainel";
 import ToggleTema from "../ToggleTema";
 import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
 
@@ -358,9 +358,7 @@ export default function AdminLayout({ children }) {
         {/* Logo Header */}
         <div className="p-6 border-b border-apex-100">
           <div className="flex items-center justify-between">
-            <a href="https://apextelecom.com.br/" target="_blank" rel="noopener noreferrer" title="Abrir site">
-              <MarcaApex className="text-lg" local="painel" />
-            </a>
+            <MarcaPainel slug={slug} className="text-lg" />
             <ToggleTema className="hidden lg:block text-gray-600" />
             <button
               onClick={() => setSidebarOpen(false)}
@@ -536,9 +534,7 @@ export default function AdminLayout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
             </button>
-            <a href="https://apextelecom.com.br/" target="_blank" rel="noopener noreferrer" title="Abrir site">
-              <MarcaApex className="text-base" local="painel" />
-            </a>
+            <MarcaPainel slug={slug} className="text-base" />
             <ToggleTema className="text-gray-600" />
           </div>
         </header>
