@@ -9,6 +9,7 @@ const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
+const { normalizarMac } = require("../utils/entradaSegura");
 
 exports.lgpdLogin = async (req, res) => {
   try {
@@ -235,8 +236,61 @@ exports.lgpdLogin = async (req, res) => {
 // do portal de origem (lgpd, portal_lead, planos...) — nao so origem='lgpd'.
 const LGPD_WHERE = "l.empresa_id = ? AND (l.origem = 'lgpd' OR l.lgpd_aceite = 1)";
 
+const DATA_EXPR = "COALESCE(l.lgpd_aceite_em, l.criado_em)";
+
+// Filtros opcionais da tela/CSV. Sempre empresa_id do tenant; valores validados e passados como placeholders.
+function montarFiltrosLgpd(query, empresaId) {
+  const q = query || {};
+  const invalido = () => { const e = new Error("Filtro inválido"); e.status = 400; return e; };
+  const txt = (v) => {
+    if (v == null) return "";
+    if (typeof v !== "string") throw invalido();
+    return v.trim();
+  };
+  let where = LGPD_WHERE;
+  const params = [empresaId];
+  const dia = (v) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw invalido();
+    const d = new Date(`${v}T00:00:00Z`);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) throw invalido();
+    return d;
+  };
+
+  const origem = txt(q.origem);
+  if (origem) {
+    if (!/^[a-z_]{1,30}$/.test(origem)) throw invalido();
+    where += " AND l.origem = ?"; params.push(origem);
+  }
+  const aceite = txt(q.aceite);
+  if (aceite) {
+    if (aceite !== "0" && aceite !== "1") throw invalido();
+    where += " AND l.lgpd_aceite = ?"; params.push(Number(aceite));
+  }
+  const de = txt(q.de);
+  const ate = txt(q.ate);
+  const dDe = de ? dia(de) : null;
+  const dAte = ate ? dia(ate) : null;
+  if (dDe && dAte && (dDe > dAte || (dAte - dDe) / 86400000 > 366)) throw invalido();
+  if (dDe) { where += ` AND ${DATA_EXPR} >= ?`; params.push(`${de} 00:00:00`); }
+  if (dAte) { where += ` AND ${DATA_EXPR} < DATE_ADD(?, INTERVAL 1 DAY)`; params.push(`${ate} 00:00:00`); }
+  const ap = txt(q.ap);
+  if (ap) {
+    const mac = normalizarMac(ap);
+    if (!mac) throw invalido();
+    where += " AND l.ap_mac = ?"; params.push(mac);
+  }
+  const ssid = txt(q.ssid);
+  if (ssid) {
+    if (ssid.length > 64) throw invalido();
+    where += " AND l.ssid = ?"; params.push(ssid);
+  }
+  return { where, params };
+}
+exports.montarFiltrosLgpd = montarFiltrosLgpd;
+
 exports.getAllLgpd = async (req, res) => {
   try {
+    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id);
     const [rows] = await db.query(
       `SELECT l.id, l.cpf, l.email, l.nome, l.telefone, l.mac, l.ip, l.origem,
               l.ap_mac, l.ssid, ap.nome AS ap_nome,
@@ -244,14 +298,33 @@ exports.getAllLgpd = async (req, res) => {
        FROM leads l
        LEFT JOIN access_points ap
          ON ap.mac = l.ap_mac AND ap.empresa_id = l.empresa_id
-       WHERE ${LGPD_WHERE}
-       ORDER BY COALESCE(l.lgpd_aceite_em, l.criado_em) DESC`,
-      [req.empresa_id]
+       WHERE ${where}
+       ORDER BY ${DATA_EXPR} DESC`,
+      params
     );
     res.json(rows);
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ message: err.message });
     console.error("Erro ao buscar cadastros LGPD:", err);
     res.status(500).json({ message: "Erro ao buscar dados LGPD" });
+  }
+};
+
+// Valores para popular os filtros da tela (origens, redes e pontos de acesso da empresa).
+exports.getFiltrosLgpd = async (req, res) => {
+  try {
+    const [origens] = await db.query(`SELECT DISTINCT l.origem FROM leads l WHERE ${LGPD_WHERE} AND l.origem IS NOT NULL AND l.origem <> '' ORDER BY l.origem`, [req.empresa_id]);
+    const [ssids] = await db.query(`SELECT DISTINCT l.ssid FROM leads l WHERE ${LGPD_WHERE} AND l.ssid IS NOT NULL AND l.ssid <> '' ORDER BY l.ssid`, [req.empresa_id]);
+    const [aps] = await db.query(
+      `SELECT DISTINCT l.ap_mac, ap.nome AS ap_nome FROM leads l
+       LEFT JOIN access_points ap ON ap.mac = l.ap_mac AND ap.empresa_id = l.empresa_id
+       WHERE ${LGPD_WHERE} AND l.ap_mac IS NOT NULL AND l.ap_mac <> '' ORDER BY ap.nome, l.ap_mac`,
+      [req.empresa_id]
+    );
+    res.json({ origens: origens.map((r) => r.origem), ssids: ssids.map((r) => r.ssid), aps });
+  } catch (err) {
+    console.error("Erro ao buscar filtros LGPD:", err);
+    res.status(500).json({ message: "Erro ao buscar filtros" });
   }
 };
 
@@ -259,6 +332,7 @@ exports.getAllLgpd = async (req, res) => {
 // e QUAL termo foi aceito). Usado com token curto de download (verifyDownloadToken).
 exports.exportarLgpdCSV = async (req, res) => {
   try {
+    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id);
     const [rows] = await db.query(
       `SELECT l.nome, l.email, l.telefone, l.cpf, l.mac, l.ip, l.origem,
               l.ap_mac, l.ssid, ap.nome AS ap_nome,
@@ -266,10 +340,10 @@ exports.exportarLgpdCSV = async (req, res) => {
        FROM leads l
        LEFT JOIN access_points ap
          ON ap.mac = l.ap_mac AND ap.empresa_id = l.empresa_id
-       WHERE ${LGPD_WHERE}
-       ORDER BY COALESCE(l.lgpd_aceite_em, l.criado_em) DESC
+       WHERE ${where}
+       ORDER BY ${DATA_EXPR} DESC
        LIMIT 50000`,
-      [req.empresa_id]
+      params
     );
 
     const fmtData = (d) => (d ? new Date(d).toISOString().replace("T", " ").slice(0, 19) : "");
@@ -300,6 +374,7 @@ exports.exportarLgpdCSV = async (req, res) => {
     res.setHeader("Content-Disposition", "attachment; filename=consentimentos_lgpd.csv");
     res.send(csv);
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ message: err.message });
     console.error("Erro ao exportar CSV LGPD:", err);
     res.status(500).json({ message: "Erro ao exportar CSV." });
   }

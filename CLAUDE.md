@@ -1796,6 +1796,7 @@ termo aceito.
 3. **Relatorio LGPD inclui qualquer origem com aceite** (`origem='lgpd' OR lgpd_aceite=1`), nao so o portal LGPD.
 4. **Todo fluxo novo de aceite TEM que gravar `lgpd_termo`** via `resolverTextoLgpd` — aceite sem termo nao e' prova LGPD.
 5. **`lgpd_logins` nao existe mais** — consentimento vive em `leads`; so ha `lgpd_logins_backup`.
+6. **Filtros da tela Cadastros LGPD (`LgpdCadastros.jsx`)**: origem, status do aceite, periodo (De/Ate sobre `COALESCE(lgpd_aceite_em, criado_em)`, ate 366 dias), ponto de acesso e SSID, aplicados NO SERVIDOR por `lgpdController.montarFiltrosLgpd` (placeholders, `empresa_id` sempre do tenant, valor invalido = 400 `Filtro inválido`) em `GET /api/lgpd` e tambem em `GET /api/lgpd/export` (o CSV sai com os mesmos filtros da tela; sem filtro continua completo, max 50000). `GET /api/lgpd/filtros` devolve origens/SSIDs/APs da empresa para os selects. A busca por texto continua no navegador. Teste: `backend/tests/unit/lgpdFiltros.test.js`.
 
 ---
 
