@@ -361,7 +361,7 @@ export default function ImportarClientes() {
           <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {[["planilha", "Planilha (CSV / XLSX)"], ["sgp", "SGP (API)"], ["whatsapp", "WhatsApp"], ["google", "Google Contatos"], ["outlook", "Outlook"], ["icloud", "iCloud"]].map(([k, rot]) => (
             <button
               key={k}
