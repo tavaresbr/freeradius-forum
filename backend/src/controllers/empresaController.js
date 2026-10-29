@@ -20,7 +20,7 @@ exports.listarEmpresas = async (req, res) => {
         (SELECT COUNT(*) FROM admins WHERE empresa_id = e.id) AS total_admins,
         (SELECT COUNT(*) FROM mikrotiks WHERE empresa_id = e.id) AS total_mikrotiks,
         (SELECT COUNT(*) FROM planos WHERE empresa_id = e.id) AS total_planos,
-        a.status AS assinatura_status, a.trial_ate, a.vence_em, a.plano_id AS assinatura_plano_id, sp.nome AS assinatura_plano_nome
+        a.status AS assinatura_status, a.trial_ate, a.vence_em, a.plano_id AS assinatura_plano_id, sp.nome AS assinatura_plano_nome, sp.valor AS assinatura_plano_valor, sp.ciclo_dias AS assinatura_ciclo_dias
       FROM empresas e
       LEFT JOIN assinaturas a ON a.empresa_id = e.id
       LEFT JOIN saas_planos sp ON sp.id = a.plano_id
