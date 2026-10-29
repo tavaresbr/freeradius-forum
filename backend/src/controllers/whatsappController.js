@@ -303,6 +303,7 @@ async function saveConfig(req, res) {
       // configuracoes do atendimento (automacao etc.) sao editadas em suas proprias telas: preservadas aqui
       ...(atual.automacao ? { automacao: atual.automacao } : {}),
       ...(atual.aviso_expiracao ? { aviso_expiracao: atual.aviso_expiracao } : {}),
+      ...(atual.alerta_equipamentos ? { alerta_equipamentos: atual.alerta_equipamentos } : {}),
     });
 
     if (existing) {
