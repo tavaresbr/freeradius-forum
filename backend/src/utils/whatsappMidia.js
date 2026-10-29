@@ -15,6 +15,7 @@ const TIPOS = {
   "image/gif": { ext: "gif", tipo: "imagem" },
   "video/mp4": { ext: "mp4", tipo: "video" },
   "audio/ogg": { ext: "ogg", tipo: "audio" },
+  "audio/webm": { ext: "webm", tipo: "audio" }, // gravacao do navegador (Chrome/Edge)
   "audio/mpeg": { ext: "mp3", tipo: "audio" },
   "audio/mp4": { ext: "m4a", tipo: "audio" },
   "audio/aac": { ext: "aac", tipo: "audio" },
@@ -59,6 +60,7 @@ function assinaturaMidia(buf, mime) {
   const ascii = (a, b) => buf.toString("latin1", a, b);
   switch (mime) {
     case "audio/ogg": return ascii(0, 4) === "OggS";
+    case "audio/webm": return buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3; // EBML
     case "audio/mpeg": return ascii(0, 3) === "ID3" || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);
     case "audio/mp4": return buf.length >= 8 && ascii(4, 8) === "ftyp";
     case "audio/aac": return (buf[0] === 0xff && (buf[1] & 0xf0) === 0xf0) || (buf.length >= 8 && ascii(4, 8) === "ftyp");

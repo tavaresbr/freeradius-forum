@@ -120,6 +120,7 @@ test('envio de midia: imagem vai por sendMedia, audio por sendWhatsAppAudio; arq
     assert.strictEqual(chamadas[0].body.media, PNG.toString('base64'));
     assert.strictEqual(chamadas[1].url, 'http://evo/message/sendWhatsAppAudio/empresa_7');
     assert.strictEqual(chamadas[1].body.audio, OGG.toString('base64'));
+    assert.strictEqual(chamadas[1].body.encoding, true); // a Evolution converte para nota de voz (OGG/Opus)
     const ins = db.calls.filter((c) => /INSERT INTO whatsapp_mensagens/.test(c.sql));
     assert.strictEqual(ins[0].params[3], 'imagem');
     assert.match(ins[0].params[5], /^7\/.*\.png$/);
@@ -188,4 +189,13 @@ test('rota de midia: mensagem recebida sem arquivo tenta baixar uma vez; falha =
     await carregarCtrl(db).servirMidia(criarReq({ params: { id: '9' }, empresa_id: 7 }), res);
     assert.strictEqual(res.statusCode, 502);
   } finally { axios.post = postOrig; fim(); }
+});
+
+test('audio gravado no navegador (webm/opus): aceito com assinatura EBML; sem ela ou como video/webm, recusado', () => {
+  const u = util();
+  const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(40, 1)]);
+  const r = u.validarArquivo(WEBM, 'audio/webm;codecs=opus', 'audio-1.webm');
+  assert.deepStrictEqual({ mime: r.mime, ext: r.ext, tipo: r.tipo }, { mime: 'audio/webm', ext: 'webm', tipo: 'audio' });
+  assert.throws(() => u.validarArquivo(Buffer.alloc(40, 1), 'audio/webm', 'x.webm'), /não corresponde/);
+  assert.throws(() => u.validarArquivo(WEBM, 'video/webm', 'x.webm'), /não permitido/);
 });
