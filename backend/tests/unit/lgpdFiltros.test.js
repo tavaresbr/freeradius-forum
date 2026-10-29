@@ -4,10 +4,11 @@ const assert = require('node:assert');
 const { criarDb, carregar, criarReq, criarRes } = require('../helpers/mocks');
 
 const silencia = () => { const l = console.error; console.error = () => {}; return () => { console.error = l; }; };
-const ctrl = (db) => carregar('src/controllers/lgpdController.js', {
+const ctrl = (db, temEq = true) => carregar('src/controllers/lgpdController.js', {
   db,
   extras: {
     'src/utils/leadUtils.js': {},
+    'src/utils/schemaCache.js': { temColuna: async () => temEq },
     'src/utils/apInfo.js': { resolverApDoContexto: async () => ({}) },
     'src/services/whatsappNotify.js': { notificarLiberacao: async () => {} },
     'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({}) },
@@ -79,6 +80,63 @@ test('getFiltrosLgpd escopa por empresa e devolve origens, ssids e aps', async (
   });
   const res = criarRes();
   await ctrl(db).getFiltrosLgpd(criarReq({ empresa_id: 4 }), res);
-  assert.deepStrictEqual(res.body, { origens: ['lgpd'], ssids: ['Loja'], aps: [{ ap_mac: 'AA:BB:CC:DD:EE:FF', ap_nome: 'AP1' }] });
+  assert.deepStrictEqual(res.body.origens, ['lgpd']);
+  assert.deepStrictEqual(res.body.ssids, ['Loja']);
+  assert.ok(Array.isArray(res.body.equipamentos));
   assert.ok(db.calls.every((c) => c.params[0] === 4 && /l\.empresa_id = \?/.test(c.sql)));
+});
+
+test('equipamento: filtra por l.mikrotik_id, valida o inteiro e so entra se a coluna existe (migration 056)', async () => {
+  const { montarFiltrosLgpd } = ctrl(criarDb());
+  const f = montarFiltrosLgpd({ equipamento: '7' }, 3);
+  assert.match(f.where, /l\.mikrotik_id = \?/);
+  assert.deepStrictEqual(f.params, [3, 7]);
+  for (const ruim of ['0', '-1', 'abc', '1 OR 1=1', '99999999999']) {
+    assert.throws(() => montarFiltrosLgpd({ equipamento: ruim }, 3), (e) => e.status === 400, ruim);
+  }
+  // sem a coluna: o filtro e' ignorado (nao quebra a consulta)
+  const g = montarFiltrosLgpd({ equipamento: '7' }, 3, { comEquipamento: false });
+  assert.ok(!/mikrotik_id/.test(g.where));
+  assert.deepStrictEqual(g.params, [3]);
+});
+
+test('lista e CSV trazem o equipamento (JOIN escopado por empresa); sem a coluna usam NULL', async () => {
+  const db = criarDb(async () => [[]]);
+  const c = ctrl(db, true);
+  await c.getAllLgpd(criarReq({ empresa_id: 3, query: { equipamento: '7' } }), criarRes());
+  assert.match(db.calls[0].sql, /m\.nome AS equipamento_nome/);
+  assert.match(db.calls[0].sql, /LEFT JOIN mikrotiks m ON m\.id = l\.mikrotik_id AND m\.empresa_id = l\.empresa_id/);
+  assert.deepStrictEqual(db.calls[0].params, [3, 7]);
+  const res = criarRes();
+  await c.exportarLgpdCSV(criarReq({ empresa_id: 3, query: {} }), res);
+  assert.match(res.body, /Equipamento/);
+
+  const db2 = criarDb(async () => [[]]);
+  await ctrl(db2, false).getAllLgpd(criarReq({ empresa_id: 3, query: { equipamento: '7' } }), criarRes());
+  assert.match(db2.calls[0].sql, /NULL AS equipamento_nome/);
+  assert.ok(!/JOIN mikrotiks/.test(db2.calls[0].sql));
+});
+
+test('gravarEquipamentoLead: so equipamento da propria empresa, so se NULL, e nunca derruba o portal', async () => {
+  const { carregar: c2 } = require('../helpers/mocks');
+  const mk = (handler) => {
+    const db = criarDb(handler);
+    const u = c2('src/utils/leadUtils.js', { db });
+    return { db, u };
+  };
+  // equipamento de outra empresa => nao grava
+  let m = mk(async (sql) => (/FROM mikrotiks/.test(sql) ? [[]] : undefined));
+  await m.u.gravarEquipamentoLead(5, { cpf: '52998224725' }, 9);
+  assert.ok(!m.db.calls.some((c) => /UPDATE leads/.test(c.sql)));
+  // equipamento da empresa => UPDATE so onde mikrotik_id IS NULL, escopado
+  m = mk(async (sql) => (/FROM mikrotiks/.test(sql) ? [[{ id: 9 }]] : undefined));
+  await m.u.gravarEquipamentoLead(5, { cpf: '52998224725' }, 9);
+  const up = m.db.calls.find((c) => /UPDATE leads/.test(c.sql));
+  assert.match(up.sql, /mikrotik_id IS NULL/);
+  assert.match(up.sql, /empresa_id = \?/);
+  assert.deepStrictEqual(up.params, [9, 5, '52998224725']);
+  // id invalido / coluna ausente => silencioso
+  m = mk(async () => { throw Object.assign(new Error("Unknown column 'mikrotik_id'"), {}); });
+  await assert.doesNotReject(() => m.u.gravarEquipamentoLead(5, { mac: 'AA:BB' }, 9));
+  await m.u.gravarEquipamentoLead(5, { cpf: '1' }, 'x');
 });

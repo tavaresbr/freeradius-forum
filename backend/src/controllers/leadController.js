@@ -1,7 +1,7 @@
 const { urlHttpSegura } = require("../utils/entradaSegura");
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
+const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -51,6 +51,8 @@ exports.capturaPassiva = async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'portal_passivo', 'novo')`,
         [empresaId, nome || null, email || null, telefone || null, cpfLimpo, mac || null, ip || null, apInfo.apMac, apInfo.ssid]
       );
+      // capturaPassiva nunca altera lead existente: o equipamento so e gravado no cadastro NOVO
+      await gravarEquipamentoLead(empresaId, { cpf: cpfLimpo || null, mac: mac || null }, mikrotik_id);
     }
 
     // Buscar config de redirect do portal lead_passivo desta empresa
@@ -231,6 +233,7 @@ exports.leadLogin = async (req, res) => {
         console.warn("Aviso: erro ao inserir lead:", leadErr.message);
       }
     }
+    await gravarEquipamentoLead(empresaId, { cpf: cpf ? String(cpf).replace(/\D/g, "") : null, mac: mac || null }, mikrotik_id);
 
     // Remove autenticacoes antigas
     await db.query("DELETE FROM radcheck WHERE username = ?", [username]);
@@ -787,6 +790,7 @@ exports.cadastroCliente = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'portal_planos', 'novo')`,
       [empresaId, nome, email, telefone, cpfLimpo, mac || null, ip || null, apInfo.apMac, apInfo.ssid]
     );
+    await gravarEquipamentoLead(empresaId, { cpf: cpfLimpo }, mikrotik_id);
 
     res.json({ id: result.insertId, nome, email, existente: false });
   } catch (err) {

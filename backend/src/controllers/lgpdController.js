@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
@@ -10,6 +10,7 @@ const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { normalizarMac } = require("../utils/entradaSegura");
+const { temColuna } = require("../utils/schemaCache");
 
 exports.lgpdLogin = async (req, res) => {
   try {
@@ -133,6 +134,7 @@ exports.lgpdLogin = async (req, res) => {
       );
       await gravarDataNascimento(cpfLimpo, empresaId, data_nascimento);
     }
+    await gravarEquipamentoLead(empresaId, { cpf: cpfLimpo || null, mac }, mikrotik_id);
 
     // Remove autenticações antigas
     await db.query("DELETE FROM radcheck WHERE username = ?", [username]);
@@ -239,7 +241,11 @@ const LGPD_WHERE = "l.empresa_id = ? AND (l.origem = 'lgpd' OR l.lgpd_aceite = 1
 const DATA_EXPR = "COALESCE(l.lgpd_aceite_em, l.criado_em)";
 
 // Filtros opcionais da tela/CSV. Sempre empresa_id do tenant; valores validados e passados como placeholders.
-function montarFiltrosLgpd(query, empresaId) {
+// Equipamento do aceite (leads.mikrotik_id, migration 056): so entra na consulta se a coluna existe.
+const COLS_EQUIP = (tem) => (tem ? "l.mikrotik_id, m.nome AS equipamento_nome" : "NULL AS mikrotik_id, NULL AS equipamento_nome");
+const JOIN_EQUIP = (tem) => (tem ? "LEFT JOIN mikrotiks m ON m.id = l.mikrotik_id AND m.empresa_id = l.empresa_id" : "");
+
+function montarFiltrosLgpd(query, empresaId, { comEquipamento = true } = {}) {
   const q = query || {};
   const invalido = () => { const e = new Error("Filtro inválido"); e.status = 400; return e; };
   const txt = (v) => {
@@ -279,6 +285,11 @@ function montarFiltrosLgpd(query, empresaId) {
     if (!mac) throw invalido();
     where += " AND l.ap_mac = ?"; params.push(mac);
   }
+  const equip = txt(q.equipamento);
+  if (equip) {
+    if (!/^\d{1,10}$/.test(equip) || Number(equip) <= 0) throw invalido();
+    if (comEquipamento) { where += " AND l.mikrotik_id = ?"; params.push(Number(equip)); }
+  }
   const ssid = txt(q.ssid);
   if (ssid) {
     if (ssid.length > 64) throw invalido();
@@ -290,14 +301,16 @@ exports.montarFiltrosLgpd = montarFiltrosLgpd;
 
 exports.getAllLgpd = async (req, res) => {
   try {
-    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id);
+    const temEq = await temColuna("leads", "mikrotik_id");
+    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id, { comEquipamento: temEq });
     const [rows] = await db.query(
       `SELECT l.id, l.cpf, l.email, l.nome, l.telefone, l.mac, l.ip, l.origem,
-              l.ap_mac, l.ssid, ap.nome AS ap_nome,
+              l.ap_mac, l.ssid, ap.nome AS ap_nome, ${COLS_EQUIP(temEq)},
               l.lgpd_aceite as aceite, l.lgpd_aceite_em, l.lgpd_termo, l.criado_em
        FROM leads l
        LEFT JOIN access_points ap
          ON ap.mac = l.ap_mac AND ap.empresa_id = l.empresa_id
+       ${JOIN_EQUIP(temEq)}
        WHERE ${where}
        ORDER BY ${DATA_EXPR} DESC`,
       params
@@ -321,7 +334,16 @@ exports.getFiltrosLgpd = async (req, res) => {
        WHERE ${LGPD_WHERE} AND l.ap_mac IS NOT NULL AND l.ap_mac <> '' ORDER BY ap.nome, l.ap_mac`,
       [req.empresa_id]
     );
-    res.json({ origens: origens.map((r) => r.origem), ssids: ssids.map((r) => r.ssid), aps });
+    let equipamentos = [];
+    if (await temColuna("leads", "mikrotik_id")) {
+      [equipamentos] = await db.query(
+        `SELECT DISTINCT m.id, m.nome FROM leads l
+         JOIN mikrotiks m ON m.id = l.mikrotik_id AND m.empresa_id = l.empresa_id
+         WHERE ${LGPD_WHERE} ORDER BY m.nome`,
+        [req.empresa_id]
+      );
+    }
+    res.json({ origens: origens.map((r) => r.origem), ssids: ssids.map((r) => r.ssid), aps, equipamentos });
   } catch (err) {
     console.error("Erro ao buscar filtros LGPD:", err);
     res.status(500).json({ message: "Erro ao buscar filtros" });
@@ -332,14 +354,16 @@ exports.getFiltrosLgpd = async (req, res) => {
 // e QUAL termo foi aceito). Usado com token curto de download (verifyDownloadToken).
 exports.exportarLgpdCSV = async (req, res) => {
   try {
-    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id);
+    const temEq = await temColuna("leads", "mikrotik_id");
+    const { where, params } = montarFiltrosLgpd(req.query, req.empresa_id, { comEquipamento: temEq });
     const [rows] = await db.query(
       `SELECT l.nome, l.email, l.telefone, l.cpf, l.mac, l.ip, l.origem,
-              l.ap_mac, l.ssid, ap.nome AS ap_nome,
+              l.ap_mac, l.ssid, ap.nome AS ap_nome, ${COLS_EQUIP(temEq)},
               l.lgpd_aceite, l.lgpd_aceite_em, l.lgpd_termo, l.criado_em
        FROM leads l
        LEFT JOIN access_points ap
          ON ap.mac = l.ap_mac AND ap.empresa_id = l.empresa_id
+       ${JOIN_EQUIP(temEq)}
        WHERE ${where}
        ORDER BY ${DATA_EXPR} DESC
        LIMIT 50000`,
@@ -347,7 +371,7 @@ exports.exportarLgpdCSV = async (req, res) => {
     );
 
     const fmtData = (d) => (d ? new Date(d).toISOString().replace("T", " ").slice(0, 19) : "");
-    const header = "Nome,Email,Telefone,CPF,MAC,IP,AP MAC,AP Nome,SSID,Origem,Aceite,Aceite Em,Cadastro Em,Termo Aceito";
+    const header = "Nome,Email,Telefone,CPF,MAC,IP,Equipamento,AP MAC,AP Nome,SSID,Origem,Aceite,Aceite Em,Cadastro Em,Termo Aceito";
     const csvRows = rows.map((r) =>
       [
         r.nome || "",
@@ -356,6 +380,7 @@ exports.exportarLgpdCSV = async (req, res) => {
         r.cpf || "",
         r.mac || "",
         r.ip || "",
+        r.equipamento_nome || "",
         r.ap_mac || "",
         r.ap_nome || "",
         r.ssid || "",
@@ -440,6 +465,7 @@ exports.lgpdCadastro = async (req, res) => {
       );
     }
     await gravarDataNascimento(cpf, empresaId, data_nascimento, { permitirLeadExistente: permitirDataEmExistente });
+    await gravarEquipamentoLead(empresaId, { cpf }, mikrotik_id);
 
     res.json({ success: true, message: "Cadastro LGPD realizado com sucesso" });
   } catch (err) {
