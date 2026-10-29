@@ -12,6 +12,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState(null)
+  const [verSenha, setVerSenha] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -37,7 +38,7 @@ export default function Login() {
     }
   }
 
-  const inp = 'w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2 focus:outline-none focus:border-apex-500 focus:ring-2 focus:ring-apex-200'
+  const inp = 'w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-3 text-base focus:outline-none focus:border-apex-500 focus:ring-2 focus:ring-apex-200'
   return (
     <div className="tema-site min-h-screen pt-24 bg-white flex">
       <SiteHeader />
@@ -50,7 +51,7 @@ export default function Login() {
         </ul>
       </div>
       <div className="flex flex-1 items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-white border border-apex-100 p-8 rounded-2xl shadow-xl shadow-apex-500/10 w-full max-w-sm">
+        <form onSubmit={handleLogin} className="bg-white border border-apex-100 p-6 sm:p-8 rounded-2xl shadow-xl shadow-apex-500/10 w-full max-w-sm">
           <div className="mb-6 text-center">
             {logoUrl
               ? <div className="flex justify-center"><MarcaApex local="login" /></div>
@@ -61,15 +62,20 @@ export default function Login() {
 
           <div className="mb-4">
             <label className="block text-gray-600 mb-2 text-sm">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
+            <input type="email" name="email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" enterKeyHint="next" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
           </div>
 
           <div className="mb-6">
             <label className="block text-gray-600 mb-2 text-sm">Senha</label>
-            <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} className={inp} required />
+            <div className="relative">
+              <input type={verSenha ? "text" : "password"} name="password" autoComplete="current-password" enterKeyHint="go" value={senha} onChange={(e) => setSenha(e.target.value)} className={`${inp} pr-16`} required />
+              <button type="button" onClick={() => setVerSenha((v) => !v)} className="absolute inset-y-0 right-0 px-3 text-sm text-apex-600 cursor-pointer" aria-label={verSenha ? "Ocultar senha" : "Mostrar senha"}>
+                {verSenha ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
-          <button type="submit" className="w-full bg-apex-500 text-white py-2 rounded-lg hover:bg-apex-600 transition-colors duration-200 cursor-pointer font-medium">
+          <button type="submit" className="w-full bg-apex-500 text-white py-3 rounded-lg hover:bg-apex-600 transition-colors duration-200 cursor-pointer font-medium">
             Entrar
           </button>
         </form>
