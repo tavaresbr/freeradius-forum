@@ -3,6 +3,7 @@ const db = require("../../db");
 const fs = require("fs");
 const svc = require("../services/whatsappAtendimento");
 const midiaUtil = require("../utils/whatsappMidia");
+const { temColuna } = require("../utils/schemaCache");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -43,6 +44,20 @@ async function anexarEtiquetas(empresaId, conversas) {
   } catch (err) { /* tabela nova ausente */ }
 }
 
+/** Coloca `atendente_nome` em cada conversa que tem dono. */
+async function anexarAtendentes(empresaId, conversas) {
+  const ids = [...new Set(conversas.map((c) => c.atendente_id).filter(Boolean))];
+  if (!ids.length) return;
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nome FROM admins WHERE id IN (${ids.map(() => "?").join(",")})`, // atendente_id so e' gravado por quem assume ou por vinculo da empresa
+      ids
+    );
+    const nomes = new Map(rows.map((r) => [r.id, r.nome]));
+    conversas.forEach((c) => { if (c.atendente_id) c.atendente_nome = nomes.get(c.atendente_id) || null; });
+  } catch (err) { /* sem nome: a tela mostra so "atribuida" */ }
+}
+
 // GET /api/atendimento/conversas?status=aberta|resolvida|todas&nao_lidas=1&q=&pagina=1
 exports.listarConversas = async (req, res) => {
   try {
@@ -58,20 +73,34 @@ exports.listarConversas = async (req, res) => {
       where.push("id IN (SELECT conversa_id FROM whatsapp_conversa_etiquetas WHERE empresa_id = ? AND etiqueta_id = ?)");
       params.push(req.empresa_id, etiqueta);
     }
+    const temAtendente = await temColuna("whatsapp_conversas", "atendente_id");
+    if (temAtendente) {
+      const at = String(req.query.atendente || "");
+      if (at === "eu") { where.push("atendente_id = ?"); params.push(req.user.id); }
+      else if (at === "sem") where.push("atendente_id IS NULL");
+      else if (/^\d+$/.test(at)) { where.push("atendente_id = ?"); params.push(parseInt(at, 10)); }
+    }
     const q = String(req.query.q || "").trim().slice(0, 60);
     if (q) {
-      where.push("(nome LIKE ? OR telefone LIKE ? OR ultima_msg_previa LIKE ?)");
       const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
-      params.push(like, like, like);
+      if (q.length >= 3) {
+        // alem do nome/telefone/previa, procura dentro do texto das mensagens da conversa
+        where.push("(nome LIKE ? OR telefone LIKE ? OR ultima_msg_previa LIKE ? OR EXISTS (SELECT 1 FROM whatsapp_mensagens mm WHERE mm.conversa_id = whatsapp_conversas.id AND mm.empresa_id = ? AND mm.texto LIKE ?))");
+        params.push(like, like, like, req.empresa_id, like);
+      } else {
+        where.push("(nome LIKE ? OR telefone LIKE ? OR ultima_msg_previa LIKE ?)");
+        params.push(like, like, like);
+      }
     }
     const [rows] = await db.query(
-      `SELECT id, jid, telefone, nome, lead_id, status, nao_lidas, ultima_msg_em, ultima_msg_previa
+      `SELECT id, jid, telefone, nome, lead_id, status, nao_lidas, ultima_msg_em, ultima_msg_previa${temAtendente ? ", atendente_id, atribuido_em" : ""}
          FROM whatsapp_conversas WHERE ${where.join(" AND ")}
         ORDER BY ultima_msg_em DESC, id DESC LIMIT ? OFFSET ?`,
       [...params, limite + 1, (pagina - 1) * limite]
     );
     const conversas = rows.slice(0, limite);
     await anexarEtiquetas(req.empresa_id, conversas);
+    await anexarAtendentes(req.empresa_id, conversas);
     res.json({ conversas, tem_mais: rows.length > limite });
   } catch (err) {
     erro500(res, err, "Erro ao listar conversas");
@@ -85,8 +114,9 @@ exports.listarMensagens = async (req, res) => {
     if (!conversa) return;
     const limite = inteiro(req.query.limite, 60, 1, 200);
     const antes = parseInt(req.query.antes_de, 10);
+    const temCitacao = await temColuna("whatsapp_mensagens", "resposta_a_wa_id");
     const [rows] = await db.query(
-      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor
+      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor${temCitacao ? ", m.resposta_a_wa_id, m.resposta_previa" : ""}
          FROM whatsapp_mensagens m LEFT JOIN admins a ON a.id = m.admin_id
         WHERE m.empresa_id = ? AND m.conversa_id = ? ${Number.isInteger(antes) ? "AND m.id < ?" : ""}
         ORDER BY m.id DESC LIMIT ?`,
@@ -94,6 +124,7 @@ exports.listarMensagens = async (req, res) => {
     );
     const [soConversa] = [[conversa]];
     await anexarEtiquetas(req.empresa_id, soConversa);
+    await anexarAtendentes(req.empresa_id, soConversa);
     res.json({ conversa, mensagens: rows.slice(0, limite).reverse(), tem_mais: rows.length > limite });
   } catch (err) {
     erro500(res, err, "Erro ao listar mensagens");
@@ -108,7 +139,17 @@ exports.enviarMensagem = async (req, res) => {
     const texto = typeof req.body?.texto === "string" ? req.body.texto.trim() : "";
     if (!texto) return res.status(400).json({ error: "Digite a mensagem" });
     if (texto.length > svc.MAX_TEXTO) return res.status(400).json({ error: `Mensagem muito longa (máximo ${svc.MAX_TEXTO} caracteres)` });
-    const r = await svc.enviarTexto(req.empresa_id, req.user.id, conversa, texto);
+    // citacao: so mensagens (recebidas ou enviadas) desta conversa e desta empresa
+    let citada = null;
+    const rid = parseInt(req.body?.responder_a, 10);
+    if (Number.isInteger(rid)) {
+      const [[m]] = await db.query(
+        "SELECT wa_id, direcao, texto, tipo FROM whatsapp_mensagens WHERE id = ? AND empresa_id = ? AND conversa_id = ? AND direcao IN ('in','out') AND wa_id NOT LIKE 'tmp\\_%'",
+        [rid, req.empresa_id, conversa.id]
+      );
+      if (m) citada = { waId: m.wa_id, fromMe: m.direcao === "out", texto: m.texto || ({ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento" }[m.tipo] || "Mensagem") };
+    }
+    const r = await svc.enviarTexto(req.empresa_id, req.user.id, conversa, texto, { citada });
     res.json({ success: true, id: r.id });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message, mensagem_id: err.mensagemId });

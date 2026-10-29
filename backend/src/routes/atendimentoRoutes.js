@@ -21,6 +21,13 @@ router.get("/midia/:id", c.servirMidia);
 router.put("/conversas/:id", c.atualizarConversa);
 router.post("/conversas/:id/lida", c.marcarLida);
 router.get("/nao-lidas", c.naoLidas);
+
+// Dia a dia: dono da conversa, localizacao e contato
+router.get("/atendentes", x.listarAtendentes);
+router.post("/conversas/:id/assumir", x.assumirConversa);
+router.post("/conversas/:id/transferir", x.transferirConversa);
+router.post("/conversas/:id/localizacao", atendimentoEnvioLimiter, x.enviarLocalizacao);
+router.post("/conversas/:id/contato", atendimentoEnvioLimiter, x.enviarContato);
 router.post("/webhook/garantir", c.garantirWebhook);
 
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa

@@ -5,6 +5,7 @@ import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
+import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function AdminLayout({ children }) {
   const [whatsappAvisoFechado, setWhatsappAvisoFechado] = useState(false);
   const [assinatura, setAssinatura] = useState(null);
   const [naoLidasWa, setNaoLidasWa] = useState(0);
+  const totalWaRef = useRef(null); // total de mensagens nao lidas na ultima consulta (null = ainda nao consultou)
 
   const toggleMenu = (key) => setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -62,10 +64,19 @@ export default function AdminLayout({ children }) {
     if (!slug || !podeAtendimento) { setNaoLidasWa(0); return; }
     let ativo = true;
     const buscar = async () => {
-      if (document.hidden) return;
+      // aba em segundo plano so consulta se o aviso (som/notificacao) estiver ligado
+      if (document.hidden && !avisoAtivo()) return;
       try {
         const res = await fetch('/api/atendimento/nao-lidas', { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
-        if (res.ok && ativo) setNaoLidasWa((await res.json()).conversas || 0);
+        if (!res.ok || !ativo) return;
+        const d = await res.json();
+        setNaoLidasWa(d.conversas || 0);
+        const total = d.mensagens || 0;
+        if (totalWaRef.current !== null && total > totalWaRef.current && avisoAtivo()) {
+          tocarAviso();
+          notificar('WhatsApp', total === 1 ? '1 mensagem nova' : `${total} mensagens não lidas`);
+        }
+        totalWaRef.current = total;
       } catch (e) { /* silencioso */ }
     };
     buscar();

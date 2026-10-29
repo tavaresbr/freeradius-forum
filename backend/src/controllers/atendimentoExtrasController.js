@@ -6,6 +6,7 @@ const svc = require("../services/whatsappAtendimento");
 const { normalizarTelefone } = require("../services/whatsappNotify");
 const wpp = require("./whatsappController");
 const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
+const { temColuna } = require("../utils/schemaCache");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -357,5 +358,123 @@ exports.novaConversa = async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message, mensagem_id: err.mensagemId });
     erro500(res, err, "Erro ao iniciar a conversa");
+  }
+};
+
+// ---------- Atendente (dono da conversa) ----------
+
+const MSG_SEM_MIGRATION = "Atribuição de atendente ainda não disponível neste servidor. Rode a migration 051 (node migrations/051_whatsapp_atendimento_dia_a_dia.js) e reinicie o backend.";
+
+// GET /api/atendimento/atendentes  (admins vinculados a empresa)
+exports.listarAtendentes = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT a.id, a.nome, a.email FROM admins a JOIN admin_empresas ae ON ae.admin_id = a.id
+        WHERE ae.empresa_id = ? ORDER BY a.nome`,
+      [req.empresa_id]
+    );
+    res.json({ atendentes: rows, eu: req.user.id });
+  } catch (err) {
+    erro500(res, err, "Erro ao listar atendentes");
+  }
+};
+
+async function registrarAtribuicao(req, conversa, texto) {
+  // nota interna (so a equipe ve): fica o historico de quem pegou/transferiu
+  await db.query(
+    `INSERT INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, admin_id)
+     VALUES (?, ?, ?, 'nota', 'texto', ?, 'enviada', ?)`,
+    [req.empresa_id, conversa.id, `nota_${crypto.randomUUID()}`, texto, req.user.id]
+  );
+}
+
+async function nomeDoAdmin(id) {
+  const [[a]] = await db.query("SELECT nome FROM admins WHERE id = ?", [id]);
+  return a?.nome || "Atendente";
+}
+
+// POST /api/atendimento/conversas/:id/assumir
+exports.assumirConversa = async (req, res) => {
+  try {
+    if (!(await temColuna("whatsapp_conversas", "atendente_id"))) return res.status(503).json({ error: MSG_SEM_MIGRATION });
+    const conversa = await conversaDaEmpresa(req, res);
+    if (!conversa) return;
+    await db.query("UPDATE whatsapp_conversas SET atendente_id = ?, atribuido_em = NOW() WHERE id = ? AND empresa_id = ?", [req.user.id, conversa.id, req.empresa_id]);
+    await registrarAtribuicao(req, conversa, `👤 ${await nomeDoAdmin(req.user.id)} assumiu a conversa`);
+    res.json({ success: true, atendente_id: req.user.id });
+  } catch (err) {
+    erro500(res, err, "Erro ao assumir a conversa");
+  }
+};
+
+// POST /api/atendimento/conversas/:id/transferir { admin_id }  (admin_id = null libera a conversa)
+exports.transferirConversa = async (req, res) => {
+  try {
+    if (!(await temColuna("whatsapp_conversas", "atendente_id"))) return res.status(503).json({ error: MSG_SEM_MIGRATION });
+    const conversa = await conversaDaEmpresa(req, res);
+    if (!conversa) return;
+    const alvo = req.body?.admin_id;
+    if (alvo === null || alvo === undefined || alvo === "") {
+      await db.query("UPDATE whatsapp_conversas SET atendente_id = NULL, atribuido_em = NULL WHERE id = ? AND empresa_id = ?", [conversa.id, req.empresa_id]);
+      await registrarAtribuicao(req, conversa, `👤 ${await nomeDoAdmin(req.user.id)} liberou a conversa (sem atendente)`);
+      return res.json({ success: true, atendente_id: null });
+    }
+    const adminId = parseInt(alvo, 10);
+    if (!Number.isInteger(adminId)) return res.status(400).json({ error: "Atendente inválido" });
+    const [[vinculo]] = await db.query("SELECT admin_id FROM admin_empresas WHERE admin_id = ? AND empresa_id = ?", [adminId, req.empresa_id]);
+    if (!vinculo) return res.status(400).json({ error: "Esse usuário não pertence a esta empresa" });
+    await db.query("UPDATE whatsapp_conversas SET atendente_id = ?, atribuido_em = NOW() WHERE id = ? AND empresa_id = ?", [adminId, conversa.id, req.empresa_id]);
+    await registrarAtribuicao(req, conversa, `👤 ${await nomeDoAdmin(req.user.id)} transferiu a conversa para ${await nomeDoAdmin(adminId)}`);
+    res.json({ success: true, atendente_id: adminId });
+  } catch (err) {
+    erro500(res, err, "Erro ao transferir a conversa");
+  }
+};
+
+// ---------- Localizacao e contato ----------
+
+const erroEnvio = (res, err, msg) => {
+  if (err?.status) return res.status(err.status).json({ error: err.message, mensagem_id: err.mensagemId });
+  erro500(res, err, msg);
+};
+
+// POST /api/atendimento/conversas/:id/localizacao { latitude, longitude, nome?, endereco? }
+exports.enviarLocalizacao = async (req, res) => {
+  try {
+    const conversa = await conversaDaEmpresa(req, res);
+    if (!conversa) return;
+    const lat = Number(req.body?.latitude), lng = Number(req.body?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return res.status(400).json({ error: "Coordenadas inválidas" });
+    }
+    const nome = texto(req.body?.nome, 100), endereco = texto(req.body?.endereco, 200);
+    const r = await svc.enviarMensagem(req.empresa_id, req.user.id, conversa, {
+      tipo: "outro",
+      texto: svc.textoLocalizacao({ degreesLatitude: lat, degreesLongitude: lng, name: nome, address: endereco }),
+      especial: { endpoint: "sendLocation", corpo: { name: nome || "Localização", address: endereco || "", latitude: lat, longitude: lng } },
+    });
+    res.json({ success: true, id: r.id });
+  } catch (err) {
+    erroEnvio(res, err, "Erro ao enviar localização");
+  }
+};
+
+// POST /api/atendimento/conversas/:id/contato { nome, telefone }
+exports.enviarContato = async (req, res) => {
+  try {
+    const conversa = await conversaDaEmpresa(req, res);
+    if (!conversa) return;
+    const nome = texto(req.body?.nome, 100);
+    const tel = normalizarTelefone(String(req.body?.telefone || "").replace(/\D/g, ""));
+    if (!nome) return res.status(400).json({ error: "Informe o nome do contato" });
+    if (!tel) return res.status(400).json({ error: "Telefone inválido (use DDD + número)" });
+    const r = await svc.enviarMensagem(req.empresa_id, req.user.id, conversa, {
+      tipo: "outro",
+      texto: `👤 Contato: ${nome} (+${tel})`,
+      especial: { endpoint: "sendContact", corpo: { contact: [{ fullName: nome, wuid: tel, phoneNumber: `+${tel}` }] } },
+    });
+    res.json({ success: true, id: r.id });
+  } catch (err) {
+    erroEnvio(res, err, "Erro ao enviar contato");
   }
 };
