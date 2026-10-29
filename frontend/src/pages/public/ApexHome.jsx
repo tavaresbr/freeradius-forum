@@ -86,8 +86,8 @@ export default function ApexHome() {
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
           <div className="text-center md:text-left">
             <span className="inline-block text-xs font-semibold bg-apex-100 text-apex-700 px-3 py-1 rounded-full">7 dias grátis, sem cartão</span>
-            <h1 className="mt-4 text-4xl md:text-5xl font-extrabold leading-tight">
-              Wi-Fi Hotspot que <span className="text-apex-500">vende e cadastra</span> por você
+            <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-balance">
+              Wi&#8209;Fi Hotspot que <span className="text-apex-500">vende e cadastra</span> por você
             </h1>
             <p className="mt-5 text-lg text-gray-600 max-w-xl mx-auto md:mx-0">
               Captive portal, pagamentos por PIX e cartão, LGPD e Marco Civil em um só sistema para provedores e estabelecimentos.
@@ -112,21 +112,21 @@ export default function ApexHome() {
         </div>
       </section>
 
-      <section id="vantagens" className="py-16 px-4 bg-white">
+      <section id="vantagens" className="py-12 sm:py-16 px-4 bg-white">
         <div className="max-w-6xl mx-auto grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {VANTAGENS.map(({ icone: Icone, titulo, texto }) => (
-            <div key={titulo} className="bg-white rounded-2xl p-6 border border-apex-100 shadow-sm hover:shadow-md hover:border-apex-400 transition text-center">
-              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-apex-100"><Icone className="text-apex-500" size={28} /></span>
-              <h3 className="mt-3 font-bold text-lg text-apex-900">{titulo}</h3>
-              <p className="mt-1 text-gray-600">{texto}</p>
+            <div key={titulo} className="bg-white rounded-2xl p-4 sm:p-6 border border-apex-100 shadow-sm hover:shadow-md hover:border-apex-400 transition flex items-start gap-4 text-left sm:block sm:text-center">
+              <span className="shrink-0 sm:mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-apex-100"><Icone className="text-apex-500" size={28} /></span>
+              <div className="min-w-0"><h3 className="sm:mt-3 font-bold text-lg text-apex-900">{titulo}</h3>
+              <p className="mt-1 text-gray-600">{texto}</p></div>
             </div>
           ))}
         </div>
       </section>
 
-      <section id="como-funciona" aria-labelledby="como-funciona-titulo" className="py-16 px-4 bg-white">
+      <section id="como-funciona" aria-labelledby="como-funciona-titulo" className="py-12 sm:py-16 px-4 bg-white">
         <div className="max-w-5xl mx-auto">
-          <h2 id="como-funciona-titulo" className="text-3xl font-bold text-center">Como funciona o Wi-Fi com cadastro e pagamento</h2>
+          <h2 id="como-funciona-titulo" className="text-2xl sm:text-3xl font-bold text-center text-balance">Como funciona o Wi&#8209;Fi com cadastro e pagamento</h2>
           <ol className="mt-10 grid gap-6 md:grid-cols-3">
             {COMO_FUNCIONA.map(([titulo, texto], i) => (
               <li key={titulo} className="bg-white rounded-2xl p-6 border border-apex-100 shadow-sm">
@@ -139,25 +139,25 @@ export default function ApexHome() {
         </div>
       </section>
 
-      <section id="recursos" className="py-16 px-4 bg-apex-50">
+      <section id="recursos" className="py-12 sm:py-16 px-4 bg-apex-50">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center">Tudo incluído em todos os planos</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Tudo incluído em todos os planos</h2>
           <p className="text-center text-gray-600 mt-2">Você não paga a mais por recurso: o plano muda só o tamanho da sua operação.</p>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {RECURSOS.map(({ icone: Icone, titulo, texto }) => (
-              <div key={titulo} className="bg-white rounded-2xl p-5 border border-apex-100 shadow-sm">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-apex-100"><Icone className="text-apex-500" size={22} /></span>
-                <h3 className="mt-3 font-bold text-apex-900">{titulo}</h3>
-                <p className="mt-1 text-sm text-gray-600">{texto}</p>
+              <div key={titulo} className="bg-white rounded-2xl p-4 sm:p-5 border border-apex-100 shadow-sm flex items-start gap-3 sm:block">
+                <span className="shrink-0 flex h-11 w-11 items-center justify-center rounded-full bg-apex-100"><Icone className="text-apex-500" size={22} /></span>
+                <div className="min-w-0"><h3 className="sm:mt-3 font-bold text-apex-900">{titulo}</h3>
+                <p className="mt-1 text-sm text-gray-600">{texto}</p></div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="planos" className="py-16 px-4">
+      <section id="planos" className="py-12 sm:py-16 px-4">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center">Escolha seu plano</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Escolha seu plano</h2>
           <p className="text-center text-gray-600 mt-2">Todos começam com 7 dias grátis e têm todos os recursos. Muda o limite de equipamentos e de administradores.</p>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {planos.map((p, i) => {
@@ -195,9 +195,9 @@ export default function ApexHome() {
         </div>
       </section>
 
-      <section id="faq" className="py-16 px-4 bg-apex-50">
+      <section id="faq" className="py-12 sm:py-16 px-4 bg-apex-50">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-center">Dúvidas frequentes</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Dúvidas frequentes</h2>
           <div className="mt-8 space-y-3">
             {FAQ.map(([q, a]) => (
               <details key={q} className="border bg-white rounded-lg p-4">
@@ -209,13 +209,13 @@ export default function ApexHome() {
         </div>
       </section>
 
-      <footer className="bg-apex-900 text-apex-100 py-8 px-4 text-center text-sm">
+      <footer className="bg-apex-900 text-apex-100 pt-8 pb-24 sm:pb-8 px-4 text-center text-sm">
         <p className="font-bold text-white">{nome}</p>
         <p className="mt-1">Atendimento: <a href={`https://wa.me/${WHATSAPP}`} className="underline hover:text-white">{TELEFONE}</a> (WhatsApp) | <a href={`mailto:${EMAIL}`} className="underline hover:text-white">{EMAIL}</a></p>
         <p className="mt-3 text-apex-400">&copy; {new Date().getFullYear()} {nome}. Todos os direitos reservados.</p>
       </footer>
 
-      <a href={`https://wa.me/${WHATSAPP}`} aria-label="WhatsApp" className="fixed bottom-5 right-5 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg">
+      <a href={`https://wa.me/${WHATSAPP}`} aria-label="WhatsApp" className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 bg-green-500 hover:bg-green-600 text-white p-3.5 sm:p-4 rounded-full shadow-lg">
         <MessageCircle />
       </a>
     </div>
