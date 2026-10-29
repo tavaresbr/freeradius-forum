@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function Backups() {
+  const raizRef = useRef(null);
+  useTabelasMobile(raizRef);
   const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const [backups, setBackups] = useState([]);
@@ -162,7 +165,7 @@ export default function Backups() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f111a] text-gray-300 p-8">
+    <div ref={raizRef} className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
