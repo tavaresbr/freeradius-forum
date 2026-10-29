@@ -162,6 +162,11 @@ async function registrarMensagem(empresaId, data) {
     [m.quando, m.previa, m.fromMe ? 0 : 1, m.fromMe ? 0 : 1, m.nome, conversaId, empresaId]
   );
   await aplicarOptOut(empresaId, m);
+  if (!m.fromMe) {
+    // Resposta automatica (boas-vindas / fora do horario): em segundo plano, nunca atrapalha o webhook.
+    require("./whatsappAutomacao").responderAutomatico(empresaId, conversaId, m)
+      .catch((err) => console.warn("[atendimento] resposta automatica falhou:", err.message));
+  }
   if (m.midia) {
     // Falha ao baixar nao perde a mensagem: o painel tenta de novo ao abrir a midia.
     try { await baixarMidia(empresaId, { id: ins.insertId, wa_id: m.waId, midia_mime: m.midia.mime }); }
@@ -316,10 +321,10 @@ async function garantirWebhook(empresaId) {
  * Envia texto ou midia pela instancia da empresa e grava a mensagem. A linha nasce "enviando"; o webhook
  * (fromMe) pode gravar o mesmo wa_id antes de a resposta da Evolution chegar — nesse caso a linha
  * temporaria e' descartada (UNIQUE empresa+wa_id).
- * @param {{tipo?: string, texto?: string, midia?: {buffer: Buffer, mime: string, ext: string, nome: string|null}, citada?: {waId: string, fromMe: boolean, texto?: string}, especial?: {endpoint: string, corpo: object}}} conteudo
+ * @param {{tipo?: string, texto?: string, midia?: {buffer: Buffer, mime: string, ext: string, nome: string|null}, citada?: {waId: string, fromMe: boolean, texto?: string}, automatica?: boolean, especial?: {endpoint: string, corpo: object}}} conteudo
  * `especial` = envio por outro endpoint da Evolution (sendLocation, sendContact); `texto` e' o que fica gravado.
  */
-async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null, citada = null, especial = null } = {}) {
+async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null, citada = null, especial = null, automatica = false } = {}) {
   const evo = await wpp.getEvolutionConfig(empresaId);
   if (!evo.apiKey) throw Object.assign(new Error("WhatsApp sem chave de API configurada"), { status: 400 });
   const temp = `tmp_${crypto.randomUUID()}`;
@@ -333,6 +338,9 @@ async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", te
   if (citada?.waId && await temColuna("whatsapp_mensagens", "resposta_a_wa_id")) {
     await db.query("UPDATE whatsapp_mensagens SET resposta_a_wa_id = ?, resposta_previa = ? WHERE id = ? AND empresa_id = ?",
       [String(citada.waId).slice(0, 120), String(citada.texto || "").replace(/\s+/g, " ").slice(0, 200) || null, id, empresaId]);
+  }
+  if (automatica && await temColuna("whatsapp_mensagens", "automatica")) {
+    await db.query("UPDATE whatsapp_mensagens SET automatica = 1 WHERE id = ? AND empresa_id = ?", [id, empresaId]);
   }
   const numero = conversa.telefone ? wpp.formatarNumeroComNonoDigito(conversa.telefone) : conversa.jid;
   const headers = { apikey: evo.apiKey, "Content-Type": "application/json" };
@@ -371,8 +379,9 @@ async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", te
     } else {
       await db.query("UPDATE whatsapp_mensagens SET status = 'enviada' WHERE id = ? AND empresa_id = ?", [id, empresaId]);
     }
+    // Resposta automatica nao zera as nao lidas: a equipe ainda precisa ver a mensagem do cliente.
     await db.query(
-      "UPDATE whatsapp_conversas SET ultima_msg_em = NOW(), ultima_msg_previa = ?, nao_lidas = 0 WHERE id = ? AND empresa_id = ?",
+      `UPDATE whatsapp_conversas SET ultima_msg_em = NOW(), ultima_msg_previa = ?, nao_lidas = ${automatica ? "nao_lidas" : "0"} WHERE id = ? AND empresa_id = ?`,
       [(texto || PREVIA[tipo] || "Mensagem").replace(/\s+/g, " ").slice(0, 200), conversa.id, empresaId]
     );
     return { id };

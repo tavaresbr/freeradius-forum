@@ -637,6 +637,12 @@ cron.schedule('* * * * *', () => {
   enviaPromocoes().catch(err => console.error('[CRON] Erro enviaPromocoes:', err.message));
 });
 
+// Atendimento WhatsApp: mensagens agendadas e lembretes de retorno
+const processaAgendadas = require('./src/jobs/processaAgendadas');
+cron.schedule('* * * * *', () => {
+  processaAgendadas().catch(err => console.error('[CRON] Erro processaAgendadas:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

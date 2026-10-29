@@ -115,8 +115,9 @@ exports.listarMensagens = async (req, res) => {
     const limite = inteiro(req.query.limite, 60, 1, 200);
     const antes = parseInt(req.query.antes_de, 10);
     const temCitacao = await temColuna("whatsapp_mensagens", "resposta_a_wa_id");
+    const temAuto = await temColuna("whatsapp_mensagens", "automatica");
     const [rows] = await db.query(
-      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor${temCitacao ? ", m.resposta_a_wa_id, m.resposta_previa" : ""}
+      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor${temCitacao ? ", m.resposta_a_wa_id, m.resposta_previa" : ""}${temAuto ? ", m.automatica" : ""}
          FROM whatsapp_mensagens m LEFT JOIN admins a ON a.id = m.admin_id
         WHERE m.empresa_id = ? AND m.conversa_id = ? ${Number.isInteger(antes) ? "AND m.id < ?" : ""}
         ORDER BY m.id DESC LIMIT ?`,

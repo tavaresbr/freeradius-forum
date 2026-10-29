@@ -300,6 +300,8 @@ async function saveConfig(req, res) {
       instance_name: plataforma && nome ? nome : `empresa_${req.empresa_id}`,
       // token do webhook de atendimento: gerado por whatsappAtendimento, nunca vem do formulario
       ...(atual.webhook_token ? { webhook_token: atual.webhook_token } : {}),
+      // configuracoes do atendimento (automacao etc.) sao editadas em suas proprias telas: preservadas aqui
+      ...(atual.automacao ? { automacao: atual.automacao } : {}),
     });
 
     if (existing) {

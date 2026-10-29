@@ -7,6 +7,8 @@ import GerenciarRespostas from "../../components/admin/atendimento/GerenciarResp
 import NovaConversa from "../../components/admin/atendimento/NovaConversa";
 import PainelCliente from "../../components/admin/atendimento/PainelCliente";
 import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
+import Automacao from "../../components/admin/atendimento/Automacao";
+import Agendar from "../../components/admin/atendimento/Agendar";
 import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
@@ -433,6 +435,7 @@ export default function Atendimento() {
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
+            <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
             <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
@@ -616,7 +619,7 @@ export default function Atendimento() {
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}
-                          {m.direcao === "out" && m.autor && <span className="opacity-70">· {m.autor}</span>}
+                          {m.direcao === "out" && m.automatica ? <span className="opacity-70">· 🤖 automática</span> : m.direcao === "out" && m.autor && <span className="opacity-70">· {m.autor}</span>}
                           {m.direcao !== "nota" && m.status !== "erro" && <button onClick={() => { setCitando(m); setModo("resposta"); }} className="ml-1 opacity-70 hover:opacity-100 cursor-pointer" aria-label="Responder esta mensagem" title="Responder esta mensagem">↩</button>}
                         </div>
                         {m.status === "erro" && <p className="text-xs text-red-200 mt-1">{m.erro || "Falha no envio"}</p>}
@@ -683,6 +686,7 @@ export default function Atendimento() {
                         <div role="menu" className="absolute left-0 bottom-full mb-1 z-30 w-44 bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-1">
                           <button role="menuitem" onClick={() => { setMenuMais(false); setModal("local"); }} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">📍 Localização</button>
                           <button role="menuitem" onClick={() => { setMenuMais(false); setModal("contato"); }} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">👤 Contato</button>
+                          <button role="menuitem" onClick={() => { setMenuMais(false); setModal("agendar"); }} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">⏰ Agendar</button>
                         </div>
                       )}
                     </div>
@@ -719,6 +723,8 @@ export default function Atendimento() {
             <EnviarEspecial tipo={modal} conversaId={selecionadaId} headers={headers} onFechar={() => setModal(null)}
               onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
           )}
+          {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
+          {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
           {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
         </div>
       </div>
