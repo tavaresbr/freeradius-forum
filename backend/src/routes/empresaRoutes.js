@@ -68,59 +68,8 @@ router.get("/by-slug/:slug", auth, async (req, res) => {
   }
 });
 
-// Logomarca da PROPRIA empresa (white label): o Administrador troca a sua sem afetar as outras.
-// A empresa vem so do token (tenant), nunca da URL/corpo.
-const tenant = require("../middleware/tenant");
-const exigeAssinatura = require("../middleware/assinatura");
-const checkPermissao = require("../middleware/checkPermissao");
-const uploadMinha = multer({
-  storage: multer.diskStorage({
-    destination: uploadsDir,
-    filename: (req, file, cb) => cb(null, `empresa-${parseInt(req.empresa_id, 10) || 0}-${Date.now()}${MIME_EXT[file.mimetype] || '.bin'}`),
-  }),
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => (MIME_EXT[file.mimetype] ? cb(null, true) : cb(new Error('Apenas imagens JPG, PNG ou WEBP são permitidas'))),
-});
-const permissaoMinhaLogo = [auth, tenant, exigeAssinatura, checkPermissao('configuracoes')];
-
-// Apaga o arquivo antigo da empresa (so dentro de /uploads/logos e so os dela).
-function apagarLogoAntiga(empresaId, logoUrl) {
-  const nome = path.basename(String(logoUrl || ''));
-  if (!nome.startsWith(`empresa-${empresaId}-`)) return;
-  for (const d of [uploadsDir, publicUploadsDir]) { try { fs.unlinkSync(path.join(d, nome)); } catch { /* ja removida */ } }
-}
-
-router.post("/minha/logo", ...permissaoMinhaLogo, (req, res, next) => {
-  uploadMinha.single('logo')(req, res, (err) => {
-    if (err) return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ message: err.code === 'LIMIT_FILE_SIZE' ? 'A imagem deve ter no máximo 2 MB' : err.message });
-    next();
-  });
-}, require("../middleware/assinaturaImagem"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
-    const logoUrl = `/uploads/logos/${req.file.filename}`;
-    fs.copyFileSync(req.file.path, path.join(publicUploadsDir, req.file.filename));
-    const [[atual]] = await db.execute('SELECT logo_url FROM empresas WHERE id = ?', [req.empresa_id]);
-    await db.execute('UPDATE empresas SET logo_url = ? WHERE id = ?', [logoUrl, req.empresa_id]);
-    if (atual) apagarLogoAntiga(req.empresa_id, atual.logo_url);
-    res.json({ logo_url: logoUrl });
-  } catch (err) {
-    console.error('Erro upload logo da empresa:', err.message);
-    res.status(500).json({ message: "Erro ao enviar a logomarca" });
-  }
-});
-
-router.delete("/minha/logo", ...permissaoMinhaLogo, async (req, res) => {
-  try {
-    const [[atual]] = await db.execute('SELECT logo_url FROM empresas WHERE id = ?', [req.empresa_id]);
-    await db.execute('UPDATE empresas SET logo_url = NULL WHERE id = ?', [req.empresa_id]);
-    if (atual) apagarLogoAntiga(req.empresa_id, atual.logo_url);
-    res.json({ logo_url: null });
-  } catch (err) {
-    console.error('Erro ao remover logo da empresa:', err.message);
-    res.status(500).json({ message: "Erro ao remover a logomarca" });
-  }
-});
+// Identidade (logo, favicon, tamanhos) da PROPRIA empresa: o Administrador troca a sua sem afetar as outras.
+router.use("/minha", require("./empresaBrandingRoutes"));
 
 // Todas as rotas abaixo requerem super_admin
 router.use(auth, authorize('super_admin'), exigeDonoPlataforma);

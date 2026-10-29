@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import IdentidadeSite from "../../components/admin/IdentidadeSite";
-import LogoEmpresa from "../../components/admin/LogoEmpresa";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -70,7 +69,7 @@ export default function Configuracoes() {
     <AdminLayout>
       <h1 className="text-2xl font-semibold mb-6">Configurações</h1>
 
-      <LogoEmpresa slug={empresaSlug || user?.empresa_slug || "default"} />
+      <IdentidadeSite empresa={empresaSlug || user?.empresa_slug || "default"} />
 
       {isSuperAdmin && <IdentidadeSite />}
 

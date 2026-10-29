@@ -92,6 +92,7 @@ function App() {
       {/* Público */}
       <Route path="/" element={<ApexHome />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/login/:empresaSlug" element={<Login />} />
       <Route path="/cadastro-cliente" element={<CadastroCliente />} />
       <Route path="/planos-cliente" element={<PlanosCliente />} />
       <Route path="/pagamento/:id" element={<Pagamento />} />

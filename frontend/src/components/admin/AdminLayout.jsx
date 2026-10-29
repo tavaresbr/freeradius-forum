@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import MarcaPainel from "./MarcaPainel";
+import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
 import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
 
@@ -358,7 +358,7 @@ export default function AdminLayout({ children }) {
         {/* Logo Header */}
         <div className="p-6 border-b border-apex-100">
           <div className="flex items-center justify-between">
-            <MarcaPainel slug={slug} className="text-lg" />
+            <MarcaApex className="text-lg" local="painel" empresa={slug} />
             <ToggleTema className="hidden lg:block text-gray-600" />
             <button
               onClick={() => setSidebarOpen(false)}
@@ -534,7 +534,7 @@ export default function AdminLayout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
             </button>
-            <MarcaPainel slug={slug} className="text-base" />
+            <MarcaApex className="text-base" local="painel" empresa={slug} />
             <ToggleTema className="text-gray-600" />
           </div>
         </header>
