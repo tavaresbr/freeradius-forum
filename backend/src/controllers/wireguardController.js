@@ -117,11 +117,14 @@ exports.updateServerSettings = async (req, res) => {
 // Peers do wg-easy que pertencem a esta empresa (mapeados em empresa_vpn_peers).
 const filtrarPeersDaEmpresa = async (allClients, empresaId) => {
   const [peerRows] = await db.execute(
-    "SELECT wg_client_id FROM empresa_vpn_peers WHERE empresa_id = ?",
+    "SELECT wg_client_id, nome FROM empresa_vpn_peers WHERE empresa_id = ?",
     [empresaId]
   );
-  const allowedIds = new Set(peerRows.map(r => r.wg_client_id));
-  return allClients.filter(c => allowedIds.has(c.id));
+  // O wg-easy guarda um nome tecnico unico (emp<id>-<hex>-<nome>); a empresa ve o nome que digitou.
+  const nomes = new Map(peerRows.map(r => [r.wg_client_id, r.nome]));
+  return allClients
+    .filter(c => nomes.has(c.id))
+    .map(c => ({ ...c, wg_name: c.name, name: nomes.get(c.id) || c.name }));
 };
 
 // Lista os peers da empresa consultando o wg-easy. Lança erro se o wg-easy estiver fora do ar.
@@ -179,14 +182,16 @@ exports.createClient = async (req, res) => {
 
     const clients = await makeRequest('GET', '/api/wireguard/client');
     const novo = (clients || []).find((c) => c.name === nomeWg && !antes.has(c.id));
-    if (novo) {
-      await db.execute(
-        "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome) VALUES (?, ?, ?)",
-        [req.empresa_id, novo.id, nome]
-      );
+    if (!novo) {
+      throw new Error("peer criado mas nao localizado no wg-easy");
     }
+    await db.execute(
+      "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome) VALUES (?, ?, ?)",
+      [req.empresa_id, novo.id, nome]
+    );
 
-    res.json(client);
+    // O front usa o id para pedir o script (o nome tecnico nao e o digitado).
+    res.json({ ...(client && typeof client === "object" ? client : {}), id: novo.id, name: nome });
   } catch (err) {
     console.error("Erro ao criar peer:", err.message);
     res.status(500).json({ message: "Erro ao criar peer" });
