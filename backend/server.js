@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
-const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter, voucherFalhasLimiters } = require('./src/middleware/rateLimiters')
+const { loginLimiter, loginPorContaLimiter, registroLimiter, cnpjLookupLimiter, cepLookupLimiter, sitePedidoLimiter, cartaoAssinaturaLimiter, publicApiLimiter, cadastroPortalLimiter, leituraPortalLimiter, updateCheckLimiter, voucherFalhasLimiters, whatsappWebhookLimiter } = require('./src/middleware/rateLimiters')
 const app = express()
 
 // Atras do nginx: confia no primeiro proxy pra obter o IP real do cliente
@@ -41,6 +41,8 @@ const lgpdRoutes = require("./src/routes/lgpdRoutes");
 const sessaoRoutes = require("./src/routes/sessaoRoutes");
 const whatsappRoutes = require("./src/routes/whatsappRoutes");
 const promocaoWhatsappRoutes = require("./src/routes/promocaoWhatsappRoutes");
+const atendimentoRoutes = require("./src/routes/atendimentoRoutes");
+const { receberWebhook: receberWebhookWhatsapp } = require("./src/controllers/atendimentoController");
 const authTempRoutes = require("./src/routes/authTempRoutes");
 const limpezaRoutes = require("./src/routes/limpezaRoutes");
 const radiusLogsRoutes = require("./src/routes/radiusLogsRoutes");
@@ -134,6 +136,8 @@ app.use("/api/planos-publicos", leituraPortalLimiter, planPublicRoutes);
 app.use("/api/pagamentos", pagamentoRoutes);  // Inclui webhook público
 app.use("/api/sessao", cadastroPortalLimiter, somentePrimitivos, sessaoRoutes);          // desconectar sessao anterior (CPF + data de nascimento)
 app.use("/api/lgpd", cadastroPortalLimiter, somentePrimitivos, lgpdRoutes);             // LGPD login/cadastro são públicos
+// Webhook da Evolution (atendimento WhatsApp): publico, autenticado pelo token da URL
+app.post("/api/whatsapp-webhook/:token", whatsappWebhookLimiter, receberWebhookWhatsapp);
 app.use("/api/assinatura/cartao", cartaoAssinaturaLimiter);
 app.use("/api/assinatura/webhook", publicApiLimiter);
 app.use("/api/assinatura/planos", publicApiLimiter);
@@ -187,6 +191,7 @@ app.use('/api/radius', auth, tenant, exigeAssinatura, radiusRoutes);
 app.use("/api/dashboard", auth, tenant, exigeAssinatura, checkPermissao('dashboard'), dashboardRoutes);
 app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), whatsappRoutes);
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
+app.use("/api/atendimento", auth, tenant, exigeAssinatura, checkPermissao('leads'), exigeRecurso('whatsapp'), atendimentoRoutes);
 app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), promocaoWhatsappRoutes);
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);

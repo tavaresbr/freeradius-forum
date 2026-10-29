@@ -204,6 +204,10 @@ async function createInstance(req, res) {
       );
     }
 
+    // Recebimento de mensagens (atendimento): falha aqui nao impede criar a instancia
+    try { await require("../services/whatsappAtendimento").ativarWebhook(req.empresa_id); }
+    catch (e) { console.warn("[whatsapp] webhook nao ativado:", e?.response?.data || e.message); }
+
     res.json({ success: true, data: resp.data });
   } catch (err) {
     console.error("Erro ao criar instancia:", err?.response?.data || err.message);
@@ -294,6 +298,8 @@ async function saveConfig(req, res) {
       api_url: plataforma && typeof api_url === "string" && api_url.trim() ? api_url.trim() : (atual.api_url || DEFAULT_API_URL),
       api_key: plataforma && typeof api_key === "string" && api_key.trim() && !api_key.endsWith("...") ? api_key.trim() : (atual.api_key && atual.api_key !== DEFAULT_API_KEY ? atual.api_key : ""),
       instance_name: plataforma && nome ? nome : `empresa_${req.empresa_id}`,
+      // token do webhook de atendimento: gerado por whatsappAtendimento, nunca vem do formulario
+      ...(atual.webhook_token ? { webhook_token: atual.webhook_token } : {}),
     });
 
     if (existing) {
@@ -327,6 +333,25 @@ async function getConfig(req, res) {
   } catch (err) {
     console.error("Erro ao buscar config WhatsApp:", err.message);
     res.status(500).json({ error: "Erro ao buscar configuracao." });
+  }
+}
+
+// === Recebimento de mensagens (webhook da Evolution) ===
+
+async function ativarWebhookInstancia(req, res) {
+  try {
+    res.json({ success: true, ...(await require("../services/whatsappAtendimento").ativarWebhook(req.empresa_id)) });
+  } catch (err) {
+    console.error("Erro ao ativar webhook WhatsApp:", err?.response?.data || err.message);
+    res.status(502).json({ error: "Não foi possível ativar o recebimento. Confira se a instância existe e está conectada." });
+  }
+}
+
+async function statusWebhookInstancia(req, res) {
+  try {
+    res.json(await require("../services/whatsappAtendimento").statusWebhook(req.empresa_id));
+  } catch (err) {
+    res.json({ ativo: false });
   }
 }
 
@@ -429,6 +454,9 @@ module.exports = {
   saveConfig,
   getConfig,
   getEvolutionConfig,
+  formatarNumeroComNonoDigito,
+  ativarWebhookInstancia,
+  statusWebhookInstancia,
   listarLogs,
   limparLogs,
 };

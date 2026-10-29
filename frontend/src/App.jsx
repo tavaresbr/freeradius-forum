@@ -28,6 +28,7 @@ import Assinatura from "./pages/admin/Assinatura";
 import PlanosSaas from "./pages/admin/PlanosSaas";
 import GruposPermissao from "./pages/admin/GruposPermissao";
 import WhatsApp from "./pages/admin/WhatsApp";
+import Atendimento from "./pages/admin/Atendimento";
 import PromocoesWhatsapp from "./pages/admin/PromocoesWhatsapp";
 import Vouchers from "./pages/admin/Vouchers";
 import Voucher from "./pages/public/Voucher";
@@ -131,6 +132,7 @@ function App() {
       <Route path="/admin/:empresaSlug/compliance" element={<RotaPrivada><Compliance /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/atendimento" element={<RotaPrivada><Atendimento /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/whatsapp" element={<RotaPrivada><WhatsApp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vouchers" element={<RotaPrivada><Vouchers /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/promocoes-whatsapp" element={<RotaPrivada><PromocoesWhatsapp /></RotaPrivada>} />

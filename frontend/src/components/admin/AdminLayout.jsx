@@ -16,6 +16,7 @@ export default function AdminLayout({ children }) {
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [whatsappAvisoFechado, setWhatsappAvisoFechado] = useState(false);
   const [assinatura, setAssinatura] = useState(null);
+  const [naoLidasWa, setNaoLidasWa] = useState(0);
 
   const toggleMenu = (key) => setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -43,7 +44,7 @@ export default function AdminLayout({ children }) {
 
   // SaaS Fase 2: tela de recurso que o plano/adicionais nao incluem (super admin nunca e' bloqueado).
   const rota = location.pathname.slice(basePath.length);
-  const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
+  const recursoDaRota = /^\/(whatsapp|promocoes-whatsapp|atendimento)(\/|$)/.test(rota) ? ["whatsapp", "WhatsApp"]
     : /^\/campanhas(\/|$)/.test(rota) ? ["campanhas", "Campanhas"]
     : /^\/dominio(\/|$)/.test(rota) ? ["dominio", "Domínio próprio"] : null;
   const recursoBloqueado = !isSuperAdmin && recursoDaRota && assinatura?.recursos?.[recursoDaRota[0]] === false ? recursoDaRota[1] : null;
@@ -51,6 +52,23 @@ export default function AdminLayout({ children }) {
     if (assinatura?.bloqueada && !naTelaAssinatura) navigate(`${basePath}/assinatura`, { replace: true });
   }, [assinatura, naTelaAssinatura, basePath]);
 
+
+  // Atendimento WhatsApp: contador de conversas nao lidas no menu (so com o recurso e a permissao)
+  const podeAtendimento = isSuperAdmin || (assinatura?.recursos?.whatsapp !== false && hasPermission('leads', 'ver'));
+  useEffect(() => {
+    if (!slug || !podeAtendimento) { setNaoLidasWa(0); return; }
+    let ativo = true;
+    const buscar = async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch('/api/atendimento/nao-lidas', { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } });
+        if (res.ok && ativo) setNaoLidasWa((await res.json()).conversas || 0);
+      } catch (e) { /* silencioso */ }
+    };
+    buscar();
+    const t = setInterval(buscar, 15000);
+    return () => { ativo = false; clearInterval(t); };
+  }, [slug, podeAtendimento, location.pathname]);
 
   // Verificar status do WhatsApp para exibir aviso se desconectado
   useEffect(() => {
@@ -92,6 +110,17 @@ export default function AdminLayout({ children }) {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+      )
+    },
+    {
+      key: "leads",
+      title: "WhatsApp",
+      path: `${basePath}/atendimento`,
+      badge: naoLidasWa,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
         </svg>
       )
     },
@@ -453,6 +482,11 @@ export default function AdminLayout({ children }) {
                     {item.icon}
                   </span>
                   <span className="text-sm">{item.title}</span>
+                  {item.badge > 0 && (
+                    <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-semibold flex items-center justify-center">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
