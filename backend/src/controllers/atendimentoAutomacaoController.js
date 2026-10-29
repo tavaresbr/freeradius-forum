@@ -3,6 +3,10 @@
 const db = require("../../db");
 const auto = require("../services/whatsappAutomacao");
 const horario = require("../utils/horarioAtendimento");
+const avisoExp = require("../utils/avisoExpiracao");
+const { renderTemplate, normalizarTelefone, gravarLog } = require("../services/whatsappNotify");
+const { enviarMensagemEstrita } = require("./whatsappController");
+const { linkPlanosDoCliente } = require("../utils/linkPlanos");
 const { temColuna } = require("../utils/schemaCache");
 
 const MAX_PENDENTES = 20; // por conversa
@@ -102,4 +106,43 @@ exports.cancelarAgendada = async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: "Agendamento não encontrado" });
     res.json({ success: true });
   } catch (err) { erro500(res, err, "Erro ao cancelar"); }
+};
+
+// GET /api/atendimento/aviso-expiracao
+exports.obterAviso = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    res.json({ aviso: avisoExp.mesclarComPadrao(cfg.aviso_expiracao) });
+  } catch (err) { erro500(res, err, "Erro ao buscar o aviso"); }
+};
+
+// PUT /api/atendimento/aviso-expiracao { ativo, minutos, template }
+exports.salvarAviso = async (req, res) => {
+  try {
+    const aviso = avisoExp.validarAviso(req.body);
+    await auto.salvarChave(req.empresa_id, "aviso_expiracao", aviso);
+    res.json({ success: true, aviso });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar o aviso");
+  }
+};
+
+// POST /api/atendimento/aviso-expiracao/teste { telefone, template?, minutos? }  (manda um exemplo a 1 numero)
+exports.testarAviso = async (req, res) => {
+  try {
+    const telefone = normalizarTelefone(req.body?.telefone);
+    if (!telefone) return res.status(400).json({ error: "Telefone inválido. Informe DDD + número." });
+    const cfg = avisoExp.mesclarComPadrao((await auto.lerConfigJson(req.empresa_id)).aviso_expiracao);
+    const modelo = typeof req.body?.template === "string" && req.body.template.trim() ? req.body.template.trim().slice(0, avisoExp.MAX_TEMPLATE) : cfg.template;
+    const minutos = Number.isInteger(Number(req.body?.minutos)) ? Number(req.body.minutos) : cfg.minutos;
+    const link = (await linkPlanosDoCliente(req.empresa_id, {}).catch(() => null)) || "";
+    const mensagem = renderTemplate(modelo, { nome: "Cliente", minutos: String(minutos), link, plano: "Plano exemplo", empresa: "" }).trim();
+    await enviarMensagemEstrita(telefone, `[TESTE] ${mensagem}`, req.empresa_id);
+    await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "aviso_expiracao_teste", status: "ok" });
+    res.json({ success: true });
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || "Erro ao enviar";
+    res.status(502).json({ error: `Não foi possível enviar o teste: ${String(msg).slice(0, 150)}` });
+  }
 };

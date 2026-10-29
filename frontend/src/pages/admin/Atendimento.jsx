@@ -9,6 +9,7 @@ import PainelCliente from "../../components/admin/atendimento/PainelCliente";
 import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
 import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
+import AvisoExpiracao from "../../components/admin/atendimento/AvisoExpiracao";
 import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
@@ -413,6 +414,13 @@ export default function Atendimento() {
   const sugestoes = modo === "resposta" && texto.startsWith("/") && !texto.includes("\n")
     ? respostas.filter((r) => { const q = texto.slice(1).toLowerCase(); return !q || r.atalho.includes(q) || r.titulo.toLowerCase().includes(q); }).slice(0, 6)
     : [];
+  // Coloca na caixa a mensagem com o link de planos do portal (o cliente paga pelo fluxo seguro do portal)
+  const inserirPlanos = (link) => {
+    const primeiro = String(conversa?.nome || "").trim().split(/\s+/)[0] || "";
+    setModo("resposta");
+    setTexto(`${primeiro ? `Olá ${primeiro}! ` : "Olá! "}Para continuar conectado, escolha um plano aqui: ${link}`);
+  };
+
   const aplicarResposta = (r) => {
     const primeiro = (conversa?.nome || "").trim().split(/\s+/)[0] || "cliente";
     setTexto(r.texto.replace(/\{\{\s*nome\s*\}\}/gi, primeiro).replace(/\{\{\s*empresa\s*\}\}/gi, cliente?.empresa || ""));
@@ -436,6 +444,7 @@ export default function Atendimento() {
             <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
             <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
+            <button onClick={() => setModal("aviso")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Aviso de expiração</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
             <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
@@ -602,7 +611,7 @@ export default function Atendimento() {
 
                 {painelAberto && conversa && (
                   <div className="xl:hidden border-b border-gray-800 max-h-64 overflow-y-auto">
-                    <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
+                    <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onEnviarPlanos={inserirPlanos} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
                   </div>
                 )}
 
@@ -713,7 +722,7 @@ export default function Atendimento() {
            </div>
            {selecionadaId && conversa && (
              <aside className="hidden xl:block w-72 shrink-0 border-l border-gray-800 overflow-y-auto">
-               <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
+               <PainelCliente dados={cliente} carregando={!cliente} empresaSlug={empresaSlug} conversa={conversa} headers={headers} onEnviarPlanos={inserirPlanos} onMudou={() => { carregarCliente(selecionadaId); carregarMensagens(selecionadaId); carregarConversas(); }} />
              </aside>
            )}
           </section>
@@ -723,6 +732,7 @@ export default function Atendimento() {
             <EnviarEspecial tipo={modal} conversaId={selecionadaId} headers={headers} onFechar={() => setModal(null)}
               onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
           )}
+          {modal === "aviso" && <AvisoExpiracao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
           {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}

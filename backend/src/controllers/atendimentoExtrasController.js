@@ -7,6 +7,8 @@ const { normalizarTelefone } = require("../services/whatsappNotify");
 const wpp = require("./whatsappController");
 const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const { temColuna } = require("../utils/schemaCache");
+const { verificarSaldoRadius } = require("../utils/leadUtils");
+const { linkPlanosDoCliente } = require("../utils/linkPlanos");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -221,7 +223,7 @@ exports.clienteDaConversa = async (req, res) => {
     if (!conversa) return;
     const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [req.empresa_id]);
     const lead = await leadDaConversa(req.empresa_id, conversa);
-    const resp = { empresa: emp?.nome || null, lead: null, plano: null, ultimo_pagamento: null };
+    const resp = { empresa: emp?.nome || null, lead: null, plano: null, ultimo_pagamento: null, saldo: null, link_planos: null };
     if (lead) {
       resp.lead = {
         id: lead.id, nome: lead.nome, cpf: mascararCpf(lead.cpf), email: lead.email || null, telefone: lead.telefone || null,
@@ -231,11 +233,16 @@ exports.clienteDaConversa = async (req, res) => {
       try {
         if (cpfLimpo) {
           const [[ru]] = await db.query(
-            `SELECT p.nome, p.duracao_minutos FROM radius_users ru LEFT JOIN planos p ON p.id = ru.plano_id
+            `SELECT p.nome, p.duracao_minutos, ru.nas_id FROM radius_users ru LEFT JOIN planos p ON p.id = ru.plano_id
               WHERE ru.empresa_id = ? AND ru.username = ? LIMIT 1`,
             [req.empresa_id, cpfLimpo]
           );
           if (ru?.nome) resp.plano = { nome: ru.nome, duracao_minutos: ru.duracao_minutos };
+          if (ru) {
+            const sd = await verificarSaldoRadius(cpfLimpo);
+            if (sd.existe) resp.saldo = { ativo: !!sd.temSaldo, restante_segundos: sd.tempoRestante || 0 };
+          }
+          resp.link_planos = await linkPlanosDoCliente(req.empresa_id, { clienteId: lead.id, nasId: ru?.nas_id });
           const [[pg]] = await db.query(
             `SELECT pg.valor, pg.status, pg.metodo_pagamento, pg.criado_em, p.nome AS plano
                FROM pagamentos pg LEFT JOIN planos p ON p.id = pg.plano_id

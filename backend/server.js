@@ -643,6 +643,12 @@ cron.schedule('* * * * *', () => {
   processaAgendadas().catch(err => console.error('[CRON] Erro processaAgendadas:', err.message));
 });
 
+// Aviso "seu tempo esta acabando" por WhatsApp (so empresas que ligaram; desligado por padrao)
+const avisaExpiracao = require('./src/jobs/avisaExpiracao');
+cron.schedule('*/2 * * * *', () => {
+  avisaExpiracao().catch(err => console.error('[CRON] Erro avisaExpiracao:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

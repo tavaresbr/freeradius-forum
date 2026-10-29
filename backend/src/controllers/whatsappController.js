@@ -302,6 +302,7 @@ async function saveConfig(req, res) {
       ...(atual.webhook_token ? { webhook_token: atual.webhook_token } : {}),
       // configuracoes do atendimento (automacao etc.) sao editadas em suas proprias telas: preservadas aqui
       ...(atual.automacao ? { automacao: atual.automacao } : {}),
+      ...(atual.aviso_expiracao ? { aviso_expiracao: atual.aviso_expiracao } : {}),
     });
 
     if (existing) {

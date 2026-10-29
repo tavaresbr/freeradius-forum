@@ -18,6 +18,8 @@ function sanitizarFiltros(raw) {
     status: lista(f.status, 20).filter((s) => STATUS_LEAD.includes(s)),
     q: f.q ? String(f.q).trim().slice(0, 100) : "",
   };
+  const dias = Number(f.inativo_dias);
+  if (Number.isInteger(dias) && dias >= 1 && dias <= 3650) out.inativo_dias = dias;
   if (f.lgpd_aceite === true || f.lgpd_aceite === 1 || f.lgpd_aceite === "1") out.lgpd_aceite = 1;
   else if (f.lgpd_aceite === false || f.lgpd_aceite === 0 || f.lgpd_aceite === "0") out.lgpd_aceite = 0;
   return out;
@@ -31,6 +33,15 @@ function montarFiltroLeads(filtrosBrutos, empresaId) {
   if (f.origens.length) { where.push(`origem IN (${f.origens.map(() => "?").join(",")})`); params.push(...f.origens); }
   if (f.status.length) { where.push(`status IN (${f.status.map(() => "?").join(",")})`); params.push(...f.status); }
   if (f.lgpd_aceite !== undefined) { where.push("lgpd_aceite = ?"); params.push(f.lgpd_aceite); }
+  if (f.inativo_dias) {
+    // Reativacao: cadastrado ha mais de N dias, com MAC, e sem NENHUMA sessao desse aparelho nos ultimos N dias.
+    // (Sem MAC nao da para saber se conectou: nao entra.) MAC comparado sem separadores e em maiusculas.
+    where.push("mac IS NOT NULL", "mac <> ''", "criado_em < DATE_SUB(NOW(), INTERVAL ? DAY)");
+    where.push(`NOT EXISTS (SELECT 1 FROM radacct ra WHERE ra.acctstarttime >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      AND REPLACE(REPLACE(UPPER(ra.callingstationid), '-', ''), ':', '') COLLATE utf8mb4_unicode_ci
+        = REPLACE(REPLACE(UPPER(leads.mac), '-', ''), ':', '') COLLATE utf8mb4_unicode_ci)`);
+    params.push(f.inativo_dias, f.inativo_dias);
+  }
   if (f.q) {
     where.push("(nome LIKE ? OR email LIKE ? OR telefone LIKE ?)");
     const s = `%${f.q}%`;
