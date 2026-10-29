@@ -674,6 +674,12 @@ cron.schedule('*/10 * * * *', () => {
   posCompra().catch(err => console.error('[CRON] Erro posCompra:', err.message));
 });
 
+// Lembrete de renovacao por WhatsApp (so empresas que ligaram; desligado por padrao)
+const renovacaoWhatsapp = require('./src/jobs/renovacaoWhatsapp');
+cron.schedule('17 * * * *', () => {
+  renovacaoWhatsapp().catch(err => console.error('[CRON] Erro renovacaoWhatsapp:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

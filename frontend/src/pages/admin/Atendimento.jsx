@@ -12,6 +12,7 @@ import Agendar from "../../components/admin/atendimento/Agendar";
 import AvisoExpiracao from "../../components/admin/atendimento/AvisoExpiracao";
 import Chatbot from "../../components/admin/atendimento/Chatbot";
 import PosCompra from "../../components/admin/atendimento/PosCompra";
+import Renovacao from "../../components/admin/atendimento/Renovacao";
 import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
@@ -471,6 +472,7 @@ export default function Atendimento() {
             <Link to={`/admin/${empresaSlug}/atendimento/relatorios`} className="text-sm text-blue-400 hover:text-blue-300">Relatórios</Link>
             <button onClick={() => setModal("chatbot")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Chatbot</button>
             <button onClick={() => setModal("poscompra")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Pós-compra</button>
+            <button onClick={() => setModal("renovacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Renovação</button>
             <button onClick={() => setModal("aviso")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Aviso de expiração</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
@@ -767,6 +769,7 @@ export default function Atendimento() {
           )}
           {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
           {modal === "poscompra" && <PosCompra headers={headers} onFechar={() => setModal(null)} />}
+          {modal === "renovacao" && <Renovacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "aviso" && <AvisoExpiracao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
