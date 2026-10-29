@@ -150,12 +150,12 @@ export default function Portais() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {portais.map((p) => (
-            <div key={p.id} className="bg-[#1a1d27] rounded-xl border border-gray-800 p-5 hover:border-gray-700 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#0d1117] rounded-lg">{tipoIcon(p.tipo)}</div>
-                  <div>
-                    <h3 className="text-white font-semibold">{p.nome}</h3>
+            <div key={p.id} className="bg-[#1a1d27] rounded-xl border border-gray-800 p-4 sm:p-5 hover:border-gray-700 transition-all">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-[#0d1117] rounded-lg shrink-0">{tipoIcon(p.tipo)}</div>
+                  <div className="min-w-0">
+                    <h3 className="text-white font-semibold break-words">{p.nome}</h3>
                     <p className="text-xs text-gray-500">/{p.slug}</p>
                   </div>
                 </div>
@@ -188,29 +188,34 @@ export default function Portais() {
                 {p.mikrotiks_vinculados} Mikrotik{p.mikrotiks_vinculados !== 1 ? "s" : ""} vinculado{p.mikrotiks_vinculados !== 1 ? "s" : ""}
               </div>
 
-              <div className="flex items-center gap-2 pt-3 border-t border-gray-800">
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-800">
                 <button
                   onClick={async () => {
+                    // Abre a aba no clique (antes do fetch): no celular o navegador bloqueia window.open depois de um await
+                    const aba = window.open("", "_blank");
                     try {
                       const r = await fetch(`/api/auth/download-token?para=portais`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
                       if (!r.ok) throw new Error("token");
                       const { token: dl } = await r.json();
-                      window.open(`/api/portais/${p.id}/preview?token=${dl}`, "_blank");
+                      const url = `/api/portais/${p.id}/preview?token=${dl}`;
+                      if (aba) aba.location.href = url;
+                      else window.location.href = url;
                     } catch (err) {
+                      if (aba) aba.close();
                       console.error("Erro ao abrir preview:", err);
                       alert("Nao foi possivel abrir o preview. Faca login novamente.");
                     }
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-blue-400 border border-blue-800/50 rounded hover:bg-blue-900/20 transition-colors cursor-pointer"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 px-3 py-2.5 sm:py-1.5 text-sm sm:text-xs text-blue-400 border border-blue-800/50 rounded hover:bg-blue-900/20 transition-colors cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                   Preview
                 </button>
                 <button
                   onClick={() => navigate(`/admin/${empresaSlug}/portais/${p.id}/editor`)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-400 border border-purple-800/50 rounded hover:bg-purple-900/20 transition-colors cursor-pointer"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 px-3 py-2.5 sm:py-1.5 text-sm sm:text-xs text-purple-400 border border-purple-800/50 rounded hover:bg-purple-900/20 transition-colors cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                   Editor Visual
