@@ -160,6 +160,8 @@ async function registrarMensagem(empresaId, data) {
     catch (err) { console.warn("[atendimento] nota nao gravada:", err.message); }
     if (nota) {
       await db.query("UPDATE whatsapp_conversas SET ultima_msg_em = ?, ultima_msg_previa = ? WHERE id = ? AND empresa_id = ?", [m.quando, m.previa, conversaId, empresaId]);
+      // Pos-compra: nota alta -> link de avaliacao; nota baixa -> alerta ao gestor (desligado por padrao, em segundo plano)
+      require("./whatsappPosCompra").aoReceberNota(empresaId, conversaId, ins.insertId).catch(() => {});
       return { conversaId, nota: true };
     }
   }

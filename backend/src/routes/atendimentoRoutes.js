@@ -45,6 +45,8 @@ router.get("/ia-status", rel.iaStatus);
 router.post("/conversas/:id/sugerir", sugestaoIaLimiter, rel.sugerir);
 router.get("/chatbot", au.obterChatbot);
 router.put("/chatbot", au.salvarChatbot);
+router.get("/pos-compra", au.obterPosCompra);
+router.put("/pos-compra", au.salvarPosCompra);
 router.get("/aviso-expiracao", au.obterAviso);
 router.put("/aviso-expiracao", au.salvarAviso);
 router.post("/aviso-expiracao/teste", atendimentoEnvioLimiter, au.testarAviso);
