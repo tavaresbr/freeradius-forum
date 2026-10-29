@@ -51,6 +51,7 @@ export default function SuperDashboard() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [erroAcesso, setErroAcesso] = useState("");
+  const [alertas, setAlertas] = useState({}); // empresa_id -> [{tipo, nivel, mensagem}]
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState("todas");
 
@@ -77,6 +78,21 @@ export default function SuperDashboard() {
       setErro("Não foi possível carregar as empresas.");
     } finally {
       setLoading(false);
+    }
+    fetchAlertas();
+  };
+
+  // Separado da lista: a checagem do WhatsApp pode demorar e nao deve atrasar a tabela; falha so some com os alertas.
+  const fetchAlertas = async () => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch("/api/empresas/alertas", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const mapa = {};
+      for (const a of await res.json()) mapa[a.empresa_id] = a.alertas;
+      setAlertas(mapa);
+    } catch (err) {
+      console.error("Erro ao buscar alertas:", err);
     }
   };
 
@@ -107,7 +123,9 @@ export default function SuperDashboard() {
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const filtradas = empresas.filter((e) => {
-      if (filtro !== "todas" && (e.assinatura_status || "sem") !== filtro) return false;
+      if (filtro === "alertas") {
+        if (!alertas[e.id]) return false;
+      } else if (filtro !== "todas" && (e.assinatura_status || "sem") !== filtro) return false;
       if (!termo) return true;
       return `${e.nome} ${e.slug}`.toLowerCase().includes(termo);
     });
@@ -119,7 +137,7 @@ export default function SuperDashboard() {
       if (!vb) return -1;
       return va - vb;
     });
-  }, [empresas, busca, filtro]);
+  }, [empresas, busca, filtro, alertas]);
 
   const cartao = (rotulo, valor, destaque) => (
     <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5">
@@ -158,6 +176,7 @@ export default function SuperDashboard() {
           {cartao("Em trial", kpis.trial, "text-blue-400")}
           {cartao("Vencidas ou vencem em 7 dias", kpis.atencao, kpis.atencao ? "text-red-400" : "text-white")}
           {cartao("Receita mensal (ativas)", moeda(kpis.mrr), "text-green-400")}
+          {cartao("Empresas com alertas", Object.keys(alertas).length, Object.keys(alertas).length ? "text-yellow-400" : "text-white")}
           {cartao("Equipamentos", kpis.equipamentos)}
         </div>
 
@@ -200,6 +219,7 @@ export default function SuperDashboard() {
               className="px-3 py-2 bg-[#1a1d27] border border-gray-800 rounded-lg text-sm text-gray-200"
             >
               <option value="todas">Todas</option>
+              <option value="alertas">Com alertas</option>
               <option value="trial">Trial</option>
               <option value="ativa">Ativas</option>
               <option value="vencida">Vencidas</option>
@@ -248,7 +268,18 @@ export default function SuperDashboard() {
                   const urgente = dias !== null && dias <= 7 && e.assinatura_status !== "cancelada";
                   return (
                     <tr key={e.id} className="border-b border-gray-800/50 hover:bg-[#252b3b]">
-                      <td className="p-4 font-medium text-white">{e.nome}</td>
+                      <td className="p-4 font-medium text-white">
+                        {e.nome}
+                        {(alertas[e.id] || []).map((a) => (
+                          <span
+                            key={a.tipo}
+                            title={a.mensagem}
+                            className={`block mt-1 text-xs font-normal ${a.nivel === "critico" ? "text-red-400" : "text-yellow-400"}`}
+                          >
+                            ⚠ {a.mensagem}
+                          </span>
+                        ))}
+                      </td>
                       <td className="p-4 text-gray-400">{e.slug}</td>
                       <td className="p-4 text-gray-400">{e.assinatura_plano_nome || "—"}</td>
                       <td className="p-4 text-center">

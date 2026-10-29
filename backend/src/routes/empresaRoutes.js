@@ -7,6 +7,7 @@ const multer = require("multer");
 const path = require("path");
 const {
   listarEmpresas,
+  alertasEmpresas,
   criarEmpresa,
   atualizarEmpresa,
   deletarEmpresa,
@@ -75,6 +76,7 @@ router.use("/minha", require("./empresaBrandingRoutes"));
 router.use(auth, authorize('super_admin'), exigeDonoPlataforma);
 
 router.get("/", listarEmpresas);
+router.get("/alertas", alertasEmpresas);
 router.post("/", criarEmpresa);
 router.get("/admins/todos", listarTodosAdmins);
 router.get("/:id", obterEmpresa);
