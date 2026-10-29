@@ -132,9 +132,9 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
 
   const avisoDoCep = () => (
     <>
-      {buscandoCep && <p className="text-xs text-gray-500 col-span-3">Buscando CEP...</p>}
+      {buscandoCep && <p className="text-xs text-gray-500 col-span-2 sm:col-span-3">Buscando CEP...</p>}
       {avisoCep && !buscandoCep && (
-        <p className={`text-xs col-span-3 ${avisoCep.tipo === "ok" ? "text-green-500" : "text-red-400"}`}>{avisoCep.texto}</p>
+        <p className={`text-xs col-span-2 sm:col-span-3 ${avisoCep.tipo === "ok" ? "text-green-500" : "text-red-400"}`}>{avisoCep.texto}</p>
       )}
     </>
   );
@@ -150,6 +150,8 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
         value={form[nome] || ""}
         onChange={(e) => (extra.aoMudar ? extra.aoMudar(e.target.value) : set(nome, extra.mascara ? extra.mascara(e.target.value) : e.target.value))}
         maxLength={extra.maxLength}
+        inputMode={extra.inputMode}
+        autoComplete={extra.auto}
         className={inputClass}
       />
     </div>
@@ -182,19 +184,19 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
             <p className="text-xs mt-1 text-red-400">CPF inválido</p>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9 })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9, inputMode: "numeric", auto: "postal-code" })}
           {campo("Endereço", "logradouro", { className: "col-span-2" })}
           {avisoDoCep()}
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {campo("Número", "numero")}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {campo("Número", "numero", { inputMode: "numeric" })}
           {campo("Complemento", "complemento", { className: "col-span-2", opcional: true })}
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {campo("Bairro", "bairro")}
           {campo("Cidade", "cidade")}
-          {campo("UF", "uf", { maxLength: 2, minLength: 2 })}
+          {campo("UF", "uf", { maxLength: 2, minLength: 2, auto: "address-level1" })}
         </div>
       </>
     );
@@ -236,19 +238,19 @@ export default function CamposEmpresa({ form, setForm, inputClass, labelClass })
 
       {campo("Razão social", "razao_social")}
       {campo("Nome fantasia", "nome_fantasia")}
-      <div className="grid grid-cols-3 gap-3">
-        {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9 })}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {campo("CEP", "cep", { aoMudar: onCep, maxLength: 9, inputMode: "numeric", auto: "postal-code" })}
         {campo("Endereço", "logradouro", { className: "col-span-2" })}
         {avisoDoCep()}
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        {campo("Número", "numero")}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {campo("Número", "numero", { inputMode: "numeric" })}
         {campo("Complemento", "complemento", { className: "col-span-2", opcional: true })}
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {campo("Bairro", "bairro")}
         {campo("Cidade", "cidade")}
-        {campo("UF", "uf", { maxLength: 2, minLength: 2 })}
+        {campo("UF", "uf", { maxLength: 2, minLength: 2, auto: "address-level1" })}
       </div>
     </>
   );
