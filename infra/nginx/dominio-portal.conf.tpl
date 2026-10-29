@@ -23,6 +23,11 @@ server {
         return 404;
     }
 
+    # A raiz nao serve a landing da plataforma no dominio do cliente; o portal abre por /hotspot/redirect/<id>
+    location = / {
+        return 404;
+    }
+
     location /assets/ {
         expires 1y;
         include /etc/nginx/snippets/hotspot-security.conf;
