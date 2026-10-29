@@ -160,11 +160,11 @@ export default function Logs() {
 
   const corLinha = (linha) => {
     const l = linha.toLowerCase();
-    if (l.includes("error") || l.includes("err ") || l.includes("erro")) return "text-red-400";
-    if (l.includes("warn") || l.includes("aviso")) return "text-yellow-400";
-    if (l.includes("auth:") || l.includes("login ok") || l.includes("approved") || l.includes("success")) return "text-green-400";
-    if (l.includes("reject") || l.includes("negado") || l.includes("failed")) return "text-red-300";
-    return "text-gray-200";
+    if (l.includes("error") || l.includes("err ") || l.includes("erro")) return "#f87171";
+    if (l.includes("warn") || l.includes("aviso")) return "#facc15";
+    if (l.includes("auth:") || l.includes("login ok") || l.includes("approved") || l.includes("success")) return "#4ade80";
+    if (l.includes("reject") || l.includes("negado") || l.includes("failed")) return "#fca5a5";
+    return "#e5e7eb";
   };
 
   const totalLinhas = conteudo ? conteudo.split("\n").length : 0;
@@ -350,10 +350,10 @@ export default function Logs() {
           className="bg-black border border-gray-700 rounded-lg p-3 h-[62vh] overflow-auto font-mono text-xs leading-relaxed"
         >
           {linhasVisiveis.length === 0 && !loading && (
-            <div className="text-gray-600 italic">Sem linhas para exibir.</div>
+            <div className="italic" style={{ color: "#9ca3af" }}>Sem linhas para exibir.</div>
           )}
           {linhasVisiveis.map((l, i) => (
-            <div key={i} className={`whitespace-pre-wrap ${corLinha(l)}`}>
+            <div key={i} className="whitespace-pre-wrap" style={{ color: corLinha(l) }}>
               {l || " "}
             </div>
           ))}
