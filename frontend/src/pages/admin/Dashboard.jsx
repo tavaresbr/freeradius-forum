@@ -74,7 +74,7 @@ export default function Dashboard() {
 
   return (
     <AdminLayout>
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-6 sm:mb-8">
         <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
       </div>
@@ -87,16 +87,16 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
             {cards.map((card, i) => (
-              <div key={i} className={`bg-[#1a1d27] rounded-xl p-5 border ${card.border} hover:border-gray-700 transition-all duration-200`}>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.title}</p>
-                  <div className={`${card.bg} ${card.color} p-2 rounded-lg`}>
+              <div key={i} className={`bg-[#1a1d27] rounded-xl p-3 sm:p-5 border ${card.border} hover:border-gray-700 transition-all duration-200`}>
+                <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
+                  <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-0">{card.title}</p>
+                  <div className={`${card.bg} ${card.color} p-1.5 sm:p-2 rounded-lg shrink-0 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6`}>
                     {card.icon}
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-white">{card.value}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white">{card.value}</p>
               </div>
             ))}
           </div>
@@ -108,18 +108,18 @@ export default function Dashboard() {
                 <h2 className="text-lg font-semibold text-white">Sessões Ativas por Mikrotik</h2>
               </div>
               <div className="bg-[#1a1d27] rounded-xl border border-gray-800 overflow-hidden">
-                <table className="w-full text-sm">
+                <table data-sem-cartoes className="w-full text-sm">
                   <thead className="bg-[#151821]">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Mikrotik</th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Conectados</th>
+                      <th className="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Mikrotik</th>
+                      <th className="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Conectados</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
                     {dados.sessoes.map((s, i) => (
                       <tr key={i} className="hover:bg-[#252b3b] transition-colors">
-                        <td className="px-6 py-3 text-gray-300">{s.nome}</td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 sm:px-6 py-3 text-gray-300 break-words">{s.nome}</td>
+                        <td className="px-4 sm:px-6 py-3 text-right">
                           <span className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs font-semibold rounded">{s.conectados}</span>
                         </td>
                       </tr>
