@@ -3,6 +3,7 @@ const router = express.Router();
 const leadController = require("../controllers/leadController");
 
 router.get("/export", leadController.exportarLeadsCSV);
+router.get("/resumo", leadController.resumoLeads);
 router.get("/", leadController.listarLeads);
 router.post("/", leadController.criarLead);
 router.put("/massa", leadController.atualizarLeadsEmMassa);

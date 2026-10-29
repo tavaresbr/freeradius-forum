@@ -6,6 +6,10 @@ const midiaUtil = require("../utils/whatsappMidia");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
+  // tabela ausente = migration nao rodou: diz o que fazer em vez de um erro generico
+  if (err && (err.code === "ER_NO_SUCH_TABLE" || err.errno === 1146)) {
+    return res.status(503).json({ error: "O atendimento WhatsApp ainda não foi preparado neste servidor. Rode as migrations 048 e 049 (node migrations/048_whatsapp_atendimento.js) e reinicie o backend." });
+  }
   res.status(500).json({ error: msg });
 };
 
