@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const c = require("../controllers/atendimentoController");
 const x = require("../controllers/atendimentoExtrasController");
+const au = require("../controllers/atendimentoAutomacaoController");
 const { atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -29,6 +30,13 @@ router.post("/conversas/:id/transferir", x.transferirConversa);
 router.post("/conversas/:id/localizacao", atendimentoEnvioLimiter, x.enviarLocalizacao);
 router.post("/conversas/:id/contato", atendimentoEnvioLimiter, x.enviarContato);
 router.post("/webhook/garantir", c.garantirWebhook);
+
+// Automacao: resposta automatica (horario) e mensagens agendadas / lembretes
+router.get("/automacao", au.obterAutomacao);
+router.put("/automacao", au.salvarAutomacao);
+router.get("/conversas/:id/agendadas", au.listarAgendadas);
+router.post("/conversas/:id/agendadas", au.criarAgendada);
+router.delete("/agendadas/:id", au.cancelarAgendada);
 
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
 router.post("/conversas", novaConversaLimiter, x.novaConversa);
