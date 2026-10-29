@@ -183,6 +183,7 @@ app.get('/api/auth/download-token', auth, tenant, exigeAssinatura, (req, res, ne
   return checkPermissao(String(req.query.para))(req, res, next);
 }, issueDownloadToken);
 app.get('/api/leads/export', verifyDownloadToken('leads'), exigeRecurso('exportacao'), leadCtrlDl.exportarLeadsCSV);
+app.get('/api/leads/export-contatos', verifyDownloadToken('leads'), exigeRecurso('exportacao'), leadCtrlDl.exportarContatos);
 app.get('/api/lgpd/export', verifyDownloadToken('leads'), require('./src/controllers/lgpdController').exportarLgpdCSV);
 app.get('/api/portais/:id/preview', verifyDownloadToken('portais'), portalCtrlDl.previewPortal);
 

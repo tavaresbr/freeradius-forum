@@ -9,6 +9,7 @@ const { validarCPF } = require("../utils/cpf");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { camposFaltando, mensagemFaltando } = require("../utils/cadastroObrigatorio");
 const { formatarTelefone, formatarCep, normalizarDataImport } = require("../utils/importCadastros");
+const { gerarContatos, FORMATOS: FORMATOS_CONTATOS } = require("../utils/exportarContatos");
 
 // Captura de lead sem liberar internet
 exports.capturaPassiva = async (req, res) => {
@@ -678,6 +679,33 @@ exports.exportarLeadsCSV = async (req, res) => {
   } catch (err) {
     console.error("Erro ao exportar leads:", err);
     res.status(500).json({ message: "Erro ao exportar leads" });
+  }
+};
+
+// Exporta os clientes como contatos (Google Contatos, Outlook ou vCard do iCloud/celular).
+// ?formato=google|outlook|vcard [&status=novo|contactado|convertido|descartado]
+exports.exportarContatos = async (req, res) => {
+  try {
+    const formato = String(req.query.formato || "");
+    if (!FORMATOS_CONTATOS[formato]) return res.status(400).json({ message: "Formato inválido (use google, outlook ou vcard)" });
+    const params = [req.empresa_id];
+    let where = "empresa_id = ? AND telefone IS NOT NULL AND telefone <> ''";
+    const status = req.query.status ? String(req.query.status) : "";
+    if (status) {
+      if (!["novo", "contactado", "convertido", "descartado"].includes(status)) return res.status(400).json({ message: "Status inválido" });
+      where += " AND status = ?";
+      params.push(status);
+    }
+    const [rows] = await db.query(`SELECT nome, email, telefone FROM leads WHERE ${where} ORDER BY criado_em DESC LIMIT 50000`, params);
+    const r = gerarContatos(rows, formato);
+    res.setHeader("Content-Type", r.mime);
+    res.setHeader("Content-Disposition", `attachment; filename=${r.arquivo}`);
+    res.setHeader("X-Total-Contatos", String(r.total));
+    res.setHeader("Access-Control-Expose-Headers", "X-Total-Contatos");
+    res.send(r.conteudo);
+  } catch (err) {
+    console.error("Erro ao exportar contatos:", err);
+    res.status(500).json({ message: "Erro ao exportar contatos" });
   }
 };
 
