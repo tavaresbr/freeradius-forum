@@ -38,6 +38,11 @@ router.get("/conversas/:id/agendadas", au.listarAgendadas);
 router.post("/conversas/:id/agendadas", au.criarAgendada);
 router.delete("/agendadas/:id", au.cancelarAgendada);
 
+// Receita: aviso "seu tempo esta acabando"
+router.get("/aviso-expiracao", au.obterAviso);
+router.put("/aviso-expiracao", au.salvarAviso);
+router.post("/aviso-expiracao/teste", atendimentoEnvioLimiter, au.testarAviso);
+
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
 router.post("/conversas", novaConversaLimiter, x.novaConversa);
 router.post("/conversas/:id/notas", x.criarNota);

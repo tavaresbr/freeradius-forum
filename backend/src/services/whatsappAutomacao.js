@@ -20,8 +20,13 @@ async function obterAutomacao(empresaId) {
 }
 
 async function salvarAutomacao(empresaId, automacao) {
+  return salvarChave(empresaId, "automacao", automacao);
+}
+
+/** Grava uma chave da config 'whatsapp' da empresa preservando as demais (api_key, webhook_token...). */
+async function salvarChave(empresaId, chave, valor) {
   const atual = await lerConfigJson(empresaId);
-  const json = JSON.stringify({ ...atual, automacao });
+  const json = JSON.stringify({ ...atual, [chave]: valor });
   const [[existe]] = await db.query("SELECT id FROM empresa_configs WHERE empresa_id = ? AND config_type = 'whatsapp'", [empresaId]);
   if (existe) await db.query("UPDATE empresa_configs SET config_json = ? WHERE empresa_id = ? AND config_type = 'whatsapp'", [json, empresaId]);
   else await db.query("INSERT INTO empresa_configs (empresa_id, config_type, config_json) VALUES (?, 'whatsapp', ?)", [empresaId, json]);
@@ -96,4 +101,4 @@ async function responderAutomatico(empresaId, conversaId, m, agora = new Date())
   return { enviada: true };
 }
 
-module.exports = { JANELA_HORAS, obterAutomacao, salvarAutomacao, responderAutomatico };
+module.exports = { JANELA_HORAS, lerConfigJson, salvarChave, obterAutomacao, salvarAutomacao, responderAutomatico };

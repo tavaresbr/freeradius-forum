@@ -17,7 +17,7 @@ function Linha({ rotulo, children }) {
 }
 
 // Resumo do cliente ligado a conversa (CPF mascarado) + criar/vincular cliente.
-export default function PainelCliente({ dados, carregando, empresaSlug, conversa, headers, onMudou }) {
+export default function PainelCliente({ dados, carregando, empresaSlug, conversa, headers, onMudou, onEnviarPlanos }) {
   const [buscando, setBuscando] = useState(false);
   const [q, setQ] = useState("");
   const [achados, setAchados] = useState([]);
@@ -69,12 +69,16 @@ export default function PainelCliente({ dados, carregando, empresaSlug, conversa
           {lead.sem_promocoes && <p className="text-xs text-yellow-400">Pediu para não receber promoções.</p>}
           {!lead.lgpd_aceite && <p className="text-xs text-gray-500">Sem consentimento LGPD registrado.</p>}
           {dados.plano && <Linha rotulo="Plano atual">{`${dados.plano.nome}${dados.plano.duracao_minutos ? ` (${dados.plano.duracao_minutos} min)` : ""}`}</Linha>}
+          {dados.saldo && (
+            <Linha rotulo="Tempo restante">{dados.saldo.ativo ? `${Math.max(1, Math.ceil(dados.saldo.restante_segundos / 60))} min` : "Esgotado"}</Linha>
+          )}
           {dados.ultimo_pagamento && (
             <Linha rotulo="Último pagamento">
               {`${brl(dados.ultimo_pagamento.valor)} · ${dados.ultimo_pagamento.status}${dados.ultimo_pagamento.plano ? ` · ${dados.ultimo_pagamento.plano}` : ""} · ${data(dados.ultimo_pagamento.criado_em)}`}
             </Linha>
           )}
           <div className="flex gap-2 flex-wrap">
+            {dados.link_planos && onEnviarPlanos && <button onClick={() => onEnviarPlanos(dados.link_planos)} className={btnPrimary} title="Coloca na caixa de mensagem o link dos planos do portal">💳 Enviar planos</button>}
             <Link to={`/admin/${empresaSlug}/leads`} className={`${btnSecondary} inline-block`}>Abrir em Clientes</Link>
             <button onClick={() => chamar(`/api/atendimento/conversas/${conversa.id}/vincular`, { method: "POST", body: JSON.stringify({ lead_id: null }) })} disabled={busy} className="text-xs text-gray-400 hover:text-red-400 cursor-pointer">desvincular</button>
           </div>

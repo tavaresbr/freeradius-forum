@@ -24,7 +24,7 @@ const ORIGENS = [
 ];
 const STATUS_LEAD = [["novo", "Novo"], ["contactado", "Contactado"], ["convertido", "Convertido"]];
 const MENSAGEM_PADRAO = "Olá, {{nome}}! Temos uma promoção especial para você. Responda esta mensagem para saber mais.";
-const FILTROS_VAZIOS = { origens: [], status: [], lgpd: "todos", q: "" };
+const FILTROS_VAZIOS = { origens: [], status: [], lgpd: "todos", q: "", inativo: "" };
 
 const fmt = (d) => (d ? new Date(d).toLocaleString("pt-BR") : "-");
 
@@ -109,6 +109,7 @@ export default function PromocoesWhatsapp() {
     origens: filtros.origens,
     status: filtros.status,
     q: filtros.q,
+    ...(Number(filtros.inativo) >= 1 ? { inativo_dias: Number(filtros.inativo) } : {}),
     ...(filtros.lgpd === "sim" ? { lgpd_aceite: true } : filtros.lgpd === "nao" ? { lgpd_aceite: false } : {}),
   });
 
@@ -272,6 +273,11 @@ export default function PromocoesWhatsapp() {
                 <label className="block text-xs text-gray-500 mb-1">Buscar (nome, e-mail ou telefone)</label>
                 <input aria-label="Buscar contato" className={inputCls} value={filtros.q} onChange={(e) => { setFiltros((f) => ({ ...f, q: e.target.value })); mudouAlgo(); }} />
               </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500 mb-1">Reativação: sem conectar há (dias)</label>
+              <input aria-label="Sem conectar há N dias" type="number" min={1} max={3650} placeholder="ex.: 30" className={`${inputCls} !w-32`} value={filtros.inativo} onChange={(e) => { setFiltros((f) => ({ ...f, inativo: e.target.value })); mudouAlgo(); }} />
+              <p className="text-xs text-gray-500 mt-1">Só quem se cadastrou há mais de N dias, tem o aparelho (MAC) registrado e não conectou nesse período.</p>
             </div>
             <p className="text-xs text-gray-500 mt-3">Quem foi marcado como "não quer promoções" e contatos descartados nunca recebem.</p>
           </fieldset>
