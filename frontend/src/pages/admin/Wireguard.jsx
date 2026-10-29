@@ -84,14 +84,9 @@ export default function Wireguard() {
         body: JSON.stringify({ name: newPeerName })
       });
       
-      // wg-easy doesn't return the new client ID, we must fetch it from the list
-      const statusRes = await fetch("/api/wireguard/status", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const statusData = await statusRes.json();
-      const createdClient = statusData.clients.find(c => c.name === newPeerName);
-
-      if (!createdClient) throw new Error("Cliente não encontrado");
+      const criado = await res.json().catch(() => ({}));
+      if (!res.ok || !criado.id) throw new Error(criado.message || "Erro ao criar peer");
+      const createdClient = criado;
 
       const scriptRes = await fetch(`/api/wireguard/clients/${createdClient.id}/config`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -104,7 +99,7 @@ export default function Wireguard() {
       setShowScriptModal(true);
       loadStatus();
     } catch (err) {
-      alert("Erro ao criar peer");
+      alert(err.message || "Erro ao criar peer");
     }
   };
 
