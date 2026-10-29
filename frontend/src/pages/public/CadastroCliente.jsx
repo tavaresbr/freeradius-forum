@@ -16,6 +16,7 @@ export default function CadastroCliente() {
   // portal_id explicito (vindo do redirect entre portais).
   // Necessario propagar pra que /planos-cliente ainda saiba qual portal usar.
   const portalId = searchParams.get("portal_id") || "";
+  const cupomUrl = /^[A-Za-z0-9]{3,32}$/.test(searchParams.get("cupom") || "") ? searchParams.get("cupom") : "";
 
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", cpf: "", data_nascimento: "" });
   const [erro, setErro] = useState(null);
@@ -110,6 +111,7 @@ export default function CadastroCliente() {
         cliente_id: data.id, cliente_nome: data.nome, cliente_email: data.email,
       });
       if (portalId) params.set("portal_id", portalId);
+      if (cupomUrl) params.set("cupom", cupomUrl);
       navigate(`/planos-cliente?${params.toString()}`);
     } catch (err) {
       setErro(err.message);

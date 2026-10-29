@@ -14,6 +14,8 @@ export default function PlanosCliente() {
   // Quando o cliente vem do portal Login -> Planos via "Clique aqui",
   // esse id identifica o portal Planos correto pra carregar configs.
   const portalId = searchParams.get("portal_id");
+  // cupom vindo do link de renovacao: so segue adiante se tiver o formato de um codigo
+  const cupomUrl = /^[A-Za-z0-9]{3,32}$/.test(searchParams.get("cupom") || "") ? searchParams.get("cupom") : "";
   const [planos, setPlanos] = useState([]);
   const navigate = useNavigate();
   const [cfg, setCfg] = useState({});
@@ -54,6 +56,7 @@ export default function PlanosCliente() {
   if (!clienteId) {
     const params = new URLSearchParams({ mac: mac || '', ip: ip || '', mikrotik_id: mikrotikId || '', empresa_id: empresaId || '' });
     if (portalId) params.set("portal_id", portalId);
+    if (cupomUrl) params.set("cupom", cupomUrl);
     return <Navigate to={`/cadastro-cliente?${params.toString()}`} replace />;
   }
 
@@ -175,7 +178,7 @@ export default function PlanosCliente() {
 
             {/* Botão de Ação */}
             <button
-              onClick={() => navigate(`/pagamento/${plano.id}?mac=${encodeURIComponent(mac || "")}&ip=${encodeURIComponent(ip || "")}&mikrotik_id=${encodeURIComponent(mikrotikId || '')}&empresa_id=${encodeURIComponent(empresaId || '')}&cliente_id=${encodeURIComponent(clienteId ?? "")}${portalId ? `&portal_id=${encodeURIComponent(portalId)}` : ''}`)}
+              onClick={() => navigate(`/pagamento/${plano.id}?mac=${encodeURIComponent(mac || "")}&ip=${encodeURIComponent(ip || "")}&mikrotik_id=${encodeURIComponent(mikrotikId || '')}&empresa_id=${encodeURIComponent(empresaId || '')}&cliente_id=${encodeURIComponent(clienteId ?? "")}${portalId ? `&portal_id=${encodeURIComponent(portalId)}` : ''}${cupomUrl ? `&cupom=${encodeURIComponent(cupomUrl)}` : ''}`)}
               className={`w-full text-white font-semibold py-3.5 rounded-xl shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 ${!btnStyle ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800' : 'hover:opacity-90'}`}
               style={btnStyle}
             >

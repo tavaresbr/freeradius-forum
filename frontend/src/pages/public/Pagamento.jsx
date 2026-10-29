@@ -63,6 +63,8 @@ export default function Pagamento() {
   const [cupomAplicado, setCupomAplicado] = useState(null); // { codigo, valor_final, desconto }
   const [cupomMsg, setCupomMsg] = useState(null);
   const [cupomBusy, setCupomBusy] = useState(false);
+  // Com cupom vindo no link, o PIX so e gerado depois de validar o cupom (senao sairia com o valor cheio)
+  const [cupomResolvido, setCupomResolvido] = useState(() => !(searchParams.get("cupom") || "").trim());
 
   // Shared state
   const [status, setStatus] = useState("idle");
@@ -173,8 +175,18 @@ export default function Pagamento() {
       setCupomAplicado(null); setCupomMsg("Não foi possível validar o cupom. Tente novamente.");
     } finally {
       setCupomBusy(false);
+      setCupomResolvido(true);
     }
   };
+
+  // Cupom que veio no link (ex.: lembrete de renovacao): valida sozinho uma vez, quando o plano carrega
+  const cupomAutoTentado = useRef(false);
+  useEffect(() => {
+    if (cupomAutoTentado.current || !plano || !cupomInput.trim()) return;
+    cupomAutoTentado.current = true;
+    aplicarCupom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plano]);
 
   const valorExibido = plano ? (cupomAplicado ? cupomAplicado.valor_final : plano.valor) : 0;
 
@@ -206,7 +218,7 @@ export default function Pagamento() {
 
   // Gerar pagamento PIX
   useEffect(() => {
-    if (metodo !== "pix" || !plano) return;
+    if (metodo !== "pix" || !plano || !cupomResolvido) return;
 
     // Voltou do login do acesso gratis: retoma o MESMO PIX (nao cria outro pagamento)
     const salvo = lerPixSalvo(id, clienteId);
@@ -236,7 +248,7 @@ export default function Pagamento() {
         setStatus("gerado");
       })
       .catch(() => setStatus("erro"));
-  }, [metodo, plano]);
+  }, [metodo, plano, cupomResolvido]);
 
   // Se ha um PIX salvo desta aba (voltou do login do acesso gratis), vai direto para ele mesmo quando o
   // portal oferece PIX e cartao (senao a tela de escolha apareceria de novo).

@@ -6,6 +6,7 @@ const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
 const bot = require("../utils/chatbot");
 const posCompra = require("../utils/posCompra");
+const renovacao = require("../utils/renovacao");
 const { renderTemplate, normalizarTelefone, gravarLog } = require("../services/whatsappNotify");
 const { enviarMensagemEstrita } = require("./whatsappController");
 const { linkPlanosDoCliente } = require("../utils/linkPlanos");
@@ -199,4 +200,56 @@ exports.salvarPosCompra = async (req, res) => {
     if (err.status) return res.status(err.status).json({ error: err.message });
     erro500(res, err, "Erro ao salvar o pós-compra");
   }
+};
+
+async function tabelaCobrancasOk() {
+  try { await db.query("SELECT 1 FROM whatsapp_cobrancas LIMIT 1"); return true; }
+  catch (err) { if (err.code === "ER_NO_SUCH_TABLE") return false; throw err; }
+}
+
+// GET /api/atendimento/renovacao
+exports.obterRenovacao = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    res.json({ renovacao: renovacao.mesclarComPadrao(cfg.renovacao), pronto: await tabelaCobrancasOk(), dias_permitidos: renovacao.DIAS_PERMITIDOS });
+  } catch (err) { erro500(res, err, "Erro ao buscar a renovação"); }
+};
+
+// PUT /api/atendimento/renovacao { ativo, dias:[0,3,7], template, cupom }
+exports.salvarRenovacao = async (req, res) => {
+  try {
+    const ren = renovacao.validarRenovacao(req.body);
+    if (ren.ativo && !(await tabelaCobrancasOk())) {
+      return res.status(503).json({ error: "Recurso indisponível: rode a migration 061 (node migrations/061_whatsapp_cobrancas.js)." });
+    }
+    await auto.salvarChave(req.empresa_id, "renovacao", ren);
+    res.json({ success: true, renovacao: ren });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar a renovação");
+  }
+};
+
+// GET /api/atendimento/renovacao/relatorio?dias=30 -> lembretes enviados e quantos voltaram a comprar em ate 7 dias
+exports.relatorioRenovacao = async (req, res) => {
+  try {
+    const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 365);
+    const [rows] = await db.query(
+      `SELECT c.etapa, COUNT(*) AS enviadas,
+              SUM(EXISTS (SELECT 1 FROM pagamentos p2
+                           WHERE p2.empresa_id = c.empresa_id AND p2.id > c.pagamento_id AND p2.status IN ('approved','expirado')
+                             AND p2.criado_em >= c.enviado_em AND p2.criado_em <= DATE_ADD(c.enviado_em, INTERVAL 7 DAY)
+                             AND ((pg.cliente_id IS NOT NULL AND p2.cliente_id = pg.cliente_id)
+                               OR (pg.cpf IS NOT NULL AND pg.cpf <> '' AND p2.cpf = pg.cpf)))) AS convertidas
+         FROM whatsapp_cobrancas c
+         JOIN pagamentos pg ON pg.id = c.pagamento_id AND pg.empresa_id = c.empresa_id
+        WHERE c.empresa_id = ? AND c.status = 'enviada' AND c.enviado_em >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        GROUP BY c.etapa ORDER BY c.etapa`,
+      [req.empresa_id, dias]
+    );
+    const por_etapa = rows.map((r) => ({ etapa: Number(r.etapa), enviadas: Number(r.enviadas), convertidas: Number(r.convertidas || 0) }));
+    const enviadas = por_etapa.reduce((s, e) => s + e.enviadas, 0);
+    const convertidas = por_etapa.reduce((s, e) => s + e.convertidas, 0);
+    res.json({ dias, enviadas, convertidas, taxa: enviadas ? Math.round((convertidas / enviadas) * 1000) / 10 : 0, por_etapa });
+  } catch (err) { erro500(res, err, "Erro ao montar o relatório de renovação"); }
 };
