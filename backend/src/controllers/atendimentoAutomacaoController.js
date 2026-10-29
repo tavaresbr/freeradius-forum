@@ -4,6 +4,7 @@ const db = require("../../db");
 const auto = require("../services/whatsappAutomacao");
 const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
+const bot = require("../utils/chatbot");
 const { renderTemplate, normalizarTelefone, gravarLog } = require("../services/whatsappNotify");
 const { enviarMensagemEstrita } = require("./whatsappController");
 const { linkPlanosDoCliente } = require("../utils/linkPlanos");
@@ -144,5 +145,28 @@ exports.testarAviso = async (req, res) => {
   } catch (err) {
     const msg = err.response?.data?.message || err.message || "Erro ao enviar";
     res.status(502).json({ error: `Não foi possível enviar o teste: ${String(msg).slice(0, 150)}` });
+  }
+};
+
+// GET /api/atendimento/chatbot
+exports.obterChatbot = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    res.json({ chatbot: bot.mesclarComPadrao(cfg.chatbot), pronto: await temColuna("whatsapp_conversas", "chatbot_estado") });
+  } catch (err) { erro500(res, err, "Erro ao buscar o chatbot"); }
+};
+
+// PUT /api/atendimento/chatbot { ativo, mensagem_menu, msg_atendente, opcoes:[{tecla,rotulo,tipo,texto}] }
+exports.salvarChatbot = async (req, res) => {
+  try {
+    const chatbot = bot.validarChatbot(req.body);
+    if (chatbot.ativo && !(await temColuna("whatsapp_conversas", "chatbot_estado"))) {
+      return res.status(503).json({ error: "Recurso indisponível: rode a migration 058 (node migrations/058_whatsapp_chatbot.js)." });
+    }
+    await auto.salvarChave(req.empresa_id, "chatbot", chatbot);
+    res.json({ success: true, chatbot });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar o chatbot");
   }
 };

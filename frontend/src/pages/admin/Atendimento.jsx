@@ -10,6 +10,7 @@ import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
 import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
 import AvisoExpiracao from "../../components/admin/atendimento/AvisoExpiracao";
+import Chatbot from "../../components/admin/atendimento/Chatbot";
 import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
@@ -467,6 +468,7 @@ export default function Atendimento() {
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
             <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
             <Link to={`/admin/${empresaSlug}/atendimento/relatorios`} className="text-sm text-blue-400 hover:text-blue-300">Relatórios</Link>
+            <button onClick={() => setModal("chatbot")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Chatbot</button>
             <button onClick={() => setModal("aviso")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Aviso de expiração</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
@@ -761,6 +763,7 @@ export default function Atendimento() {
             <EnviarEspecial tipo={modal} conversaId={selecionadaId} headers={headers} onFechar={() => setModal(null)}
               onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
           )}
+          {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
           {modal === "aviso" && <AvisoExpiracao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}

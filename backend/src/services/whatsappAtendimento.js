@@ -173,8 +173,11 @@ async function registrarMensagem(empresaId, data) {
   );
   await aplicarOptOut(empresaId, m);
   if (!m.fromMe) {
-    // Resposta automatica (boas-vindas / fora do horario): em segundo plano, nunca atrapalha o webhook.
-    require("./whatsappAutomacao").responderAutomatico(empresaId, conversaId, m)
+    // Chatbot de menu e, se ele nao tratou a mensagem, resposta automatica (boas-vindas / fora do horario):
+    // em segundo plano, nunca atrapalha o webhook.
+    require("./whatsappChatbot").processar(empresaId, conversaId, m)
+      .catch((err) => { console.warn("[atendimento] chatbot falhou:", err.message); return { tratada: false }; })
+      .then((r) => (r && r.tratada ? null : require("./whatsappAutomacao").responderAutomatico(empresaId, conversaId, m)))
       .catch((err) => console.warn("[atendimento] resposta automatica falhou:", err.message));
   }
   if (m.midia) {
