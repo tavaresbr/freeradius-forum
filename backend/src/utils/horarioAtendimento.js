@@ -10,6 +10,9 @@ const padrao = () => ({
   horarios: Array.from({ length: 7 }, (_, d) => ({ ativo: d >= 1 && d <= 5, de: "08:00", ate: "18:00" })), // 0 = domingo
   msg_boas_vindas: "",
   msg_fora_horario: "",
+  pedir_nota: false, // ao resolver, pede nota de 1 a 5
+  msg_pedir_nota: "De 1 a 5, como foi o nosso atendimento? Responda só com o número.",
+  ia_sugestao: false, // permite "Sugerir resposta" por IA (envia trechos da conversa a Anthropic)
 });
 
 function fusoValido(fuso) {
@@ -43,6 +46,9 @@ function validarAutomacao(body) {
     horarios,
     msg_boas_vindas: msg(b.msg_boas_vindas, "Boas-vindas"),
     msg_fora_horario: msg(b.msg_fora_horario, "Fora do horário"),
+    pedir_nota: !!b.pedir_nota,
+    msg_pedir_nota: msg(b.msg_pedir_nota, "Pesquisa de satisfação") || base.msg_pedir_nota,
+    ia_sugestao: !!b.ia_sugestao,
   };
   if (cfg.ativo && !cfg.msg_boas_vindas && !(cfg.usar_horario && cfg.msg_fora_horario)) {
     throw erro("Escreva ao menos uma mensagem (boas-vindas ou fora do horário)");

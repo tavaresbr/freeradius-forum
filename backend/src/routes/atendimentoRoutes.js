@@ -3,7 +3,8 @@ const multer = require("multer");
 const c = require("../controllers/atendimentoController");
 const x = require("../controllers/atendimentoExtrasController");
 const au = require("../controllers/atendimentoAutomacaoController");
-const { atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
+const rel = require("../controllers/atendimentoRelatoriosController");
+const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
 
@@ -39,6 +40,9 @@ router.post("/conversas/:id/agendadas", au.criarAgendada);
 router.delete("/agendadas/:id", au.cancelarAgendada);
 
 // Receita: aviso "seu tempo esta acabando"
+router.get("/relatorios", rel.relatorios);
+router.get("/ia-status", rel.iaStatus);
+router.post("/conversas/:id/sugerir", sugestaoIaLimiter, rel.sugerir);
 router.get("/aviso-expiracao", au.obterAviso);
 router.put("/aviso-expiracao", au.salvarAviso);
 router.post("/aviso-expiracao/teste", atendimentoEnvioLimiter, au.testarAviso);

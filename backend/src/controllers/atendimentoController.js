@@ -116,8 +116,9 @@ exports.listarMensagens = async (req, res) => {
     const antes = parseInt(req.query.antes_de, 10);
     const temCitacao = await temColuna("whatsapp_mensagens", "resposta_a_wa_id");
     const temAuto = await temColuna("whatsapp_mensagens", "automatica");
+    const temExp = await temColuna("whatsapp_mensagens", "midia_expirada_em");
     const [rows] = await db.query(
-      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor${temCitacao ? ", m.resposta_a_wa_id, m.resposta_previa" : ""}${temAuto ? ", m.automatica" : ""}
+      `SELECT m.id, m.direcao, m.tipo, m.texto, m.midia_nome, m.midia_mime, (m.midia_mime IS NOT NULL) AS tem_midia, m.status, m.erro, m.admin_id, m.criado_em, a.nome AS autor${temCitacao ? ", m.resposta_a_wa_id, m.resposta_previa" : ""}${temAuto ? ", m.automatica" : ""}${temExp ? ", (m.midia_expirada_em IS NOT NULL) AS midia_expirada" : ""}
          FROM whatsapp_mensagens m LEFT JOIN admins a ON a.id = m.admin_id
         WHERE m.empresa_id = ? AND m.conversa_id = ? ${Number.isInteger(antes) ? "AND m.id < ?" : ""}
         ORDER BY m.id DESC LIMIT ?`,
@@ -186,11 +187,14 @@ exports.servirMidia = async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id)) return res.status(400).json({ error: "Mídia inválida" });
+    const temExp = await temColuna("whatsapp_mensagens", "midia_expirada_em");
     const [[msg]] = await db.query(
-      "SELECT id, wa_id, direcao, midia_path, midia_mime, midia_nome FROM whatsapp_mensagens WHERE id = ? AND empresa_id = ? AND midia_mime IS NOT NULL",
+      `SELECT id, wa_id, direcao, midia_path, midia_mime, midia_nome${temExp ? ", midia_expirada_em" : ""} FROM whatsapp_mensagens WHERE id = ? AND empresa_id = ? AND midia_mime IS NOT NULL`,
       [id, req.empresa_id]
     );
     if (!msg) return res.status(404).json({ error: "Mídia não encontrada" });
+    // Removida pelo expurgo automatico: nao tenta baixar de novo
+    if (msg.midia_expirada_em) return res.status(410).json({ error: "Mídia removida pela limpeza automática" });
     let rel = msg.midia_path;
     if (!rel && msg.direcao === "in") {
       try { rel = await svc.baixarMidia(req.empresa_id, msg); }
@@ -231,6 +235,10 @@ exports.atualizarConversa = async (req, res) => {
     }
     if (!sets.length) return res.status(400).json({ error: "Nada para alterar" });
     await db.query(`UPDATE whatsapp_conversas SET ${sets.join(", ")} WHERE id = ? AND empresa_id = ?`, [...params, conversa.id, req.empresa_id]);
+    // Resolvida: pede a nota de satisfacao (se a empresa ligou). Falha nunca atrapalha o status.
+    if (req.body?.status === "resolvida" && conversa.status !== "resolvida") {
+      await require("../services/whatsappSatisfacao").pedirNota(req.empresa_id, req.user?.id, conversa);
+    }
     res.json({ success: true });
   } catch (err) {
     erro500(res, err, "Erro ao atualizar conversa");

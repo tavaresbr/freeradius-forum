@@ -86,6 +86,8 @@ export default function Atendimento() {
   const [menuMais, setMenuMais] = useState(false);
   const [avisoLigado, setAvisoLigado] = useState(avisoAtivo());
   const [modo, setModo] = useState("resposta"); // resposta | nota
+  const [iaAtiva, setIaAtiva] = useState(false); // "Sugerir resposta" liberado (chave no servidor + empresa ligou)
+  const [sugerindo, setSugerindo] = useState(false);
   const [modal, setModal] = useState(null); // etiquetas | respostas | nova
   const [menuEtiquetas, setMenuEtiquetas] = useState(false);
   const [cliente, setCliente] = useState(null);
@@ -198,6 +200,10 @@ export default function Atendimento() {
   }, [token]);
 
   useEffect(() => { carregarEtiquetas(); carregarRespostas(); }, [carregarEtiquetas, carregarRespostas]);
+  useEffect(() => {
+    fetch("/api/atendimento/ia-status", { headers }).then((r) => (r.ok ? r.json() : null)).then((d) => setIaAtiva(!!d?.ativo)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal]);
   useEffect(() => { setCliente(null); setPainelAberto(false); setMenuEtiquetas(false); setModo("resposta"); if (selecionadaId) carregarCliente(selecionadaId); }, [selecionadaId, carregarCliente]);
 
   // o webhook so e' consultado por quem tem acesso a configuracao do WhatsApp (senao ignora)
@@ -421,6 +427,22 @@ export default function Atendimento() {
     setTexto(`${primeiro ? `Olá ${primeiro}! ` : "Olá! "}Para continuar conectado, escolha um plano aqui: ${link}`);
   };
 
+  // Pede um rascunho de resposta a IA; o atendente revisa antes de enviar
+  const sugerir = async () => {
+    if (!selecionadaId || sugerindo) return;
+    setSugerindo(true); setErroEnvio("");
+    try {
+      const res = await fetch(`/api/atendimento/conversas/${selecionadaId}/sugerir`, { method: "POST", headers });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroEnvio(d.error || "Não foi possível sugerir agora"); return; }
+      setModo("resposta"); setTexto(d.sugestao);
+    } catch {
+      setErroEnvio("Erro de conexão");
+    } finally {
+      setSugerindo(false);
+    }
+  };
+
   const aplicarResposta = (r) => {
     const primeiro = (conversa?.nome || "").trim().split(/\s+/)[0] || "cliente";
     setTexto(r.texto.replace(/\{\{\s*nome\s*\}\}/gi, primeiro).replace(/\{\{\s*empresa\s*\}\}/gi, cliente?.empresa || ""));
@@ -444,6 +466,7 @@ export default function Atendimento() {
             <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
             <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
+            <Link to={`/admin/${empresaSlug}/atendimento/relatorios`} className="text-sm text-blue-400 hover:text-blue-300">Relatórios</Link>
             <button onClick={() => setModal("aviso")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Aviso de expiração</button>
             <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
@@ -546,6 +569,7 @@ export default function Atendimento() {
                     ) : (
                       <p className="text-white font-medium truncate">
                         {conversa ? titulo(conversa) : "..."}
+                        {conversa?.nota_satisfacao != null && <span className="ml-2 text-xs text-yellow-400" title="Nota de satisfação dada pelo cliente">{conversa.nota_satisfacao}★</span>}
                         {conversa && (
                           <button onClick={() => { setNomeEdit(conversa.nome || ""); setEditandoNome(true); }} className="ml-2 text-xs text-blue-400 hover:text-blue-300 cursor-pointer">editar nome</button>
                         )}
@@ -621,7 +645,9 @@ export default function Atendimento() {
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : m.direcao === "nota" ? "bg-yellow-100 text-yellow-900 border border-yellow-300" : "bg-green-700/80 text-white"}`}>
                         {m.resposta_previa && <div className="mb-1 px-2 py-1 border-l-2 border-current bg-black/10 rounded text-xs opacity-80 line-clamp-2">{m.resposta_previa}</div>}
                         {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? ` · ${m.autor}` : ""} (o cliente não vê)</p>}
-                        {m.tem_midia
+                        {m.tem_midia && m.midia_expirada
+                          ? <p className="text-xs italic opacity-70 mb-0.5">Mídia removida pela limpeza automática</p>
+                          : m.tem_midia
                           ? <div className="mb-1"><MidiaMensagem mensagem={m} /></div>
                           : m.tipo !== "texto" && !(m.tipo === "outro" && m.texto) && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
                         {m.texto}
@@ -711,6 +737,9 @@ export default function Atendimento() {
                       placeholder={modo === "nota" ? "Nota interna: só a equipe vê" : arquivo ? "Legenda (opcional)" : "Digite a mensagem — / abre as respostas rápidas (Enter envia)"}
                       className={`${inputCls} resize-none`}
                     />
+                    {iaAtiva && modo !== "nota" && (
+                      <button onClick={sugerir} disabled={sugerindo || enviando} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" title="Gera um rascunho de resposta com IA (você revisa antes de enviar)" aria-label="Sugerir resposta com IA">{sugerindo ? "…" : "✨"}</button>
+                    )}
                     <button onClick={enviar} disabled={enviando || (!texto.trim() && (modo === "nota" || !arquivo))} className={`px-4 py-2 ${modo === "nota" ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"} text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer`}>
                       {enviando ? "..." : modo === "nota" ? "Salvar nota" : "Enviar"}
                     </button>
