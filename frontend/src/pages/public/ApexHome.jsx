@@ -25,6 +25,8 @@ const RECURSOS = RECURSOS_TEXTO.map((r) => ({ ...r, icone: ICONES[r.chave] || La
 
 const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const limite = (v) => (v == null ? "Ilimitados" : v);
+// "2 equipamentos", "1 administrador", "Equipamentos ilimitados"
+const rotuloLimite = (v, um, varios) => (v == null ? `${varios[0].toUpperCase()}${varios.slice(1)} ilimitados` : `${v} ${Number(v) === 1 ? um : varios}`);
 
 export default function ApexHome() {
   const { nome } = useBranding();
@@ -82,11 +84,11 @@ export default function ApexHome() {
     <div className="tema-site min-h-screen bg-white text-gray-800">
       <SiteHeader />
 
-      <section id="topo" className="pt-32 pb-20 px-4 bg-gradient-to-br from-apex-50 via-white to-apex-100 text-apex-900">
+      <section id="topo" className="pt-32 pb-20 lg:pt-40 lg:pb-28 px-4 bg-gradient-to-br from-apex-50 via-white to-apex-100 text-apex-900">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
           <div className="text-center md:text-left">
             <span className="inline-block text-xs font-semibold bg-apex-100 text-apex-700 px-3 py-1 rounded-full">7 dias grátis, sem cartão</span>
-            <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-balance">
+            <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-balance md:text-wrap">
               Wi&#8209;Fi Hotspot que <span className="text-apex-500">vende e cadastra</span> por você
             </h1>
             <p className="mt-5 text-lg text-gray-600 max-w-xl mx-auto md:mx-0">
@@ -125,7 +127,7 @@ export default function ApexHome() {
       </section>
 
       <section id="como-funciona" aria-labelledby="como-funciona-titulo" className="py-12 sm:py-16 px-4 bg-white">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 id="como-funciona-titulo" className="text-2xl sm:text-3xl font-bold text-center text-balance">Como funciona o Wi&#8209;Fi com cadastro e pagamento</h2>
           <ol className="mt-10 grid gap-6 md:grid-cols-3">
             {COMO_FUNCIONA.map(([titulo, texto], i) => (
@@ -169,8 +171,8 @@ export default function ApexHome() {
                   <p className="text-sm text-gray-500">{p.descricao}</p>
                   <p className="mt-3"><span className="text-4xl font-extrabold text-apex-900">{brl(p.valor)}</span><span className="text-gray-500">/{p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}</span></p>
                   <ul className="mt-4 space-y-2 flex-1 text-sm">
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{limite(p.max_equipamentos)} equipamento(s)</li>
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{limite(p.max_admins)} administrador(es)</li>
+                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_equipamentos, "equipamento", "equipamentos")}</li>
+                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_admins, "administrador", "administradores")}</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />Todos os recursos incluídos</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />7 dias grátis, sem cartão</li>
                   </ul>
@@ -196,12 +198,12 @@ export default function ApexHome() {
       </section>
 
       <section id="faq" className="py-12 sm:py-16 px-4 bg-apex-50">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Dúvidas frequentes</h2>
           <div className="mt-8 space-y-3">
             {FAQ.map(([q, a]) => (
-              <details key={q} className="border bg-white rounded-lg p-4">
-                <summary className="font-semibold cursor-pointer">{q}</summary>
+              <details key={q} className="group border border-apex-100 bg-white rounded-lg p-4 open:shadow-sm hover:border-apex-400 transition">
+                <summary className="font-semibold cursor-pointer list-none flex items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">{q}<span aria-hidden="true" className="text-apex-500 transition-transform group-open:rotate-180">&#9662;</span></summary>
                 <p className="mt-2 text-gray-600">{a}</p>
               </details>
             ))}
