@@ -9,6 +9,8 @@ export default function LgpdCadastros() {
   const [busca, setBusca] = useState("");
   const FILTROS_VAZIOS = { equipamento: "", origem: "", aceite: "", de: "", ate: "", ap: "", ssid: "" };
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+  const [menuContatos, setMenuContatos] = useState(false);
+  const [msgContatos, setMsgContatos] = useState({ tipo: "", texto: "" });
   const [opcoes, setOpcoes] = useState({ origens: [], ssids: [], aps: [], equipamentos: [] });
 
   const token = localStorage.getItem("admin_token");
@@ -84,6 +86,35 @@ export default function LgpdCadastros() {
     }
   };
 
+  // Exporta os cadastros filtrados como contatos (Google Contatos / Outlook / vCard)
+  const exportarContatos = async (formato, arquivo) => {
+    setMenuContatos(false);
+    setMsgContatos({ tipo: "", texto: "" });
+    try {
+      const t = await fetch("/api/auth/download-token?para=leads", { headers: { Authorization: `Bearer ${token}` } });
+      if (!t.ok) throw new Error("Sessão expirada. Faça login novamente.");
+      const { token: dl } = await t.json();
+      const qs = new URLSearchParams(queryFiltros());
+      qs.set("token", dl);
+      qs.set("formato", formato);
+      const r = await fetch(`/api/lgpd/export-contatos?${qs}`);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(r.status === 403 && d.code === "RECURSO_NAO_CONTRATADO" ? "A exportação da base não está incluída no seu plano." : d.message || d.error || "Não foi possível exportar.");
+      }
+      const total = r.headers.get("X-Total-Contatos");
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = arquivo;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsgContatos({ tipo: "ok", texto: total === "0" ? "Nenhum cadastro com telefone válido neste filtro." : `${total || ""} contato(s) exportado(s).` });
+    } catch (e) {
+      setMsgContatos({ tipo: "erro", texto: e.message || "Não foi possível exportar." });
+    }
+  };
+
   const ORIGEM_LABELS = {
     lgpd: { label: "Portal LGPD", cls: "bg-blue-900/30 text-blue-400" },
     portal_lead: { label: "Portal Lead", cls: "bg-purple-900/30 text-purple-400" },
@@ -127,13 +158,38 @@ export default function LgpdCadastros() {
               <p className="text-sm text-gray-400">Gerenciamento de consentimentos e dados pessoais</p>
             </div>
           </div>
-          <button
-            onClick={handleExport}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded shadow text-sm font-medium cursor-pointer"
-          >
-            {filtrosAtivos ? "Exportar CSV (filtrado)" : "Exportar CSV"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setMenuContatos((v) => !v)}
+                className="bg-[#1a1d27] border border-gray-700 hover:bg-[#252b3b] text-gray-200 px-5 py-2 rounded shadow text-sm font-medium cursor-pointer"
+              >
+                {filtrosAtivos ? "Exportar contatos (filtrado)" : "Exportar contatos"} ▾
+              </button>
+              {menuContatos && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuContatos(false)} />
+                  <div className="absolute right-0 mt-1 w-64 z-20 bg-[#1a1d27] border border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                    {[["google", "Google Contatos (CSV)", "contatos-google.csv"], ["outlook", "Outlook (CSV)", "contatos-outlook.csv"], ["vcard", "iCloud / celular (vCard .vcf)", "contatos.vcf"]].map(([f, rot, arq]) => (
+                      <button key={f} onClick={() => exportarContatos(f, arq)} className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">
+                        {rot}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              onClick={handleExport}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded shadow text-sm font-medium cursor-pointer"
+            >
+              {filtrosAtivos ? "Exportar CSV (filtrado)" : "Exportar CSV"}
+            </button>
+          </div>
         </div>
+        {msgContatos.texto && (
+          <p className={`text-sm ${msgContatos.tipo === "erro" ? "text-red-400" : "text-green-400"}`}>{msgContatos.texto}</p>
+        )}
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-3">

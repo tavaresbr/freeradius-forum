@@ -10,7 +10,7 @@ const ctrl = (db, temEq = true) => carregar('src/controllers/lgpdController.js',
     'src/utils/leadUtils.js': {},
     'src/utils/schemaCache.js': { temColuna: async () => temEq },
     'src/utils/apInfo.js': { resolverApDoContexto: async () => ({}) },
-    'src/services/whatsappNotify.js': { notificarLiberacao: async () => {} },
+    'src/services/whatsappNotify.js': { notificarLiberacao: async () => {}, normalizarTelefone: (t) => { const d = String(t || '').replace(/\D/g, ''); return d.length === 10 || d.length === 11 ? `55${d}` : d.length >= 12 && d.length <= 13 ? d : null; } },
     'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({}) },
     'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async () => ({}) },
   },
@@ -139,4 +139,33 @@ test('gravarEquipamentoLead: so equipamento da propria empresa, so se NULL, e nu
   m = mk(async () => { throw Object.assign(new Error("Unknown column 'mikrotik_id'"), {}); });
   await assert.doesNotReject(() => m.u.gravarEquipamentoLead(5, { mac: 'AA:BB' }, 9));
   await m.u.gravarEquipamentoLead(5, { cpf: '1' }, 'x');
+});
+
+test('exportarContatosLgpd: usa os filtros da tela, so com telefone, escopado e valida formato/filtro', async () => {
+  const db = criarDb(async () => [[
+    { nome: 'Maria da Silva', email: 'm@x.com', telefone: '(93) 99193-5695' },
+    { nome: 'Sem Tel', email: '', telefone: '123' },
+  ]]);
+  const c = ctrl(db, true);
+  const res = criarRes();
+  await c.exportarContatosLgpd(criarReq({ empresa_id: 3, query: { formato: 'google', origem: 'lgpd', equipamento: '7' } }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const q = db.calls[0];
+  assert.match(q.sql, /l\.telefone IS NOT NULL AND l\.telefone <> ''/);
+  assert.match(q.sql, /l\.mikrotik_id = \?/);
+  assert.match(q.sql, /LIMIT 50000/);
+  assert.deepStrictEqual(q.params, [3, 'lgpd', 7]);
+  assert.match(res.body, /\+5593991935695/);
+  assert.strictEqual(res.headers['X-Total-Contatos'], '1');
+  assert.match(res.headers['Content-Disposition'], /contatos-google\.csv/);
+
+  const restaura = silencia();
+  const r2 = criarRes();
+  await c.exportarContatosLgpd(criarReq({ empresa_id: 3, query: { formato: 'xml' } }), r2);
+  const r3 = criarRes();
+  await c.exportarContatosLgpd(criarReq({ empresa_id: 3, query: { formato: 'vcard', aceite: '9' } }), r3);
+  restaura();
+  assert.strictEqual(r2.statusCode, 400);
+  assert.strictEqual(r3.statusCode, 400);
+  assert.strictEqual(db.calls.length, 1);
 });
