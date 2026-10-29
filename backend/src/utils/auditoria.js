@@ -30,6 +30,7 @@ const REGRAS = [
   ["DELETE", /^\/api\/limpeza\/([a-z_-]+)$/, "limpeza.executar", "limpeza"],
   ["POST", /^\/api\/vouchers\/massa(-filtro)?$/, "voucher.massa", "voucher"],
   ["POST", /^\/api\/promocoes-whatsapp\/(\d+)\/iniciar$/, "promocao.iniciar", "promocao"],
+  ["POST", /^\/api\/avisos-operacionais\/(\d+)\/iniciar$/, "aviso_operacional.iniciar", "aviso_operacional"],
 ];
 
 /** { acao, entidade, id } da requisicao, ou null se nao e' auditada. Puro (testavel). */
