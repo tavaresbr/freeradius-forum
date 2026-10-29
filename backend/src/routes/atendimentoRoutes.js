@@ -21,6 +21,7 @@ router.get("/midia/:id", c.servirMidia);
 router.put("/conversas/:id", c.atualizarConversa);
 router.post("/conversas/:id/lida", c.marcarLida);
 router.get("/nao-lidas", c.naoLidas);
+router.post("/webhook/garantir", c.garantirWebhook);
 
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
 router.post("/conversas", novaConversaLimiter, x.novaConversa);

@@ -230,9 +230,20 @@ exports.receberWebhook = async (req, res) => {
     const instancia = req.body?.instance;
     if (instancia && typeof instancia === "string" && instancia !== dono.instancia) return res.status(200).json({ ok: true, ignorado: true });
     res.status(200).json({ ok: true });
+    svc.registrarEvento(dono.empresaId, req.body?.event);
+    console.log(`[atendimento] webhook empresa=${dono.empresaId} evento=${String(req.body?.event || "").slice(0, 40)}`);
     await svc.processarWebhook(dono.empresaId, req.body);
   } catch (err) {
     console.error("[atendimento] webhook:", err.message);
     if (!res.headersSent) res.status(200).json({ ok: false });
+  }
+};
+
+// POST /api/atendimento/webhook/garantir  (registra o recebimento se faltar ou estiver com URL antiga)
+exports.garantirWebhook = async (req, res) => {
+  try {
+    res.json(await svc.garantirWebhook(req.empresa_id));
+  } catch (err) {
+    res.json({ ativo: false });
   }
 };

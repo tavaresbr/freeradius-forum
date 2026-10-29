@@ -198,3 +198,45 @@ test('lista de conversas sem a migration 048: 503 dizendo o que rodar (nao o err
     assert.ok(!res.body.error.includes('x.whatsapp_conversas'), 'sem vazar o erro do MySQL');
   } finally { fim(); }
 });
+
+test('baseWebhook: EVOLUTION_WEBHOOK_BASE manda; senao SYSTEM_DOMAIN publico; senao host.docker.internal', () => {
+  const antes = { b: process.env.EVOLUTION_WEBHOOK_BASE, d: process.env.SYSTEM_DOMAIN };
+  try {
+    process.env.EVOLUTION_WEBHOOK_BASE = 'http://10.0.0.5:3001/';
+    assert.strictEqual(servico(criarDb()).baseWebhook(), 'http://10.0.0.5:3001');
+    delete process.env.EVOLUTION_WEBHOOK_BASE;
+    process.env.SYSTEM_DOMAIN = 'painel.exemplo.com.br';
+    assert.strictEqual(servico(criarDb()).baseWebhook(), 'https://painel.exemplo.com.br');
+    delete process.env.SYSTEM_DOMAIN;
+    assert.strictEqual(servico(criarDb()).baseWebhook(), 'http://host.docker.internal:3001');
+  } finally {
+    for (const [k, v] of [['EVOLUTION_WEBHOOK_BASE', antes.b], ['SYSTEM_DOMAIN', antes.d]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+test('statusWebhook: so e ativo com a URL esperada; URL antiga (outro host) = inativo; garantir registra de novo', async () => {
+  const antes = { b: process.env.EVOLUTION_WEBHOOK_BASE, get: axios.get, post: axios.post };
+  const token = 'b'.repeat(48);
+  const db = criarDb((sql) => (/webhook_token|empresa_configs/.test(sql) ? [[{ id: 1, config_json: JSON.stringify({ webhook_token: token }) }]] : undefined));
+  const fim = semLog();
+  try {
+    process.env.EVOLUTION_WEBHOOK_BASE = 'https://painel.exemplo.com.br';
+    let registrado = `http://host.docker.internal:3001/api/whatsapp-webhook/${token}`;
+    const posts = [];
+    axios.get = async () => ({ data: { webhook: { enabled: true, url: registrado } } });
+    axios.post = async (url, body) => { posts.push({ url, body }); registrado = body.webhook.url; return { data: {} }; };
+    const s = servico(db);
+    assert.strictEqual((await s.statusWebhook(7)).ativo, false);
+    const g = await s.garantirWebhook(7);
+    assert.strictEqual(g.ativo, true);
+    assert.strictEqual(posts.length, 1);
+    assert.strictEqual(posts[0].body.webhook.url, `https://painel.exemplo.com.br/api/whatsapp-webhook/${token}`);
+    assert.strictEqual((await s.statusWebhook(7)).ativo, true);
+    s.registrarEvento(7, 'MESSAGES_UPSERT');
+    assert.ok((await s.statusWebhook(7)).ultimo_evento_em instanceof Date);
+  } finally {
+    fim();
+    axios.get = antes.get; axios.post = antes.post;
+    if (antes.b === undefined) delete process.env.EVOLUTION_WEBHOOK_BASE; else process.env.EVOLUTION_WEBHOOK_BASE = antes.b;
+  }
+});

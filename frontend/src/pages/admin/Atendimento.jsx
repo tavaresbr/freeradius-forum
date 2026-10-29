@@ -181,7 +181,8 @@ export default function Atendimento() {
 
   // o webhook so e' consultado por quem tem acesso a configuracao do WhatsApp (senao ignora)
   useEffect(() => {
-    fetch("/api/whatsapp/webhook/status", { headers })
+    // garantir: registra o recebimento se faltar ou estiver com a URL antiga (a Evolution nao alcancava o servidor)
+    fetch("/api/atendimento/webhook/garantir", { method: "POST", headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setWebhook(d ? !!d.ativo : null))
       .catch(() => {});

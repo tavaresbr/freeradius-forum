@@ -6,6 +6,7 @@ const { normalizarTelefone } = require("./whatsappNotify");
 const wpp = require("../controllers/whatsappController");
 const midiaUtil = require("../utils/whatsappMidia");
 const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
+const { normalizarHost } = require("../utils/entradaSegura");
 
 const MAX_TEXTO = 4000;
 const STATUS_ORDEM = ["enviando", "enviada", "entregue", "lida"];
@@ -225,7 +226,21 @@ async function empresaPorWebhookToken(token) {
 }
 
 const EVENTOS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
-const baseWebhook = () => (process.env.EVOLUTION_WEBHOOK_BASE || "http://host.docker.internal:3001").replace(/\/+$/, "");
+/**
+ * URL base que a Evolution (container Docker) usa para chamar este backend. EVOLUTION_WEBHOOK_BASE manda; senao o
+ * dominio publico (SYSTEM_DOMAIN, via nginx: nao depende da rede Docker). `host.docker.internal` so como ultimo recurso:
+ * em Linux ele nao resolve dentro do container sem `extra_hosts`.
+ */
+const baseWebhook = () => {
+  const manual = String(process.env.EVOLUTION_WEBHOOK_BASE || "").trim();
+  if (manual) return manual.replace(/\/+$/, "");
+  const host = normalizarHost(process.env.SYSTEM_DOMAIN || "");
+  return host ? `https://${host}` : "http://host.docker.internal:3001";
+};
+
+// Ultimo evento recebido por empresa (memoria do processo): ajuda a ver se a Evolution esta chegando.
+const ultimoEvento = new Map();
+const registrarEvento = (empresaId, evento) => ultimoEvento.set(empresaId, { quando: new Date(), evento: String(evento || "").slice(0, 60) });
 
 async function ativarWebhook(empresaId) {
   const evo = await wpp.getEvolutionConfig(empresaId);
@@ -242,15 +257,33 @@ async function ativarWebhook(empresaId) {
 
 async function statusWebhook(empresaId) {
   const evo = await wpp.getEvolutionConfig(empresaId);
-  if (!evo.apiKey) return { ativo: false };
+  const ev = ultimoEvento.get(empresaId);
+  const base = { ativo: false, ultimo_evento_em: ev?.quando || null };
+  if (!evo.apiKey) return base;
   const token = await obterOuCriarWebhookToken(empresaId);
   try {
     const r = await axios.get(`${evo.apiUrl}/webhook/find/${evo.instanceName}`, { headers: { apikey: evo.apiKey }, timeout: 10000 });
     const w = r.data?.webhook || r.data || {};
-    return { ativo: !!w.enabled && String(w.url || "").includes(token) };
+    const url = String(w.url || "");
+    // Registrado com a URL de antes (outro host) = a Evolution nao esta chegando aqui: precisa registrar de novo.
+    const esperada = `${baseWebhook()}/api/whatsapp-webhook/${token}`;
+    let host = "";
+    try { host = new URL(url).host; } catch { /* sem URL */ }
+    return { ...base, ativo: !!w.enabled && url === esperada, url_host: host };
   } catch {
-    return { ativo: false };
+    return base;
   }
+}
+
+const garantidoEm = new Map();
+/** Registra o webhook se faltar ou estiver com URL antiga (no maximo 1 tentativa por 10 min por empresa). */
+async function garantirWebhook(empresaId) {
+  const st = await statusWebhook(empresaId);
+  if (st.ativo) return st;
+  if (Date.now() - (garantidoEm.get(empresaId) || 0) < 10 * 60 * 1000) return st;
+  garantidoEm.set(empresaId, Date.now());
+  try { await ativarWebhook(empresaId); return { ...st, ativo: true, reativado: true }; }
+  catch (err) { console.warn("[atendimento] webhook nao reativado:", err?.response?.data || err.message); return st; }
 }
 
 // --- Envio ---
@@ -319,5 +352,5 @@ const enviarTexto = (empresaId, adminId, conversa, texto) => enviarMensagem(empr
 
 module.exports = {
   MAX_TEXTO, extrairMensagem, resolverContato, normalizarEvento, processarWebhook, registrarMensagem, atualizarStatus,
-  obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, enviarTexto, enviarMensagem, baixarMidia,
+  obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, garantirWebhook, registrarEvento, baseWebhook, enviarTexto, enviarMensagem, baixarMidia,
 };
