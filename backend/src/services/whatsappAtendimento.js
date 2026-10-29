@@ -313,7 +313,7 @@ async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", te
       r = await axios.post(`${evo.apiUrl}/message/sendText/${evo.instanceName}`, { number: numero, text: texto }, { headers, timeout: 20000 });
     } else if (tipo === "audio") {
       r = await axios.post(`${evo.apiUrl}/message/sendWhatsAppAudio/${evo.instanceName}`,
-        { number: numero, audio: midia.buffer.toString("base64") }, { headers, timeout: 60000 });
+        { number: numero, audio: midia.buffer.toString("base64"), encoding: true }, { headers, timeout: 60000 });
     } else {
       r = await axios.post(`${evo.apiUrl}/message/sendMedia/${evo.instanceName}`, {
         number: numero,

@@ -14,6 +14,9 @@ const FILTROS = [
 ];
 
 const MAX_ARQUIVO = 16 * 1024 * 1024;
+const MAX_GRAVACAO_S = 300; // 5 min
+const PODE_GRAVAR = typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
+const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const EXT_ACEITAS = ["jpg", "jpeg", "png", "webp", "gif", "mp4", "ogg", "mp3", "m4a", "aac", "wav", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "zip"];
 const tamanho = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
@@ -59,6 +62,9 @@ export default function Atendimento() {
   const [enviando, setEnviando] = useState(false);
   const [arquivo, setArquivo] = useState(null);
   const arquivoRef = useRef(null);
+  const [gravando, setGravando] = useState(false);
+  const [segundos, setSegundos] = useState(0);
+  const gravRef = useRef({ rec: null, stream: null, chunks: [], timer: null, enviar: false, conversaId: null });
   const [erroEnvio, setErroEnvio] = useState("");
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeEdit, setNomeEdit] = useState("");
@@ -220,6 +226,87 @@ export default function Atendimento() {
     setArquivo(f);
   };
 
+  const postarMidia = (f, legenda, conversaId) => {
+    const fd = new FormData();
+    fd.append("arquivo", f);
+    fd.append("legenda", legenda);
+    return fetch(`/api/atendimento/conversas/${conversaId}/midia`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+  };
+
+  const encerrarGravacao = () => {
+    const g = gravRef.current;
+    clearInterval(g.timer);
+    g.stream?.getTracks().forEach((t) => t.stop());
+    g.rec = null; g.stream = null; g.timer = null;
+    setGravando(false);
+    setSegundos(0);
+  };
+
+  // para a gravacao: enviar=true manda o audio, false descarta
+  const pararGravacao = (enviarAudio) => {
+    const g = gravRef.current;
+    if (!g.rec) return;
+    g.enviar = enviarAudio;
+    if (g.rec.state !== "inactive") g.rec.stop(); else encerrarGravacao();
+  };
+
+  const iniciarGravacao = async () => {
+    if (!PODE_GRAVAR || gravando || enviando || !selecionadaId) return;
+    setErroEnvio("");
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setErroEnvio("Não foi possível usar o microfone. Permita o acesso ao microfone no navegador e tente de novo.");
+      return;
+    }
+    const tipo = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find((t) => MediaRecorder.isTypeSupported?.(t));
+    const g = gravRef.current;
+    try {
+      g.rec = tipo ? new MediaRecorder(stream, { mimeType: tipo }) : new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      setErroEnvio("Este navegador não consegue gravar áudio.");
+      return;
+    }
+    g.stream = stream; g.chunks = []; g.enviar = false; g.conversaId = selecionadaId;
+    g.rec.ondataavailable = (e) => { if (e.data?.size) g.chunks.push(e.data); };
+    g.rec.onstop = async () => {
+      const { chunks, enviar: mandar, conversaId } = g;
+      const mime = (g.rec?.mimeType || tipo || "audio/webm").split(";")[0];
+      encerrarGravacao();
+      if (!mandar || !chunks.length) return;
+      const ext = mime === "audio/ogg" ? "ogg" : mime === "audio/mp4" ? "m4a" : "webm";
+      const f = new File(chunks, `audio-${Date.now()}.${ext}`, { type: mime });
+      if (f.size > MAX_ARQUIVO) { setErroEnvio("Áudio muito grande (máximo 16 MB)."); return; }
+      setEnviando(true);
+      try {
+        const res = await postarMidia(f, "", conversaId);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) setErroEnvio(data.error || "Erro ao enviar o áudio");
+        noFimRef.current = true;
+        await carregarMensagens(conversaId);
+        carregarConversas();
+      } catch {
+        setErroEnvio("Erro de conexão");
+      } finally {
+        setEnviando(false);
+      }
+    };
+    g.rec.start();
+    setGravando(true);
+    setSegundos(0);
+    g.timer = setInterval(() => {
+      setSegundos((n) => {
+        if (n + 1 >= MAX_GRAVACAO_S) setTimeout(() => pararGravacao(true), 0);
+        return n + 1;
+      });
+    }, 1000);
+  };
+
+  // trocar de conversa ou sair da tela descarta a gravacao e libera o microfone
+  useEffect(() => () => { const g = gravRef.current; if (g.rec) { g.enviar = false; try { g.rec.stop(); } catch { /* ja parado */ } } }, [selecionadaId]);
+
   const enviar = async () => {
     const t = texto.trim();
     if ((!t && (modo === "nota" || !arquivo)) || enviando || !selecionadaId) return;
@@ -230,10 +317,7 @@ export default function Atendimento() {
       if (modo === "nota") {
         res = await fetch(`/api/atendimento/conversas/${selecionadaId}/notas`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
       } else if (arquivo) {
-        const fd = new FormData();
-        fd.append("arquivo", arquivo);
-        fd.append("legenda", t);
-        res = await fetch(`/api/atendimento/conversas/${selecionadaId}/midia`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        res = await postarMidia(arquivo, t, selecionadaId);
       } else {
         res = await fetch(`/api/atendimento/conversas/${selecionadaId}/mensagens`, { method: "POST", headers, body: JSON.stringify({ texto: t }) });
       }
@@ -484,9 +568,21 @@ export default function Atendimento() {
                       <button onClick={() => setArquivo(null)} className="text-gray-400 hover:text-red-400 cursor-pointer" aria-label="Remover arquivo">✕</button>
                     </div>
                   )}
+                  {gravando ? (
+                    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0f111a] border border-red-900/60">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                      <span className="text-sm text-gray-200 tabular-nums">Gravando {mmss(segundos)}</span>
+                      <span className="flex-1" />
+                      <button onClick={() => pararGravacao(false)} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer" aria-label="Cancelar gravação">✕ Cancelar</button>
+                      <button onClick={() => pararGravacao(true)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer" aria-label="Enviar áudio">➤ Enviar áudio</button>
+                    </div>
+                  ) : (
                   <div className="flex gap-2 items-end">
                     <input ref={arquivoRef} type="file" onChange={escolherArquivo} className="hidden" accept={EXT_ACEITAS.map((x) => `.${x}`).join(",")} />
                     <button onClick={() => arquivoRef.current?.click()} disabled={enviando || modo === "nota"} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Anexar arquivo" title="Anexar arquivo">📎</button>
+                    {PODE_GRAVAR && (
+                      <button onClick={iniciarGravacao} disabled={enviando || modo === "nota" || !!arquivo} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" aria-label="Gravar áudio" title="Gravar áudio">🎤</button>
+                    )}
                     <textarea
                       value={texto}
                       onChange={(e) => setTexto(e.target.value)}
@@ -503,6 +599,7 @@ export default function Atendimento() {
                       {enviando ? "..." : modo === "nota" ? "Salvar nota" : "Enviar"}
                     </button>
                   </div>
+                  )}
                 </footer>
               </>
             )}
