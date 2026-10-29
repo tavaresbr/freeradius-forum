@@ -220,7 +220,7 @@ export default function AtualizarSistema() {
       : 0;
 
   return (
-    <div className="min-h-screen bg-[#0f111a] text-gray-300 p-8">
+    <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -249,7 +249,7 @@ export default function AtualizarSistema() {
 
         {/* Step: email */}
         {step === "email" && (
-          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-8">
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 sm:p-8">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center">
@@ -368,7 +368,7 @@ export default function AtualizarSistema() {
 
         {/* Step: applying */}
         {step === "applying" && (
-          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-8 space-y-6">
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 sm:p-8 space-y-6">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 border-3 border-gray-700 border-t-green-500 rounded-full animate-spin flex-shrink-0" style={{ borderWidth: "3px" }}></div>
               <div>
@@ -409,7 +409,7 @@ export default function AtualizarSistema() {
 
         {/* Step: done */}
         {step === "done" && (
-          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-8 space-y-6">
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 sm:p-8 space-y-6">
             <div className="bg-green-600/10 border border-green-500/30 rounded-xl p-6 flex gap-4">
               <div className="w-10 h-10 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -450,7 +450,7 @@ export default function AtualizarSistema() {
 
         {/* Step: error */}
         {step === "error" && (
-          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-8 space-y-6">
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 sm:p-8 space-y-6">
             <div className="bg-red-600/10 border border-red-500/30 rounded-xl p-6 flex gap-4">
               <div className="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

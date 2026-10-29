@@ -86,9 +86,9 @@ export default function Empresas() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f111a] text-gray-300 p-8">
+    <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <Link to="/super" className="text-gray-500 hover:text-gray-300 text-sm mb-2 inline-block">
               &larr; Voltar ao Super Admin

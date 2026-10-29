@@ -165,7 +165,7 @@
 
 /* Tablet/celular: tabelas do painel rolam na horizontal em vez de esticar a pagina */
 @media (max-width: 1023px) {
-  .painel table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .painel table, .super-pagina table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .painel pre { max-width: 100%; overflow-x: auto; }
   .painel code { overflow-wrap: anywhere; }
   .painel img { max-width: 100%; }
@@ -175,26 +175,35 @@ html { -webkit-text-size-adjust: 100%; }
 /* Celular (<768px): cada linha da tabela vira um cartao; o rotulo vem de data-label (hooks/useTabelasMobile.js).
    Tabela com data-sem-cartoes continua rolando na horizontal. */
 @media (max-width: 767px) {
-  .painel table:not([data-sem-cartoes]) { overflow: visible; }
-  .painel table:not([data-sem-cartoes]) thead {
+  .painel table:not([data-sem-cartoes]),
+  .super-pagina table:not([data-sem-cartoes]) { overflow: visible; }
+  .painel table:not([data-sem-cartoes]) thead,
+  .super-pagina table:not([data-sem-cartoes]) thead {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
   }
   .painel table:not([data-sem-cartoes]) tbody,
-  .painel table:not([data-sem-cartoes]) tfoot { display: block; }
-  .painel table:not([data-sem-cartoes]) tbody tr {
+  .super-pagina table:not([data-sem-cartoes]) tbody,
+  .painel table:not([data-sem-cartoes]) tfoot,
+  .super-pagina table:not([data-sem-cartoes]) tfoot { display: block; }
+  .painel table:not([data-sem-cartoes]) tbody tr,
+  .super-pagina table:not([data-sem-cartoes]) tbody tr {
     display: block; margin-bottom: .75rem; padding: .5rem .75rem;
     border: 1px solid rgb(107 114 128 / .35); border-radius: .5rem;
   }
-  .painel table:not([data-sem-cartoes]) tbody td {
+  .painel table:not([data-sem-cartoes]) tbody td,
+  .super-pagina table:not([data-sem-cartoes]) tbody td {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem .75rem;
     min-width: 0; padding: .35rem 0 !important; border: 0; text-align: right; overflow-wrap: anywhere; white-space: normal;
   }
-  .painel table:not([data-sem-cartoes]) tbody td[data-label]::before {
+  .painel table:not([data-sem-cartoes]) tbody td[data-label]::before,
+  .super-pagina table:not([data-sem-cartoes]) tbody td[data-label]::before {
     content: attr(data-label); flex: 0 0 auto; max-width: 45%; text-align: left;
     font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; opacity: .65;
   }
-  .painel table:not([data-sem-cartoes]) tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
-  .painel table:not([data-sem-cartoes]) tbody td:has(button) { justify-content: flex-start; }
+  .painel table:not([data-sem-cartoes]) tbody td:not([data-label]),
+  .super-pagina table:not([data-sem-cartoes]) tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
+  .painel table:not([data-sem-cartoes]) tbody td:has(button),
+  .super-pagina table:not([data-sem-cartoes]) tbody td:has(button) { justify-content: flex-start; }
 }
 
 /* Celular (<768px): modais (overlay fixed inset-0 z-50) cabem na tela e rolam por dentro; grids de 2 colunas viram 1 */
