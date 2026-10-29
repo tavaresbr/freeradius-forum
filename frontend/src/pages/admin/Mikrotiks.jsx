@@ -459,7 +459,7 @@ const carregarMikrotiks = async () => {
                   {m.portal_nome ? (
                     <span className="text-xs px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
                   ) : (
-                    <span className="text-xs text-gray-600">Nenhum</span>
+                    <span className="text-xs text-gray-500">Nenhum</span>
                   )}
                 </td>
                 <td className="p-2">
@@ -501,7 +501,7 @@ const carregarMikrotiks = async () => {
                   {m.portal_nome ? (
                     <span className="px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
                   ) : (
-                    <span className="text-gray-600">Sem portal</span>
+                    <span className="text-gray-500">Sem portal</span>
                   )}
                   <span>Usuários ativos: {m.usuarios_ativos}</span>
                 </div>
