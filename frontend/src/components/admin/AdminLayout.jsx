@@ -216,8 +216,7 @@ export default function AdminLayout({ children }) {
       title: "Marketing",
       children: [
         { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
-        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/promocoes-whatsapp` },
-        { key: "configuracoes", title: "Aviso operacional", path: `${basePath}/aviso-operacional` },
+        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/atendimento/campanhas` },
         { key: "configuracoes", title: "Cupons", path: `${basePath}/cupons` },
       ],
       icon: (

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
 
 const hojeStr = () => new Date().toISOString().slice(0, 10);
 const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
@@ -26,7 +26,7 @@ function Card({ titulo, valor, detalhe }) {
   );
 }
 
-export default function AtendimentoRelatorios() {
+export default function AtendimentoRelatorios({ embutido = false }) {
   const { empresaSlug } = useParams();
   const [de, setDe] = useState(diasAtras(29));
   const [ate, setAte] = useState(hojeStr());
@@ -64,7 +64,7 @@ export default function AtendimentoRelatorios() {
   const inputCls = "px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 text-sm min-w-0";
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold text-white">Relatórios do atendimento</h1>
@@ -133,6 +133,6 @@ export default function AtendimentoRelatorios() {
           </>
         )}
       </div>
-    </AdminLayout>
+    </Moldura>
   );
 }

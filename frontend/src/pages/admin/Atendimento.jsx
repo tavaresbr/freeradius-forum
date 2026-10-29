@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
-import AdminLayout from "../../components/admin/AdminLayout";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import Moldura from "../../components/admin/Moldura";
 import MidiaMensagem from "../../components/admin/atendimento/MidiaMensagem";
 import GerenciarEtiquetas from "../../components/admin/atendimento/GerenciarEtiquetas";
 import GerenciarRespostas from "../../components/admin/atendimento/GerenciarRespostas";
@@ -9,10 +9,7 @@ import PainelCliente from "../../components/admin/atendimento/PainelCliente";
 import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
 import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
-import AvisoExpiracao from "../../components/admin/atendimento/AvisoExpiracao";
 import Chatbot from "../../components/admin/atendimento/Chatbot";
-import PosCompra from "../../components/admin/atendimento/PosCompra";
-import Renovacao from "../../components/admin/atendimento/Renovacao";
 import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
@@ -53,17 +50,32 @@ function Ticks({ status }) {
   return <span className={status === "lida" ? "text-sky-200 font-bold" : "text-white/70"}>✓✓</span>;
 }
 
-export default function Atendimento() {
+export default function Atendimento({ embutido = false }) {
   const { empresaSlug } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  // o atalho ?conversa= so vale na chegada: limpa da URL para um F5 nao reabrir a mesma conversa
+  useEffect(() => {
+    if (searchParams.get("conversa")) {
+      const p = new URLSearchParams(searchParams);
+      p.delete("conversa");
+      setSearchParams(p, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [filtro, setFiltro] = useState("aberta");
   const [busca, setBusca] = useState("");
   const [conversas, setConversas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState("");
-  const [selecionadaId, setSelecionadaId] = useState(null);
+  const [selecionadaId, setSelecionadaId] = useState(() => {
+    // atalho vindo da aba Contatos: /atendimento/conversas?conversa=<id>
+    const n = parseInt(searchParams.get("conversa"), 10);
+    return Number.isInteger(n) ? n : null;
+  });
   const [conversa, setConversa] = useState(null);
   const [mensagens, setMensagens] = useState([]);
   const [texto, setTexto] = useState("");
@@ -461,20 +473,15 @@ export default function Atendimento() {
   const inputCls = "w-full px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-blue-800 text-sm";
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-2xl font-bold text-white">WhatsApp</h1>
+          {embutido ? <span /> : <h1 className="text-2xl font-bold text-white">WhatsApp</h1>}
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
             <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
             <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
-            <Link to={`/admin/${empresaSlug}/atendimento/relatorios`} className="text-sm text-blue-400 hover:text-blue-300">Relatórios</Link>
             <button onClick={() => setModal("chatbot")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Chatbot</button>
-            <button onClick={() => setModal("poscompra")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Pós-compra</button>
-            <button onClick={() => setModal("renovacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Renovação</button>
-            <button onClick={() => setModal("aviso")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Aviso de expiração</button>
-            <button onClick={() => setModal("respostas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Respostas rápidas</button>
             <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
             <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
           </div>
@@ -768,14 +775,11 @@ export default function Atendimento() {
               onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
           )}
           {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
-          {modal === "poscompra" && <PosCompra headers={headers} onFechar={() => setModal(null)} />}
-          {modal === "renovacao" && <Renovacao headers={headers} onFechar={() => setModal(null)} />}
-          {modal === "aviso" && <AvisoExpiracao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
           {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
         </div>
       </div>
-    </AdminLayout>
+    </Moldura>
   );
 }

@@ -4,6 +4,7 @@ const c = require("../controllers/atendimentoController");
 const x = require("../controllers/atendimentoExtrasController");
 const au = require("../controllers/atendimentoAutomacaoController");
 const rel = require("../controllers/atendimentoRelatoriosController");
+const contatos = require("../controllers/atendimentoContatosController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -55,6 +56,7 @@ router.put("/aviso-expiracao", au.salvarAviso);
 router.post("/aviso-expiracao/teste", atendimentoEnvioLimiter, au.testarAviso);
 
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
+router.get("/contatos", contatos.listarContatos);
 router.post("/conversas", novaConversaLimiter, x.novaConversa);
 router.post("/conversas/:id/notas", x.criarNota);
 router.put("/conversas/:id/etiquetas", x.definirEtiquetasDaConversa);
@@ -67,6 +69,7 @@ router.post("/etiquetas", x.criarEtiqueta);
 router.put("/etiquetas/:id", x.atualizarEtiqueta);
 router.delete("/etiquetas/:id", x.excluirEtiqueta);
 router.get("/respostas-rapidas", x.listarRespostas);
+router.post("/respostas-rapidas/padrao", x.criarModelosPadrao);
 router.post("/respostas-rapidas", x.criarResposta);
 router.put("/respostas-rapidas/:id", x.atualizarResposta);
 router.delete("/respostas-rapidas/:id", x.excluirResposta);

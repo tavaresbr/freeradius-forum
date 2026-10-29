@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
+import SeletorModelo from "../../components/admin/atendimento/SeletorModelo";
 
 const inputCls =
   "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
@@ -48,7 +49,7 @@ function Barra({ envio }) {
   );
 }
 
-export default function PromocoesWhatsapp() {
+export default function PromocoesWhatsapp({ embutido = false }) {
   const token = localStorage.getItem("admin_token");
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
@@ -188,7 +189,7 @@ export default function PromocoesWhatsapp() {
   );
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-white">Promoções WhatsApp</h1>
         {tela === "lista" ? (
@@ -239,6 +240,7 @@ export default function PromocoesWhatsapp() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Mensagem (use {"{{nome}}"} para o primeiro nome do cliente)</label>
             <textarea aria-label="Mensagem" className={inputCls} rows={5} maxLength={1000} value={mensagem} onChange={(e) => { setMensagem(e.target.value); mudouAlgo(); }} />
+            <SeletorModelo headers={headers} categoria="promocao" onEscolher={(t) => { setMensagem(t.slice(0, 1000)); mudouAlgo(); }} />
             <p className="text-xs text-gray-500 mt-1">{mensagem.length}/1000 · O aviso "Para não receber mais mensagens, responda SAIR." é adicionado automaticamente no final.</p>
           </div>
 
@@ -346,6 +348,6 @@ export default function PromocoesWhatsapp() {
           )}
         </div>
       )}
-    </AdminLayout>
+    </Moldura>
   );
 }
