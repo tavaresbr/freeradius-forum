@@ -57,6 +57,8 @@ test('escreverVhost: renderiza so com host validado; nginx -t falho remove o arq
     readFileSync: (p) => require('node:fs').readFileSync(p, 'utf8'),
     writeFileSync: (p, c) => { escritos[p] = c; },
     unlinkSync: (p) => { removidos.push(p); },
+    existsSync: () => true, // snippet de seguranca ja existe
+    mkdirSync: () => {},
   };
   const ok = (cmd, args, o, cb) => cb(null, '', '');
   const arq = await dom.escreverVhost('wifi.empresa.com.br', { exec: ok, fsx, dir: '/etc/nginx/conf.d' });
@@ -65,6 +67,7 @@ test('escreverVhost: renderiza so com host validado; nginx -t falho remove o arq
   assert.match(conf, /server_name wifi\.empresa\.com\.br;/);
   assert.match(conf, /live\/wifi\.empresa\.com\.br\/fullchain\.pem/);
   assert.match(conf, /location ~ \^\/\(admin\|super\|login\|registro\)/); // painel nunca abre no dominio do cliente
+  assert.match(conf, /location = \/ \{\s*return 404;/, 'raiz nao serve a landing da plataforma');
   assert.ok(!/\{\{/.test(conf), 'sem placeholders sobrando');
   assert.match(conf, /\$http_upgrade/, 'variaveis do nginx preservadas');
 
@@ -109,4 +112,51 @@ test('rotas /api/dominio exigem o recurso; hotspot-login e walled garden usam o 
   assert.match(server, /portalHostDaEmpresa\(mikrotik\?\.empresa_id\)/);
   const setup = fs.readFileSync(require.resolve('../../src/utils/hotspotSetup.js'), 'utf8');
   assert.match(setup, /dominiosLiberados = \[\.\.\.new Set\(\[systemDomain, portalHost\]/);
+});
+
+test('garantirSnippetSeguranca: cria so quando falta e nunca sobrescreve', () => {
+  const gravados = {}; const dirs = [];
+  const mk = (existe) => ({ existsSync: () => existe, mkdirSync: (d) => dirs.push(d), writeFileSync: (p, c) => { gravados[p] = c; } });
+  assert.strictEqual(dom.garantirSnippetSeguranca({ fsx: mk(true), dir: '/s' }), false);
+  assert.deepStrictEqual(gravados, {});
+  assert.strictEqual(dom.garantirSnippetSeguranca({ fsx: mk(false), dir: '/s' }), true);
+  assert.match(gravados['/s/hotspot-security.conf'], /server_tokens off;[\s\S]*X-Content-Type-Options/);
+  assert.deepStrictEqual(dirs, ['/s']);
+});
+
+test('garantirDesafioHttp: server da porta 80 por host, nginx -t antes do reload e rollback', async () => {
+  const arquivos = {}; const removidos = []; const cmds = [];
+  const fsx = {
+    existsSync: (p) => p in arquivos,
+    readFileSync: (p) => arquivos[p],
+    writeFileSync: (p, c) => { arquivos[p] = c; },
+    unlinkSync: (p) => { removidos.push(p); delete arquivos[p]; },
+  };
+  const ok = (cmd, args, o, cb) => { cmds.push([cmd, ...args].join(' ')); cb(null, '', ''); };
+  const arq = await dom.garantirDesafioHttp('wifi.empresa.com.br', { exec: ok, fsx, dir: '/c', webroot: '/dist' });
+  assert.strictEqual(arq, '/c/hotspot-acme-wifi.empresa.com.br.conf');
+  assert.match(arquivos[arq], /listen 80;\s+server_name wifi\.empresa\.com\.br;/);
+  assert.match(arquivos[arq], /location \^~ \/\.well-known\/acme-challenge\/ \{\s+root \/dist;/);
+  assert.deepStrictEqual(cmds, ['nginx -t', 'nginx -s reload'], 'testa antes de recarregar');
+  cmds.length = 0;
+  await dom.garantirDesafioHttp('wifi.empresa.com.br', { exec: ok, fsx, dir: '/c', webroot: '/dist' });
+  assert.deepStrictEqual(cmds, [], 'idempotente: nada a fazer se ja esta no lugar');
+
+  delete arquivos[arq];
+  const ruim = (cmd, args, o, cb) => (args[0] === '-t' ? cb(Object.assign(new Error('x'), { stderr: 'bad' }), '', 'bad') : cb(null, '', ''));
+  const un = console.error; console.error = () => {};
+  try {
+    await assert.rejects(() => dom.garantirDesafioHttp('wifi.empresa.com.br', { exec: ruim, fsx, dir: '/c' }), /nginx recusou/);
+  } finally { console.error = un; }
+  assert.deepStrictEqual(removidos, [arq], 'arquivo removido quando o nginx -t falha');
+  await assert.rejects(() => dom.garantirDesafioHttp('x; id', { exec: ok, fsx }), /Informe|inválido/);
+});
+
+test('motivoCertbot: classifica o ultimo Detail do log', () => {
+  const d = (x) => `Domain: a.com\n  Type:   unauthorized\n  Detail: ${x}`;
+  assert.match(dom.motivoCertbot(d('1.2.3.4: Invalid response from http://a.com/.well-known/acme-challenge/x: 404')), /404/);
+  assert.match(dom.motivoCertbot(d('1.2.3.4: Fetching http://a.com/.well-known/acme-challenge/x: Timeout during connect')), /porta 80/);
+  assert.match(dom.motivoCertbot(d('DNS problem: NXDOMAIN looking up A for a.com')), /DNS/);
+  assert.match(dom.motivoCertbot('too many failed authorizations (5) for "a.com"'), /Limite/);
+  assert.strictEqual(dom.motivoCertbot('algo sem relacao'), null);
 });

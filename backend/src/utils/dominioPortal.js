@@ -8,7 +8,15 @@ const { execFile } = require("child_process");
 const RAIZ = path.resolve(__dirname, "../../..");
 const TEMPLATE = path.join(RAIZ, "infra", "nginx", "dominio-portal.conf.tpl");
 const NGINX_CONF_DIR = process.env.NGINX_CONF_DIR || "/etc/nginx/conf.d";
+const NGINX_SNIPPETS_DIR = process.env.NGINX_SNIPPETS_DIR || "/etc/nginx/snippets";
+const LOG_CERTBOT = process.env.CERTBOT_LOG || "/var/log/letsencrypt/letsencrypt.log";
 const TIMEOUT_CERTBOT_MS = 120000;
+// Mesmo conteudo do install.sh; servidores instalados antes do hardening nao tem o arquivo e o vhost o inclui.
+const SNIPPET_SEGURANCA = `server_tokens off;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+`;
 
 const sistema = () => String(process.env.SYSTEM_DOMAIN || "").trim().toLowerCase();
 
@@ -72,7 +80,82 @@ async function comLock(fn) {
   try { return await fn(); } finally { ocupado = false; }
 }
 
-/** Emite o certificado Let's Encrypt (HTTP-01 via webroot; o server default do nginx atende qualquer Host na porta 80). */
+/** Cria o snippet de seguranca do nginx se faltar (nunca sobrescreve um existente). */
+function garantirSnippetSeguranca({ fsx = fs, dir = NGINX_SNIPPETS_DIR } = {}) {
+  const arquivo = path.join(dir, "hotspot-security.conf");
+  if (fsx.existsSync(arquivo)) return false;
+  fsx.mkdirSync(dir, { recursive: true });
+  fsx.writeFileSync(arquivo, SNIPPET_SEGURANCA, { mode: 0o644 });
+  return true;
+}
+
+const arquivoDesafio = (dir, host) => path.join(dir, `hotspot-acme-${host}.conf`);
+
+/**
+ * Garante que a porta 80 responde o desafio HTTP-01 para ESTE host, sem depender do server default do nginx
+ * (o bloco gerado pelo Certbot tem `return 404` no nivel do server e nega o desafio). Um server com server_name
+ * exato vence o default_server. nginx -t antes do reload; se falhar remove o arquivo.
+ */
+async function garantirDesafioHttp(host, { exec = execFile, fsx = fs, dir = NGINX_CONF_DIR, webroot } = {}) {
+  const v = validarDominio(host);
+  if (v.erro) throw Object.assign(new Error(v.erro), { seguro: true });
+  const raiz = webroot || path.join(RAIZ, "frontend", "dist");
+  const arquivo = arquivoDesafio(dir, v.host);
+  const conteudo = `# Gerado pelo painel (utils/dominioPortal.garantirDesafioHttp): desafio HTTP-01 do Let's Encrypt para ${v.host}.
+server {
+    listen 80;
+    server_name ${v.host};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${raiz};
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+`;
+  const anterior = fsx.existsSync(arquivo) ? fsx.readFileSync(arquivo, "utf8") : null;
+  if (anterior === conteudo) return arquivo; // ja esta no lugar
+  fsx.writeFileSync(arquivo, conteudo, { mode: 0o644 });
+  try {
+    await run(exec, "nginx", ["-t"]);
+    await run(exec, "nginx", ["-s", "reload"]);
+  } catch (e) {
+    try { fsx.unlinkSync(arquivo); } catch { /* ja removido */ }
+    console.error("[dominio] nginx recusou o server da porta 80:", (e.stderr || e.message || "").slice(0, 500));
+    throw Object.assign(new Error("O nginx recusou a configuração do domínio (nada foi alterado)."), { seguro: true });
+  }
+  return arquivo;
+}
+
+/** Traduz o ultimo "Detail:" do log do certbot em uma orientacao (sem expor o log). */
+function motivoCertbot(texto) {
+  const t = String(texto || "");
+  const detalhes = t.match(/Detail: .*/g);
+  const d = detalhes ? detalhes[detalhes.length - 1] : t;
+  if (/too many|rate ?limit/i.test(d) || /too many (certificates|failed)/i.test(t)) return "Limite de emissões do Let's Encrypt atingido. Aguarde cerca de 1 hora e tente de novo.";
+  if (/Timeout|Connection refused|Connection reset|No route/i.test(d)) return "O Let's Encrypt não conseguiu acessar a porta 80 do servidor. Libere a porta 80 no firewall e tente de novo.";
+  if (/NXDOMAIN|DNS problem|no valid A/i.test(d)) return "O DNS do domínio ainda não aponta para o servidor. Confira o apontamento e tente de novo.";
+  if (/404|Invalid response/i.test(d)) return "O servidor respondeu 404 ao desafio do Let's Encrypt na porta 80. Confira a configuração do nginx.";
+  return null;
+}
+
+function lerMotivoCertbot({ fsx = fs, log = LOG_CERTBOT } = {}) {
+  try {
+    const stat = fsx.statSync(log);
+    const fd = fsx.openSync(log, "r");
+    try {
+      const n = Math.min(stat.size, 16384);
+      const buf = Buffer.alloc(n);
+      fsx.readSync(fd, buf, 0, n, stat.size - n);
+      return motivoCertbot(buf.toString("utf8"));
+    } finally { fsx.closeSync(fd); }
+  } catch { return null; }
+}
+
+/** Emite o certificado Let's Encrypt (HTTP-01 via webroot; o desafio vem do server da porta 80 criado por garantirDesafioHttp). */
 async function emitirCertificado(host, { exec = execFile, webroot } = {}) {
   const v = validarDominio(host);
   if (v.erro) throw Object.assign(new Error(v.erro), { seguro: true });
@@ -88,15 +171,17 @@ async function emitirCertificado(host, { exec = execFile, webroot } = {}) {
       ], { timeout: TIMEOUT_CERTBOT_MS });
     } catch (e) {
       console.error("[dominio] certbot falhou:", (e.stderr || e.message || "").slice(0, 500));
-      throw Object.assign(new Error("Não foi possível emitir o certificado. Confira se o DNS já aponta para o servidor e se as portas 80/443 estão abertas."), { seguro: true });
+      throw Object.assign(new Error(lerMotivoCertbot() || "Não foi possível emitir o certificado. Confira se o DNS já aponta para o servidor e se as portas 80/443 estão abertas."), { seguro: true });
     }
   });
 }
 
 /** Renderiza o vhost 443 do dominio; nginx -t antes do reload; se o teste falhar remove o arquivo (nunca deixa o nginx quebrado). */
-async function escreverVhost(host, { exec = execFile, fsx = fs, dir = NGINX_CONF_DIR } = {}) {
+async function escreverVhost(host, opcoes = {}) {
+  const { exec = execFile, fsx = fs, dir = NGINX_CONF_DIR } = opcoes;
   const v = validarDominio(host);
   if (v.erro) throw Object.assign(new Error(v.erro), { seguro: true });
+  garantirSnippetSeguranca({ fsx, dir: opcoes.snippetsDir });
   const tpl = fsx.readFileSync(TEMPLATE, "utf8");
   const conteudo = tpl
     .replace(/\{\{HOST\}\}/g, v.host)
@@ -121,6 +206,7 @@ async function removerDominio(host, { exec = execFile, fsx = fs, dir = NGINX_CON
   if (v.erro) return;
   const arquivo = path.join(dir, `hotspot-dominio-${v.host}.conf`);
   try { fsx.unlinkSync(arquivo); } catch { /* nao existia */ }
+  try { fsx.unlinkSync(arquivoDesafio(dir, v.host)); } catch { /* nao existia */ }
   try { await run(exec, "nginx", ["-t"]); await run(exec, "nginx", ["-s", "reload"]); } catch (e) { console.error("[dominio] reload apos remover:", e.message); }
   try { await run(exec, "certbot", ["delete", "--cert-name", v.host, "--non-interactive"]); } catch { /* best effort */ }
 }
@@ -149,4 +235,4 @@ async function portalHostDaEmpresa(empresaId, { db = require("../../db"), temRec
   return v;
 }
 
-module.exports = { validarDominio, verificarDns, emitirCertificado, escreverVhost, removerDominio, portalHostDaEmpresa, invalidarPortalHost };
+module.exports = { validarDominio, verificarDns, garantirSnippetSeguranca, garantirDesafioHttp, motivoCertbot, emitirCertificado, escreverVhost, removerDominio, portalHostDaEmpresa, invalidarPortalHost };

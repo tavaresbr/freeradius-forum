@@ -86,6 +86,7 @@ exports.ativar = async (req, res) => {
     const r = await dom.verificarDns(e.dominio_portal);
     if (!r.ok) return res.status(409).json({ message: r.mensagem });
     try {
+      await dom.garantirDesafioHttp(e.dominio_portal);
       await dom.emitirCertificado(e.dominio_portal);
       await dom.escreverVhost(e.dominio_portal);
     } catch (err) {
