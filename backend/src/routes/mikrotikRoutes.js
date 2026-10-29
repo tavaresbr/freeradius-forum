@@ -10,6 +10,7 @@ const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
 const { peersLivres } = require("../utils/vpnPeers");
 const { credenciaisRoteador } = require("../utils/roteadorAdmin");
 const { checarLimiteSeguro } = require("../utils/assinatura");
+const { trilhaDaEmpresa } = require("../utils/trilhaAtivacao");
 
 // FreeRADIUS só lê NAS clients na inicialização, precisamos recarregar após mudanças
 function reloadFreeRADIUS() {
@@ -231,6 +232,16 @@ router.post("/aplicar-padroes", async (req, res) => {
   } catch (err) {
     console.error("Erro em /aplicar-padroes:", err.message);
     res.status(500).json({ message: "Erro ao aplicar os padrões nos equipamentos." });
+  }
+});
+
+// Trilha de ativacao (leitura barata: so consultas agregadas, sem RouterOS)
+router.get("/trilha", async (req, res) => {
+  try {
+    res.json({ success: true, data: await trilhaDaEmpresa(db, req.empresa_id) });
+  } catch (err) {
+    console.error("Erro em /trilha:", err.message);
+    res.status(500).json({ message: "Erro ao calcular a trilha de ativação." });
   }
 });
 
