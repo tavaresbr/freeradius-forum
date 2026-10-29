@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import GatewayWizard from "../../components/admin/GatewayWizard";
 import TrilhaAtivacao, { progresso } from "../../components/admin/TrilhaAtivacao";
+import AlertasEquipamentos from "../../components/admin/AlertasEquipamentos";
 
 // Badges por tipo de gateway (default mikrotik pra linhas antigas sem tipo)
 const TIPO_BADGES = {
@@ -25,6 +26,7 @@ export default function Mikrotiks() {
   const [mikrotikInfo, setMikrotikInfo] = useState(null);
   const [erro, setErro] = useState("");
   const [aplicandoPadroes, setAplicandoPadroes] = useState(false);
+  const [showAlertas, setShowAlertas] = useState(false);
   const [resultadoPadroes, setResultadoPadroes] = useState(null); // [{id, nome, ok, mensagem}]
   const [trilhas, setTrilhas] = useState({}); // { [id]: { etapas, concluidas, total } }
   const [trilhaAberta, setTrilhaAberta] = useState(null);
@@ -428,6 +430,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
 
   return (
     <AdminLayout>
+      {showAlertas && <AlertasEquipamentos onFechar={() => setShowAlertas(false)} />}
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-white">Equipamentos</h1>
         <div className="flex flex-wrap gap-3">
@@ -438,6 +441,13 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
             title="Keepalive 30 min, atualização RADIUS a cada 5 min e timeout RADIUS 3s em todos os MikroTik"
           >
             {aplicandoPadroes ? "Aplicando..." : "Aplicar padrões em todos"}
+          </button>
+          <button
+            onClick={() => setShowAlertas(true)}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow w-full sm:w-auto"
+            title="Aviso por WhatsApp quando um equipamento ficar offline"
+          >
+            Alertas offline
           </button>
           <button
             onClick={() => { setEditandoGw(null); setShowGwWizard(true); }}

@@ -195,6 +195,7 @@ app.use("/api/whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configur
 app.use("/api/vouchers", auth, tenant, exigeAssinatura, checkPermissao('portais'), require("./src/routes/voucherRoutes"));
 app.use("/api/atendimento", auth, tenant, exigeAssinatura, checkPermissao('leads'), exigeRecurso('whatsapp'), atendimentoRoutes);
 app.use("/api/promocoes-whatsapp", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('whatsapp'), promocaoWhatsappRoutes);
+app.use("/api/alertas-equipamentos", auth, tenant, exigeAssinatura, checkPermissao('mikrotiks'), exigeRecurso('whatsapp'), require("./src/routes/alertaEquipamentosRoutes"));
 app.use("/api/auditoria", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), require("./src/routes/auditoriaRoutes"));
 app.use("/api/limpeza", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), limpezaRoutes);
 app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sessoeslog'), radiusLogsRoutes);
@@ -656,6 +657,12 @@ cron.schedule('*/2 * * * *', () => {
 const expurgaMidia = require('./src/jobs/expurgaMidia');
 cron.schedule('30 3 * * *', () => {
   expurgaMidia().catch(err => console.error('[CRON] Erro expurgaMidia:', err.message));
+});
+
+// Alerta de equipamento offline por WhatsApp (so empresas que ligaram; desligado por padrao)
+const alertaEquipamentos = require('./src/jobs/alertaEquipamentos');
+cron.schedule('*/5 * * * *', () => {
+  alertaEquipamentos().catch(err => console.error('[CRON] Erro alertaEquipamentos:', err.message));
 });
 
 // --- Tela de emergencia (SEM auth) ---
