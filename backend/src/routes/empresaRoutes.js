@@ -68,6 +68,9 @@ router.get("/by-slug/:slug", auth, async (req, res) => {
   }
 });
 
+// Identidade (logo, favicon, tamanhos) da PROPRIA empresa: o Administrador troca a sua sem afetar as outras.
+router.use("/minha", require("./empresaBrandingRoutes"));
+
 // Todas as rotas abaixo requerem super_admin
 router.use(auth, authorize('super_admin'), exigeDonoPlataforma);
 

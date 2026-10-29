@@ -61,7 +61,19 @@ function removerArquivo(logoUrl) {
 
 exports.obter = async (req, res) => {
   res.set("Cache-Control", "public, max-age=60");
-  res.json(await ler());
+  const base = await ler();
+  // ?empresa=<slug>: identidade da empresa (login /login/<slug>, painel) por cima da plataforma
+  const slug = String(req?.query?.empresa || "").toLowerCase();
+  if (slug && /^[a-z0-9-]{1,64}$/.test(slug)) {
+    try {
+      const [[emp]] = await db.execute("SELECT id FROM empresas WHERE slug = ? AND ativo = 1", [slug]);
+      if (emp) {
+        const { lerEmpresa, mesclar } = require("./brandingEmpresaController");
+        return res.json(mesclar(base, await lerEmpresa(emp.id)));
+      }
+    } catch (err) { /* empresa/coluna indisponivel: devolve a identidade da plataforma */ }
+  }
+  res.json(base);
 };
 
 /** PUT: nome e/ou tamanhos da logo; so grava o que veio e preserva o resto (logo inclusive). */

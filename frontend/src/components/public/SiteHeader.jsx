@@ -8,7 +8,7 @@ import LinkPainel from "./LinkPainel";
 // Cabecalho do site (landing, login e registro). Links com hash funcionam de qualquer pagina.
 const LINKS = [["/#recursos", "Recursos"], ["/#planos", "Planos"], ["/#faq", "Dúvidas"]];
 
-export default function SiteHeader() {
+export default function SiteHeader({ empresa = "" }) {
   const [menu, setMenu] = useState(false);
   const { pathname } = useLocation();
   const ativo = (p) => (pathname === p ? "text-apex-500" : "hover:text-apex-500");
@@ -16,7 +16,7 @@ export default function SiteHeader() {
   return (
     <header className="tema-site fixed top-0 inset-x-0 z-40 bg-white/95 backdrop-blur text-apex-900 border-b border-apex-100">
       <div className="max-w-6xl mx-auto px-4 min-h-16 py-2 flex items-center justify-between">
-        <Link to="/"><MarcaApex local="site" /></Link>
+        <Link to="/"><MarcaApex local="site" empresa={empresa} /></Link>
         <nav className="hidden md:flex items-center gap-6 text-sm">
           {LINKS.map(([h, t]) => <Link key={h} to={h} className="hover:text-apex-500">{t}</Link>)}
           <LinkPainel to="/login" className={ativo("/login")}>Entrar</LinkPainel>

@@ -27,32 +27,40 @@ const tamanhosDe = (t) => ({
   login: ALTURAS[t?.login] ? t.login : TAMANHOS_PADRAO.login,
   painel: ALTURAS[t?.painel] ? t.painel : TAMANHOS_PADRAO.painel,
 });
-let cache = null;
-let pendente = null;
-const ouvintes = new Set();
+// Cache por empresa ("" = plataforma): /login/<slug> e o painel usam a identidade da empresa.
+const caches = new Map();
+const pendentes = new Map();
+const ouvintes = new Map(); // chave -> Set de setState
 
-function carregar() {
-  if (!pendente) {
-    pendente = fetch("/api/branding", { cache: "no-cache" })
+const normalizar = (d) => ({ nome: d.nome || PADRAO.nome, logo_url: d.logo_url || null, favicon_url: d.favicon_url || null, apple_icon_url: d.apple_icon_url || null, tamanhos: tamanhosDe(d.tamanhos) });
+
+function carregar(chave) {
+  if (!pendentes.has(chave)) {
+    const url = chave ? `/api/branding?empresa=${encodeURIComponent(chave)}` : "/api/branding";
+    pendentes.set(chave, fetch(url, { cache: "no-cache" })
       .then((r) => (r.ok ? r.json() : PADRAO))
       .catch(() => PADRAO)
       .then((d) => {
-        cache = { nome: d.nome || PADRAO.nome, logo_url: d.logo_url || null, favicon_url: d.favicon_url || null, apple_icon_url: d.apple_icon_url || null, tamanhos: tamanhosDe(d.tamanhos) };
-        aplicarIcones(cache.favicon_url, cache.apple_icon_url);
-        ouvintes.forEach((fn) => fn(cache));
-        return cache;
+        const c = normalizar(d);
+        caches.set(chave, c);
+        aplicarIcones(c.favicon_url, c.apple_icon_url);
+        (ouvintes.get(chave) || []).forEach((fn) => fn(c));
+        return c;
       })
-      .finally(() => { pendente = null; });
+      .finally(() => { pendentes.delete(chave); }));
   }
-  return pendente;
+  return pendentes.get(chave);
 }
 
-export default function useBranding() {
-  const [b, setB] = useState(cache || PADRAO);
+// useBranding(slug?): identidade da plataforma ou, com slug, a da empresa (o que ela nao enviou cai na plataforma).
+export default function useBranding(empresa = "") {
+  const chave = String(empresa || "").toLowerCase();
+  const [b, setB] = useState(caches.get(chave) || PADRAO);
   useEffect(() => {
-    ouvintes.add(setB);
-    if (cache) setB(cache); else carregar();
-    return () => ouvintes.delete(setB);
-  }, []);
-  return { nome: b.nome, logoUrl: b.logo_url, faviconUrl: b.favicon_url, appleIconUrl: b.apple_icon_url, tamanhos: b.tamanhos || TAMANHOS_PADRAO, recarregar: carregar };
+    if (!ouvintes.has(chave)) ouvintes.set(chave, new Set());
+    ouvintes.get(chave).add(setB);
+    if (caches.has(chave)) { setB(caches.get(chave)); aplicarIcones(caches.get(chave).favicon_url, caches.get(chave).apple_icon_url); } else carregar(chave);
+    return () => ouvintes.get(chave).delete(setB);
+  }, [chave]);
+  return { nome: b.nome, logoUrl: b.logo_url, faviconUrl: b.favicon_url, appleIconUrl: b.apple_icon_url, tamanhos: b.tamanhos || TAMANHOS_PADRAO, recarregar: () => carregar(chave) };
 }

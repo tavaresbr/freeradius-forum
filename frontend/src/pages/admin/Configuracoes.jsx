@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import IdentidadeSite from "../../components/admin/IdentidadeSite";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 const acoes = [
@@ -27,7 +28,8 @@ const acoes = [
 const PALAVRA_CONFIRMACAO = "LIMPAR";
 
 export default function Configuracoes() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
+  const { empresaSlug } = useParams();
   const [modal, setModal] = useState(null);
   const [confirmacao, setConfirmacao] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,6 +68,8 @@ export default function Configuracoes() {
   return (
     <AdminLayout>
       <h1 className="text-2xl font-semibold mb-6">Configurações</h1>
+
+      <IdentidadeSite empresa={empresaSlug || user?.empresa_slug || "default"} />
 
       {isSuperAdmin && <IdentidadeSite />}
 
