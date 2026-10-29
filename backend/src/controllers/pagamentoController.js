@@ -13,6 +13,7 @@ const { baseUrlPublica } = require("../utils/baseUrl");
 const { validarCPF } = require("../utils/cpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
+const { resolverCupom, registrarUsoCupom, MSG_INVALIDO: MSG_CUPOM_INVALIDO } = require("../utils/cupons");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
 async function resolveEmpresaId(planoId) {
@@ -57,7 +58,7 @@ async function resolvePortalIdByMikrotik(mikrotikId, empresaId) {
 }
 
 exports.gerarPagamento = async (req, res) => {
-  const { plano_id, mac, ip, cpf, cliente_id, portal_id: portalIdInput } = req.body;
+  const { plano_id, mac, ip, cpf, cliente_id, portal_id: portalIdInput, cupom } = req.body;
   console.log("[gerarPagamento PIX] body:", { plano_id, cliente_id, portal_id: portalIdInput });
 
   try {
@@ -94,6 +95,16 @@ exports.gerarPagamento = async (req, res) => {
       return res.status(409).json({ message: MSG_PAGAMENTO_ALHEIO, requer_data_nascimento: true });
     }
 
+    // Cupom: todo o calculo e' do servidor; codigo invalido NAO cai em cobranca cheia (o cliente decide).
+    let valorCobrar = Number(plano.valor);
+    let cupomAplicado = null;
+    if (typeof cupom === "string" && cupom.trim()) {
+      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf });
+      if (!rc.ok) return res.status(400).json({ message: MSG_CUPOM_INVALIDO });
+      valorCobrar = rc.valor_final;
+      cupomAplicado = rc;
+    }
+
     // Prioriza portal_id explicito (vindo do redirect entre portais), VALIDADO
     // contra a empresa do plano (endpoint publico — nunca confiar no body).
     // Fallback: resolver via mikrotiks.portal_id (caminho direto sem redirect).
@@ -109,8 +120,11 @@ exports.gerarPagamento = async (req, res) => {
     const [insertPix] = await db.query(`
       INSERT INTO pagamentos (empresa_id, cliente_id, plano_id, ip, mac, cpf, nome_plano, valor, status, metodo_pagamento, portal_id, telefone)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aguardando', 'pix', ?, ?)
-    `, [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, plano.nome, plano.valor, portalIdPix, clienteTelefone]);
+    `, [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, plano.nome, valorCobrar, portalIdPix, clienteTelefone]);
     const pagId = insertPix.insertId;
+    if (cupomAplicado) {
+      await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+    }
 
     // 2. Monta notification_url baseado no host do request.
     //    CRITICO em multi-tenant: master e aluno podem usar a mesma conta MP,
@@ -124,7 +138,7 @@ exports.gerarPagamento = async (req, res) => {
     const response = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
-        transaction_amount: parseFloat(plano.valor) / 100,
+        transaction_amount: valorCobrar / 100,
         description: plano.nome,
         payment_method_id: "pix",
         external_reference: `pag_${pagId}_emp_${empresaId}`,
@@ -340,6 +354,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
     ip,
     cpf,
     cliente_id,
+    cupom,
     device_session_id,
     portal_id: portalIdInput,
   } = req.body;
@@ -399,7 +414,9 @@ exports.gerarPagamentoCartao = async (req, res) => {
       return res.status(400).json({ message: "Configuracao do Mercado Pago nao encontrada." });
     }
 
-    const valorReais = parseFloat(plano.valor) / 100;
+    let valorReais = parseFloat(plano.valor) / 100;
+    let valorCobrar = Number(plano.valor);
+    let cupomAplicado = null;
 
     // Resolver email do pagador: prioridade lead (real) > config (placeholder) > fallback.
     // Email real do comprador melhora muito a aprovacao do antifraude.
@@ -440,6 +457,15 @@ exports.gerarPagamentoCartao = async (req, res) => {
       return res.status(409).json({ message: MSG_PAGAMENTO_ALHEIO, requer_data_nascimento: true });
     }
 
+    // Cupom (calculo so no servidor): invalido = recusa antes de cobrar, nunca cobranca cheia silenciosa.
+    if (typeof cupom === "string" && cupom.trim()) {
+      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf });
+      if (!rc.ok) return res.status(400).json({ message: MSG_CUPOM_INVALIDO });
+      valorCobrar = rc.valor_final;
+      valorReais = valorCobrar / 100;
+      cupomAplicado = rc;
+    }
+
     // 3. INSERT pagamento aguardando ANTES de qualquer chamada ao MP
     //    (assim temos o id interno pra usar como external_reference; o webhook
     //    consegue casar mesmo se a request travar entre /payments e o INSERT).
@@ -449,9 +475,12 @@ exports.gerarPagamentoCartao = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aguardando', 'cartao', ?, ?)`,
       // pagador_cpf = CPF do TITULAR DO CARTAO (informado no formulario): so confirma o CPF do
       // cadastro se for o mesmo (pai pagando pelo filho nao confirma o CPF do filho).
-      [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, cardholderCpf || null, plano.nome, plano.valor, portalIdPagto, telefonePagto]
+      [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, cardholderCpf || null, plano.nome, valorCobrar, portalIdPagto, telefonePagto]
     );
     pagId = insertResult.insertId;
+    if (cupomAplicado) {
+      await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+    }
 
     // 4. BIN lookup -> payment_method_id + issuer_id (obrigatorios pela doc)
     const bin = cardDigits.slice(0, 6);
@@ -585,6 +614,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
          WHERE id = ? AND liberado_em IS NULL`,
         [mpPagamentoId, duracao, pagId]
       );
+      if (marker.affectedRows > 0) await registrarUsoCupom(pagId);
 
       let gateway = null;
       let username = null;
@@ -782,7 +812,7 @@ exports.notificacaoWebhook = async (req, res) => {
         console.warn(`[webhook MP] external_reference nao confere (mp_id=${mpPagamentoId}): nao aprova`);
         return res.sendStatus(200);
       }
-      const esperado = Number(existente[0].valor);
+      const esperado = Number(existente[0].valor) / 100; // pagamentos.valor guarda CENTAVOS; o MP devolve reais
       const pago = Number(pagamento.transaction_amount);
       if (Number.isFinite(esperado) && esperado > 0 && Number.isFinite(pago) && Math.abs(esperado - pago) > 0.01) {
         console.warn(`[webhook MP] valor pago (${pago}) diferente do esperado (${esperado}) (mp_id=${mpPagamentoId}): nao aprova`);
@@ -900,6 +930,7 @@ exports.notificacaoWebhook = async (req, res) => {
           [pagIdWebhook]
         );
         marcado = m.affectedRows > 0;
+        if (marcado) await registrarUsoCupom(pagIdWebhook);
       }
 
       if (marcado) {
@@ -1063,6 +1094,7 @@ exports.verificarStatusPagamento = async (req, res) => {
         "UPDATE pagamentos SET liberado_em = NOW() WHERE id = ? AND status = 'approved' AND liberado_em IS NULL",
         [pagIdStatus]
       );
+      if (marker.affectedRows > 0) await registrarUsoCupom(pagIdStatus);
       if (marker.affectedRows > 0) {
         try {
           const cred = await liberarUsuario({

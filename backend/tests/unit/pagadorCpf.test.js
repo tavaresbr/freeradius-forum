@@ -117,19 +117,19 @@ test('webhook PIX: o UPDATE de aprovacao so age em pagamento ainda nao aprovado/
 });
 
 test('webhook PIX: valor pago diferente do registro => nao aprova', async () => {
-  const { db, mod } = webhook({ mp: mpAprovado({ transaction_amount: 1 }), linha: { valor: '25.00' } });
+  const { db, mod } = webhook({ mp: mpAprovado({ transaction_amount: 1 }), linha: { valor: '2500' } });
   const un = silencia(); try { await rodar(mod); } finally { un(); }
   assert.strictEqual(aprovou(db), undefined);
 });
 
 test('webhook PIX: external_reference de OUTRO pagamento => nao aprova', async () => {
-  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_77_emp_5' }), linha: { valor: '5.00' } });
+  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_77_emp_5' }), linha: { valor: '500' } });
   const un = silencia(); try { await rodar(mod); } finally { un(); }
   assert.strictEqual(aprovou(db), undefined);
 });
 
 test('webhook PIX: referencia e valor conferem => aprova', async () => {
-  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_1_emp_5' }), linha: { valor: '5.00' } });
+  const { db, mod } = webhook({ mp: mpAprovado({ external_reference: 'pag_1_emp_5' }), linha: { valor: '500' } });
   const un = silencia(); try { await rodar(mod); } finally { un(); }
   assert.ok(aprovou(db));
 });
