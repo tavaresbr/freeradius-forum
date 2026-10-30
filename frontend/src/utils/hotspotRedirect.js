@@ -32,7 +32,7 @@ export function redirecionarHotspot(gateway, username, password, delayMs = 0, ga
     // --- Grandstream: GET no login_url do gateway GWN (External RADIUS) ---
     // O RADIUS ja foi provisionado no backend; aqui o navegador so faz o
     // "login final" no proprio gateway, que valida no nosso FreeRADIUS.
-    if (tipo === "grandstream") {
+    if (tipo === "grandstream" || tipo === "intelbras") {
       if (gatewayInfo?.ok === false) {
         console.error("Liberacao no gateway falhou:", gatewayInfo?.erro);
       }

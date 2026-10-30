@@ -17,12 +17,14 @@ const MikrotikDriver = require("./MikrotikDriver");
 const OmadaDriver = require("./OmadaDriver");
 const UnifiDriver = require("./UnifiDriver");
 const GrandstreamDriver = require("./GrandstreamDriver");
+const IntelbrasDriver = require("./IntelbrasDriver");
 
 const DRIVERS = {
   mikrotik: MikrotikDriver,
   omada: OmadaDriver,   // Fase 4B
   unifi: UnifiDriver,   // Fase 4B
   grandstream: GrandstreamDriver,
+  intelbras: IntelbrasDriver,
 };
 
 /**
@@ -41,4 +43,4 @@ function getDriver(arg) {
   return new DriverClass(gateway);
 }
 
-module.exports = { getDriver, GatewayDriver, MikrotikDriver, OmadaDriver, UnifiDriver, GrandstreamDriver };
+module.exports = { getDriver, GatewayDriver, MikrotikDriver, OmadaDriver, UnifiDriver, GrandstreamDriver, IntelbrasDriver };

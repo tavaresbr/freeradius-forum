@@ -39,6 +39,7 @@ import Voucher from "./pages/public/Voucher";
 import Campanhas from "./pages/admin/Campanhas";
 import TutorialOmada from "./pages/admin/TutorialOmada";
 import TutorialGrandstream from "./pages/admin/TutorialGrandstream";
+import TutorialIntelbras from "./pages/admin/TutorialIntelbras";
 import TutorialUnifi from "./pages/admin/TutorialUnifi";
 import CampanhaEditor from "./pages/admin/CampanhaEditor";
 import Empresas from "./pages/super/Empresas";
@@ -126,6 +127,7 @@ function App() {
       <Route path="/admin/:empresaSlug/vpn" element={<RotaPrivada><Wireguard /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-omada" element={<RotaPrivada><TutorialOmada /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-grandstream" element={<RotaPrivada><TutorialGrandstream /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/tutorial-intelbras" element={<RotaPrivada><TutorialIntelbras /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-unifi" element={<RotaPrivada><TutorialUnifi /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/portais" element={<RotaPrivada><Portais /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/portais/:portalId/editor" element={<RotaPrivada><PortalEditor /></RotaPrivada>} />

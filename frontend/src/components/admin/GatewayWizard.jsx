@@ -31,6 +31,12 @@ const VENDORS = [
     desc: "APs GWN via External Web Portal + External RADIUS. Chaves GWN Cloud opcionais (só monitoramento).",
     badge: "bg-rose-900/30 border-rose-800/50 text-rose-400",
   },
+  {
+    id: "intelbras",
+    nome: "Intelbras",
+    desc: "APs Intelbras standalone (AP 360/1210/1250/3000) via portal externo + External RADIUS.",
+    badge: "bg-teal-900/30 border-teal-800/50 text-teal-400",
+  },
 ];
 
 const FORM_INICIAL = {
@@ -114,6 +120,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
     }
     if (form.tipo === "omada" && !form.senha) return "Informe o Secret RADIUS.";
     if (form.tipo === "grandstream" && !form.senha) return "Informe o Secret RADIUS.";
+    if (form.tipo === "intelbras" && !form.senha) return "Informe o Secret RADIUS.";
     if (form.tipo === "unifi" && (!form.controller_url || !form.api_user || !form.api_pass)) {
       return "Preencha Controller URL e credenciais do admin local.";
     }
@@ -247,6 +254,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 {form.tipo === "omada" && "IP do Controller/EAP (origem dos pacotes RADIUS)"}
                 {form.tipo === "unifi" && "IP do Controller"}
                 {form.tipo === "grandstream" && "IP do Gateway/Router GWN (origem dos pacotes RADIUS)"}
+                {form.tipo === "intelbras" && "IP do AP Intelbras (origem dos pacotes RADIUS)"}
               </label>
               <input className={inputCls} value={form.ip} onChange={(e) => set("ip", e.target.value)} placeholder="192.168.1.1" />
             </div>
@@ -329,6 +337,23 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
               </>
             )}
 
+            {/* Intelbras (AP standalone) — External Web Portal + External RADIUS */}
+            {form.tipo === "intelbras" && (
+              <>
+                <div>
+                  <label className={labelCls}>Secret RADIUS (o mesmo cadastrado no RADIUS do AP Intelbras)</label>
+                  <input type="password" className={inputCls} value={form.senha} onChange={(e) => set("senha", e.target.value)} />
+                </div>
+                <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
+                  <p className="text-gray-500 font-medium">Configure na interface web do AP Intelbras:</p>
+                  <p>• RADIUS → servidor {window.location.hostname} portas 1812 (auth) e 1813 (accounting) com este secret</p>
+                  <p>• Portal cativo → portal externo → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o id aparece na lista após salvar)</p>
+                  <p>• Acesso sem autenticação / Walled Garden → liberar {window.location.hostname}</p>
+                  <p className="text-teal-400/90 pt-1">Passo a passo: menu Documentação → Tutorial Intelbras.</p>
+                </div>
+              </>
+            )}
+
             {/* UniFi: campos de controller */}
             {form.tipo === "unifi" && (
               <>
@@ -395,7 +420,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
             <div className="bg-[#0d1117] rounded-lg p-4 border border-gray-800 text-sm space-y-2">
               <p className="text-gray-500 text-xs font-medium mb-1">Resumo</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <span className="text-gray-500">Tipo</span><span className="text-white">{vendor.nome}{(form.tipo === "omada" || form.tipo === "grandstream") ? " (External RADIUS)" : ""}</span>
+                <span className="text-gray-500">Tipo</span><span className="text-white">{vendor.nome}{(form.tipo === "omada" || form.tipo === "grandstream" || form.tipo === "intelbras") ? " (External RADIUS)" : ""}</span>
                 <span className="text-gray-500">Nome</span><span className="text-white">{form.nome}</span>
                 <span className="text-gray-500">IP</span><span className="text-white">{form.ip}</span>
                 {form.tipo === "unifi" && (<><span className="text-gray-500">Controller</span><span className="text-white break-all">{form.controller_url}</span></>)}

@@ -2,8 +2,8 @@
 // (sem migration). calcularTrilha e' pura; buscarFatos faz 3 consultas agregadas
 // por empresa (nunca por equipamento) e tolera tabela/coluna ausente.
 
-const USA_RADIUS = ["mikrotik", "omada", "grandstream"];
-const TUTORIAIS = { omada: "tutorial-omada", unifi: "tutorial-unifi", grandstream: "tutorial-grandstream" };
+const USA_RADIUS = ["mikrotik", "omada", "grandstream", "intelbras"];
+const TUTORIAIS = { omada: "tutorial-omada", unifi: "tutorial-unifi", grandstream: "tutorial-grandstream", intelbras: "tutorial-intelbras" };
 
 const tipoDe = (m) => m.tipo || "mikrotik";
 
