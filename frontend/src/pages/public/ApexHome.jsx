@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
 import { periodosDoPlano, periodosDosPlanos, rotuloPeriodo, totalDoPeriodo, descontoDoPeriodo } from "../../utils/periodoPlano";
 import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
+import { ganhosDoPlano } from "../../utils/ganhosPlano";
 import LinkPainel from "../../components/public/LinkPainel";
 import useBranding from "../../hooks/useBranding";
 import useSeo from "../../hooks/useSeo";
@@ -170,7 +171,7 @@ export default function ApexHome() {
       </section>
 
       <section id="planos" className="py-12 sm:py-16 px-4">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Escolha seu plano</h2>
           <p className="text-center text-gray-600 mt-2">Compare os limites e os recursos de cada plano. Os planos pagos começam com teste grátis, sem cartão.</p>
           {periodosDosPlanos(planos).length > 1 && (
@@ -180,29 +181,44 @@ export default function ApexHome() {
               ))}
             </div>
           )}
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${planos.length <= 6 ? "xl:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]" : "xl:grid-cols-4"}`} style={{ "--n": planos.length }}>
             {planos.map((p, i) => {
               // Plano favorito marcado em Planos SaaS; sem nenhum marcado vale o padrao (o 2o de 3+).
               const destaque = planos.some((x) => x.destaque) ? !!p.destaque : planos.length >= 3 && i === 1;
+              const ganho = ganhosDoPlano(p, planos[i - 1]);
+              const itens = ITENS_SITE.map(([k]) => k).filter((k) => itensDoPlano(p).includes(k));
               return (
-                <div key={p.id ?? p.nome} className={`rounded-2xl p-6 flex flex-col border-2 ${destaque ? "border-apex-500 shadow-xl" : "border-apex-100"}`}>
-                  {destaque && <span className="self-start text-xs font-bold bg-apex-500 text-white px-3 py-1 rounded-full mb-2">Mais escolhido</span>}
-                  <h3 className="text-2xl font-bold">{p.nome}</h3>
-                  <p className="text-sm text-gray-500">{p.descricao}</p>
+                <div key={p.id ?? p.nome} className={`relative rounded-2xl p-5 flex flex-col border-2 ${destaque ? "border-apex-500 shadow-xl" : "border-apex-100"}`}>
+                  {destaque && <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-bold bg-apex-500 text-white px-3 py-1 rounded-full">Mais escolhido</span>}
+                  <h3 className="text-xl font-bold">{p.nome}</h3>
+                  <p className="text-sm text-gray-500 min-h-[2.5rem]">{p.descricao}</p>
                   {mesesDe(p) === 1
-                    ? <p className="mt-3"><span className="text-4xl font-extrabold text-apex-900">{brl(p.valor)}</span><span className="text-gray-500">/{p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}</span></p>
+                    ? <p className="mt-3 break-words"><span className="text-2xl font-extrabold text-apex-900">{brl(p.valor)}</span><span className="text-gray-500 text-sm whitespace-nowrap">/{p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}</span></p>
                     : (
                       <div className="mt-3">
-                        <p><span className="text-4xl font-extrabold text-apex-900">{brl(totalDoPeriodo(p, mesesDe(p)))}</span><span className="text-gray-500">/{mesesDe(p)} meses</span></p>
+                        <p><span className="text-2xl font-extrabold text-apex-900">{brl(totalDoPeriodo(p, mesesDe(p)))}</span><span className="text-gray-500 text-sm whitespace-nowrap">/{mesesDe(p)} meses</span></p>
                         <p className="text-sm text-green-700">{brl(totalDoPeriodo(p, mesesDe(p)) / mesesDe(p))} por mês · {descontoDoPeriodo(p, mesesDe(p))}% de desconto</p>
                       </div>
                     )}
-                  <ul className="mt-4 space-y-2 flex-1 text-sm">
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_equipamentos, "equipamento", "equipamentos")}</li>
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_admins, "administrador", "administradores")}</li>
-                    {ITENS_SITE.map(([k]) => k).filter((k) => itensDoPlano(p).includes(k)).map((k) => (
-                      <li key={k} className="flex items-center gap-2"><Check size={16} className="text-green-600" />{textoItem(p, k)}</li>
-                    ))}
+                  {ganho && (
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-apex-600">Tudo do {planos[i - 1].nome}, e mais:</p>
+                  )}
+                  <ul className={`${ganho ? "mt-2" : "mt-4"} space-y-2 flex-1 text-sm`}>
+                    {ganho ? (
+                      <>
+                        {ganho.equipamentos && <li className="flex items-start gap-2 font-semibold text-green-700"><Check size={16} className="mt-0.5 shrink-0" />{ganho.equipamentos === "ilimitados" ? "Equipamentos ilimitados" : `+${ganho.equipamentos} ${ganho.equipamentos === 1 ? "equipamento" : "equipamentos"} (total ${p.max_equipamentos})`}</li>}
+                        {ganho.admins && <li className="flex items-start gap-2 font-semibold text-green-700"><Check size={16} className="mt-0.5 shrink-0" />{ganho.admins === "ilimitados" ? "Administradores ilimitados" : `+${ganho.admins} ${ganho.admins === 1 ? "administrador" : "administradores"} (total ${p.max_admins})`}</li>}
+                        {ganho.novos.map((k) => <li key={k} className="flex items-start gap-2 font-semibold text-green-700"><Check size={16} className="mt-0.5 shrink-0" />{textoItem(p, k)}</li>)}
+                        {!ganho.equipamentos && !ganho.admins && !ganho.novos.length && <li className="text-gray-500">Mesmos limites do {planos[i - 1].nome}</li>}
+                        {itens.includes("teste") && <li className="flex items-start gap-2 text-gray-600"><Check size={16} className="mt-0.5 shrink-0 text-green-600" />{textoTeste(p)}</li>}
+                      </>
+                    ) : (
+                      <>
+                        <li className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-green-600" />{rotuloLimite(p.max_equipamentos, "equipamento", "equipamentos")}</li>
+                        <li className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-green-600" />{rotuloLimite(p.max_admins, "administrador", "administradores")}</li>
+                        {itens.map((k) => <li key={k} className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-green-600" />{textoItem(p, k)}</li>)}
+                      </>
+                    )}
                   </ul>
                   <LinkPainel to={cadastro(p)} className="mt-6 text-center bg-apex-500 hover:bg-apex-600 text-white py-3 rounded-lg font-semibold">{Number(p.gratis) === 1 ? "Começar grátis" : "Testar grátis"}</LinkPainel>
                 </div>
@@ -213,11 +229,11 @@ export default function ApexHome() {
           <div className="mt-10 hidden sm:block overflow-x-auto rounded-2xl border border-apex-100">
             <table className="w-full text-sm">
               <thead className="bg-apex-50 text-apex-900">
-                <tr><th className="text-left px-4 py-3">Comparar</th>{planos.map((p) => <th key={p.id ?? p.nome} className="px-4 py-3 text-center">{p.nome}</th>)}</tr>
+                <tr><th className="text-left px-4 py-3 sticky left-0 bg-apex-50">Comparar</th>{planos.map((p, i) => <th key={p.id ?? p.nome} className={`px-4 py-3 text-center ${planos.length >= 3 && i === 1 ? "bg-apex-100" : ""}`}>{p.nome}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-apex-100">
                 {[["Valor", (p) => (mesesDe(p) === 1 ? `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}` : `${brl(totalDoPeriodo(p, mesesDe(p)))}/${mesesDe(p)} meses`)], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", (p) => itensExtras(p).map((k) => textoItem(p, k)).join(", ") || "-"], ["Teste grátis", (p) => (itensDoPlano(p).includes("teste") ? (diasDeTeste(p) ? `${diasDeTeste(p)} dias` : "Plano grátis") : "-")]].map(([rotulo, fn]) => (
-                  <tr key={rotulo}><td className="px-4 py-3 font-medium text-apex-900">{rotulo}</td>{planos.map((p) => <td key={p.id ?? p.nome} className="px-4 py-3 text-center text-gray-700">{fn(p)}</td>)}</tr>
+                  <tr key={rotulo}><td className="px-4 py-3 font-medium text-apex-900 sticky left-0 bg-white">{rotulo}</td>{planos.map((p, i) => <td key={p.id ?? p.nome} className={`px-4 py-3 text-center text-gray-700 ${planos.length >= 3 && i === 1 ? "bg-apex-50" : ""}`}>{fn(p)}</td>)}</tr>
                 ))}
               </tbody>
             </table>
