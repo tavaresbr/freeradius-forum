@@ -222,7 +222,25 @@ test('atualizarPlano sem a migration 047 regrava sem gratis/trial_dias e avisa',
   fakeDb.execute = orig;
   assert.strictEqual(res.code, undefined);
   assert.ok(res.body.aviso);
+  assert.strictEqual(chamadas.length, 3);
+  assert.ok(!/gratis/.test(chamadas[2].sql));
+  assert.strictEqual(chamadas[2].params.length, 14);
+});
+
+test('atualizarPlano sem a migration 068 grava gratis/trial_dias sem exibir_site e avisa', async () => {
+  const ctrl = require('../../src/controllers/assinaturaController');
+  const orig = fakeDb.execute;
+  chamadas.length = 0;
+  fakeDb.execute = async (sql, params) => {
+    chamadas.push({ sql, params });
+    if (/exibir_site/.test(sql)) { const e = new Error("Unknown column 'exibir_site'"); e.code = 'ER_BAD_FIELD_ERROR'; throw e; }
+    return [{ affectedRows: 1 }];
+  };
+  const res = { json: (b) => { res.body = b; }, status: (c) => { res.code = c; return res; } };
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 5, exibir_site: ['whatsapp', 'teste', 'invalido'] }, params: { id: 1 } }, res);
+  fakeDb.execute = orig;
+  assert.ok(/068/.test(res.body.aviso));
   assert.strictEqual(chamadas.length, 2);
-  assert.ok(!/gratis/.test(chamadas[1].sql));
-  assert.strictEqual(chamadas[1].params.length, 14);
+  assert.ok(/gratis=/.test(chamadas[1].sql));
+  assert.strictEqual(chamadas[0].params[15], JSON.stringify(['teste', 'whatsapp'].sort((a, b) => ['todos_recursos','teste','whatsapp'].indexOf(a) - ['todos_recursos','teste','whatsapp'].indexOf(b))));
 });
