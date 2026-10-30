@@ -1,5 +1,5 @@
 const { RouterOSAPI } = require("node-routeros");
-const { HOTSPOT_PADROES } = require("../constants/hotspotDefaults");
+const { HOTSPOT_PADROES, DNS_SEGURO } = require("../constants/hotspotDefaults");
 
 const ehInterfaceWifi = (nome = "", tipo = "") => /^wlan|^wifi/i.test(nome) || /^(wlan|wireless)/i.test(tipo);
 
@@ -42,6 +42,33 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
     return { status: "aviso", message: `Sem confirmacao do Wi-Fi. Confira: /interface wireless set ${ifName} mode=ap-bridge ssid="${nome}" disabled=no` };
   } catch (e) {
     return { status: "aviso", message: `Wi-Fi nao configurado: ${e.message}` };
+  }
+}
+
+/**
+ * Liga ou desliga o DNS seguro (filtro de conteudo adulto) do hotspot. Nunca lanca: devolve
+ * { status: "ok" | "aviso", message }. `ligar` = true aplica; false so reverte se o roteador estiver
+ * usando os servidores filtrados (nao desfaz DNS configurado a mao).
+ */
+async function configurarDnsSeguro({ ligar, gateway, network, print, write }) {
+  try {
+    const nets = await print("/ip/dhcp-server/network/print");
+    const rede = nets.find((n) => n.address === network);
+    if (ligar) {
+      await write("/ip/dns/set", [`=servers=${DNS_SEGURO.servidores}`, "=allow-remote-requests=yes"]);
+      if (rede) await write("/ip/dhcp-server/network/set", [`=.id=${rede[".id"]}`, `=dns-server=${gateway}`]);
+      return { status: "ok", message: `DNS seguro ligado (OpenDNS FamilyShield); clientes usam ${gateway} como DNS` };
+    }
+    const dns = (await print("/ip/dns/print"))[0];
+    if (!dns) return { status: "aviso", message: "Nao foi possivel ler o DNS do roteador; DNS seguro nao alterado." };
+    if (!String(dns.servers || "").includes(DNS_SEGURO.servidores.split(",")[0])) {
+      return { status: "ok", message: "DNS seguro ja estava desligado" };
+    }
+    await write("/ip/dns/set", [`=servers=${DNS_SEGURO.padrao}`, "=allow-remote-requests=yes"]);
+    if (rede) await write("/ip/dhcp-server/network/set", [`=.id=${rede[".id"]}`, "=dns-server=8.8.8.8"]);
+    return { status: "ok", message: "DNS seguro desligado (DNS padrao restaurado)" };
+  } catch (e) {
+    return { status: "aviso", message: `DNS seguro nao alterado: ${e.message}` };
   }
 }
 
@@ -231,6 +258,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
     } catch (e) {
       addStep("dhcp", "aviso", e.message);
+    }
+
+    // === 3b. DNS seguro (so se o assistente pediu: true liga, false desliga, ausente nao mexe) ===
+    if (config.dnsSeguro === true || config.dnsSeguro === false) {
+      const d = await configurarDnsSeguro({ ligar: config.dnsSeguro, gateway, network, print: safePrint, write: safeWrite });
+      addStep("dns_seguro", d.status, d.message);
     }
 
     // === 4. Hotspot Profile ===
@@ -641,4 +674,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarDnsSeguro, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

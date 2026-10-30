@@ -21,4 +21,12 @@ const HOTSPOT_PADROES = {
   macCookieTimeout: "1h",
 };
 
-module.exports = { HOTSPOT_PADROES };
+// DNS seguro (opcional por equipamento, escolhido no assistente): o DNS do roteador encaminha para o
+// OpenDNS FamilyShield (bloqueia conteudo adulto) e o DHCP entrega o proprio gateway como DNS.
+// Limite: cliente com DNS fixo ou DNS sobre HTTPS no navegador contorna o filtro.
+const DNS_SEGURO = {
+  servidores: "208.67.222.123,208.67.220.123",
+  padrao: "8.8.8.8,1.1.1.1",
+};
+
+module.exports = { HOTSPOT_PADROES, DNS_SEGURO };
