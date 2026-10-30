@@ -1,6 +1,6 @@
 const { RouterOSAPI } = require("node-routeros");
 const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
-const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT } = require("../constants/hotspotDefaults");
+const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout } = require("../constants/hotspotDefaults");
 
 const NOME_PORTA_VALIDO = /^[A-Za-z0-9._-]{1,32}$/;
 const TIPOS_PORTA_BRIDGE = /^(ether|wlan|wifi)/i;
@@ -154,6 +154,32 @@ async function configurarDnsSeguro({ ligar, gateway, network, print, write }) {
     return { status: "ok", message: "DNS seguro desligado (DNS padrao restaurado)" };
   } catch (e) {
     return { status: "aviso", message: `DNS seguro nao alterado: ${e.message}` };
+  }
+}
+
+/**
+ * on-logout opcional do user profile "default" (nunca lanca). Nunca sobrescreve script alheio:
+ * so grava se estiver vazio ou for o nosso (marcador); leitura que falha = nao grava.
+ */
+async function configurarOnLogout({ ligar, print, write }) {
+  try {
+    const perfis = await print("/ip/hotspot/user/profile/print", ["=.proplist=.id,name,on-logout"]);
+    const padrao = Array.isArray(perfis) ? perfis.find((p) => p.name === "default") : null;
+    if (!padrao) return { status: "aviso", message: "Nao foi possivel ler o user profile default; on-logout nao alterado." };
+    const atual = String(padrao["on-logout"] || "").trim();
+    const nosso = atual.includes(ON_LOGOUT_HOTSPOT.marcador);
+    if (atual && !nosso) {
+      return { status: "aviso", message: "O user profile default ja tem um on-logout proprio; nao foi alterado." };
+    }
+    if (ligar) {
+      await write("/ip/hotspot/user/profile/set", ["=numbers=default", `=on-logout=${scriptOnLogout()}`]);
+      return { status: "ok", message: "on-logout ligado: ao fim da sessao o aparelho e' desconectado do Wi-Fi (se nao houver outra sessao dele)" };
+    }
+    if (!nosso) return { status: "ok", message: "on-logout ja estava desligado" };
+    await write("/ip/hotspot/user/profile/set", ["=numbers=default", "=on-logout="]);
+    return { status: "ok", message: "on-logout desligado" };
+  } catch (e) {
+    return { status: "aviso", message: `on-logout nao alterado: ${e.message}` };
   }
 }
 
@@ -501,6 +527,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       addStep("user-profile", "aviso", `User profile default nao ajustado: ${e.message}. Ajuste: /ip hotspot user profile set [find name=default] address-pool=${poolName}`);
     }
 
+    // === 5c. on-logout (so se o assistente pediu: true liga, false desliga, ausente nao mexe) ===
+    if (config.onLogout === true || config.onLogout === false) {
+      const o = await configurarOnLogout({ ligar: config.onLogout, print: safePrint, write: safeWrite });
+      addStep("on_logout", o.status, o.message);
+    }
+
     // === 6. RADIUS Client ===
     try {
       const radiusList = await safePrint("/radius/print");
@@ -797,4 +829,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarOnLogout, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
