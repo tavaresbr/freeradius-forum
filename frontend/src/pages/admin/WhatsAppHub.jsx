@@ -124,10 +124,10 @@ export default function WhatsAppHub() {
       <div className="space-y-3">
         <h1 className="sr-only">WhatsApp</h1>
         <div className="flex items-center border-b border-gray-800">
-          <div role="tablist" aria-label="Seções do WhatsApp" className="flex gap-1 overflow-x-auto flex-1 min-w-0">
+          <div role="tablist" aria-label="Seções do WhatsApp" className="flex justify-start gap-0 overflow-x-auto overflow-y-hidden flex-1 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {permitidas.map((a) => (
               <button key={a.id} role="tab" aria-selected={a.id === atual.id} onClick={() => navigate(`/admin/${empresaSlug}/atendimento/${a.id}`)}
-                className={`px-4 py-2 text-sm whitespace-nowrap cursor-pointer border-b-2 -mb-px ${a.id === atual.id ? "border-orange-500 text-white font-medium" : "border-transparent text-gray-400 hover:text-gray-200"}`}>
+                className={`px-2.5 py-2 text-sm whitespace-nowrap cursor-pointer border-b-2 -mb-px ${a.id === atual.id ? "border-orange-500 text-white font-medium" : "border-transparent text-gray-400 hover:text-gray-200"}`}>
                 {a.titulo}
               </button>
             ))}
