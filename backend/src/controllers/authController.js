@@ -13,6 +13,10 @@ function roleNaEmpresa(user, empresa) {
 }
 exports.roleNaEmpresa = roleNaEmpresa
 
+// Hash descartavel: e-mail inexistente tambem paga o custo do bcrypt, senao o tempo de resposta
+// revela quais e-mails tem conta (enumeracao por timing).
+const HASH_FALSO = bcrypt.hashSync('senha-inexistente', 10)
+
 exports.login = async (req, res) => {
   try {
     return await loginInterno(req, res)
@@ -25,16 +29,15 @@ exports.login = async (req, res) => {
 async function loginInterno(req, res) {
   const { email, password, senha } = req.body || {}
   const pass = password || senha
-  if (typeof email !== 'string' || typeof pass !== 'string' || !email || !pass) {
+  // Limites de tamanho: evita bcrypt/consulta com entrada gigante (e senha acima de 72 bytes e' truncada pelo bcrypt)
+  if (typeof email !== 'string' || typeof pass !== 'string' || !email || !pass || email.length > 254 || pass.length > 256) {
     return res.status(401).json({ error: 'Credenciais inválidas' })
   }
-  const user = await Admin.findByEmail(email)
+  const user = await Admin.findByEmail(email.trim())
 
-  // Mesma resposta para e-mail inexistente e senha errada (nao enumera usuarios).
-  if (!user) return res.status(401).json({ error: 'Credenciais inválidas' })
-
-  const match = await bcrypt.compare(pass, user.password)
-  if (!match) return res.status(401).json({ error: 'Credenciais inválidas' })
+  // Mesma resposta (e mesmo custo de CPU) para e-mail inexistente e senha errada (nao enumera usuarios).
+  const match = await bcrypt.compare(pass, user ? user.password : HASH_FALSO)
+  if (!user || !match) return res.status(401).json({ error: 'Credenciais inválidas' })
 
   // Buscar todas as empresas do usuário
   const empresas = await Admin.getEmpresas(user.id, user.role);
