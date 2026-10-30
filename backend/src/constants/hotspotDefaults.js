@@ -72,4 +72,15 @@ const BLOCK_REDIRECT = {
   ],
 };
 
-module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT };
+// Log de conexoes novas (opcional, diagnostico pontual; o log legal do Marco Civil continua sendo o radacct):
+// regra mangle "log" so para a rede do hotspot, com teto de taxa para nao sobrecarregar o roteador, e uma
+// acao de log em memoria pequena e propria. Tudo leva o nome/comentario apex para ser removido sem tocar no resto.
+const LOG_CONEXOES = {
+  comentario: "apex-connlog",
+  prefixo: "apex-conn",
+  acao: "apex-conn-mem",
+  linhas: 300,
+  limite: "100,200:packet",
+};
+
+module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES };

@@ -1,6 +1,6 @@
 const { RouterOSAPI } = require("node-routeros");
 const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
-const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT } = require("../constants/hotspotDefaults");
+const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require("../constants/hotspotDefaults");
 
 const NOME_PORTA_VALIDO = /^[A-Za-z0-9._-]{1,32}$/;
 const TIPOS_PORTA_BRIDGE = /^(ether|wlan|wifi)/i;
@@ -206,6 +206,44 @@ async function configurarBlockRedirect({ ligar, print, write }) {
     return { status: "ok", message: `BlockRedirect desligado (${nossas.length} regra(s) removida(s))` };
   } catch (e) {
     return { status: "aviso", message: `BlockRedirect nao alterado: ${e.message}` };
+  }
+}
+
+/**
+ * Log de conexoes novas (opcional, nunca lanca): regra mangle log (so a rede do hotspot, com teto de taxa),
+ * acao de log em memoria propria e regra de logging firewall -> essa acao. Desligar remove SO o que tem o
+ * nosso nome/comentario. Limite: o log geral do roteador (regra padrao "info") tambem recebe estas linhas.
+ */
+async function configurarLogConexoes({ ligar, network, print, write }) {
+  try {
+    const mangle = await print("/ip/firewall/mangle/print");
+    const acoes = await print("/system/logging/action/print");
+    const regras = await print("/system/logging/print");
+    if (![mangle, acoes, regras].every(Array.isArray)) {
+      return { status: "aviso", message: "Nao foi possivel ler a configuracao de log; log de conexoes nao alterado." };
+    }
+    const meuMangle = mangle.filter((m) => m.comment === LOG_CONEXOES.comentario);
+    const minhaAcao = acoes.find((a) => a.name === LOG_CONEXOES.acao);
+    const minhasRegras = regras.filter((r) => r.action === LOG_CONEXOES.acao);
+    if (ligar) {
+      if (!network) return { status: "aviso", message: "Rede do hotspot desconhecida; log de conexoes nao ligado." };
+      if (!minhaAcao) await write("/system/logging/action/add", [`=name=${LOG_CONEXOES.acao}`, "=target=memory", `=memory-lines=${LOG_CONEXOES.linhas}`]);
+      if (!minhasRegras.length) await write("/system/logging/add", ["=topics=firewall", `=action=${LOG_CONEXOES.acao}`]);
+      if (!meuMangle.length) {
+        await write("/ip/firewall/mangle/add", [
+          "=chain=forward", `=src-address=${network}`, "=connection-state=new", `=limit=${LOG_CONEXOES.limite}`,
+          "=action=log", `=log-prefix=${LOG_CONEXOES.prefixo}`, `=comment=${LOG_CONEXOES.comentario}`,
+        ]);
+      }
+      return { status: "ok", message: `Log de conexoes ligado (prefixo ${LOG_CONEXOES.prefixo}, ate ${LOG_CONEXOES.linhas} linhas na acao ${LOG_CONEXOES.acao})` };
+    }
+    if (!meuMangle.length && !minhaAcao && !minhasRegras.length) return { status: "ok", message: "Log de conexoes ja estava desligado" };
+    for (const m of meuMangle) await write("/ip/firewall/mangle/remove", [`=.id=${m[".id"]}`]);
+    for (const r of minhasRegras) await write("/system/logging/remove", [`=.id=${r[".id"]}`]);
+    if (minhaAcao) await write("/system/logging/action/remove", [`=.id=${minhaAcao[".id"]}`]);
+    return { status: "ok", message: "Log de conexoes desligado" };
+  } catch (e) {
+    return { status: "aviso", message: `Log de conexoes nao alterado: ${e.message}` };
   }
 }
 
@@ -632,6 +670,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       addStep("block_redirect", b.status, b.message);
     }
 
+    // === 7c. Log de conexoes (so se o assistente pediu: true liga, false desliga, ausente nao mexe) ===
+    if (config.logConexoes === true || config.logConexoes === false) {
+      const l = await configurarLogConexoes({ ligar: config.logConexoes, network, print: safePrint, write: safeWrite });
+      addStep("log_conexoes", l.status, l.message);
+    }
+
     // === 8. Masquerade (NAT) ===
     try {
       const natRules = await safePrint("/ip/firewall/nat/print");
@@ -861,4 +905,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

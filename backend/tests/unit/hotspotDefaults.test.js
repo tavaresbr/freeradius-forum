@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect } = require('../../src/utils/hotspotSetup');
+const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require('../../src/constants/hotspotDefaults');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -383,4 +383,65 @@ test('assistente so aplica BlockRedirect com true/false e nao entra em aplicarPa
   assert.match(src, /config\.blockRedirect === true \|\| config\.blockRedirect === false/);
   const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
   assert.ok(!/blockRedirect|BLOCK_REDIRECT/.test(ap.slice(0, ap.indexOf('module.exports'))));
+});
+
+// ---- Log de conexoes opcional ----
+function roteadorLog({ mangle = [], acoes = [], regras = [] } = {}) {
+  const escritas = [];
+  return {
+    escritas,
+    print: async (c) => (c === '/ip/firewall/mangle/print' ? mangle : c === '/system/logging/action/print' ? acoes : regras),
+    write: async (caminho, args) => { escritas.push({ caminho, args }); return []; },
+  };
+}
+
+test('configurarLogConexoes: ligar cria acao, regra de logging e mangle limitado a rede do hotspot', async () => {
+  const r = roteadorLog();
+  const out = await configurarLogConexoes({ ligar: true, network: '10.5.50.0/24', print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.deepStrictEqual(r.escritas.map((e) => e.caminho), ['/system/logging/action/add', '/system/logging/add', '/ip/firewall/mangle/add']);
+  const m = r.escritas[2].args;
+  assert.ok(m.includes('=src-address=10.5.50.0/24') && m.includes('=connection-state=new') && m.includes('=action=log'));
+  assert.ok(m.includes(`=limit=${LOG_CONEXOES.limite}`) && m.includes(`=comment=${LOG_CONEXOES.comentario}`));
+});
+
+test('configurarLogConexoes: ligar e idempotente e exige a rede', async () => {
+  const r = roteadorLog({
+    mangle: [{ '.id': '*1', comment: LOG_CONEXOES.comentario }],
+    acoes: [{ '.id': '*2', name: LOG_CONEXOES.acao }],
+    regras: [{ '.id': '*3', action: LOG_CONEXOES.acao }],
+  });
+  await configurarLogConexoes({ ligar: true, network: '10.5.50.0/24', print: r.print, write: r.write });
+  assert.strictEqual(r.escritas.length, 0);
+  const sem = roteadorLog();
+  const out = await configurarLogConexoes({ ligar: true, network: '', print: sem.print, write: sem.write });
+  assert.strictEqual(out.status, 'aviso');
+  assert.strictEqual(sem.escritas.length, 0);
+});
+
+test('configurarLogConexoes: desligar remove so o que e nosso', async () => {
+  const r = roteadorLog({
+    mangle: [{ '.id': '*1', comment: LOG_CONEXOES.comentario }, { '.id': '*9', comment: 'do dono' }],
+    acoes: [{ '.id': '*2', name: LOG_CONEXOES.acao }, { '.id': '*8', name: 'outra' }],
+    regras: [{ '.id': '*3', action: LOG_CONEXOES.acao }, { '.id': '*7', action: 'memory' }],
+  });
+  const out = await configurarLogConexoes({ ligar: false, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.deepStrictEqual(r.escritas.map((e) => e.args[0]), ['=.id=*1', '=.id=*3', '=.id=*2']);
+});
+
+test('configurarLogConexoes: leitura invalida ou erro avisa sem escrever/lancar', async () => {
+  const w = [];
+  let out = await configurarLogConexoes({ ligar: true, network: 'x', print: async () => null, write: async (...a) => w.push(a) });
+  assert.strictEqual(out.status, 'aviso');
+  assert.strictEqual(w.length, 0);
+  out = await configurarLogConexoes({ ligar: true, network: 'x', print: async () => { throw new Error('x'); }, write: async () => {} });
+  assert.strictEqual(out.status, 'aviso');
+});
+
+test('assistente so aplica log de conexoes com true/false e nao entra em aplicarPadroesHotspot', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.match(src, /config\.logConexoes === true \|\| config\.logConexoes === false/);
+  const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
+  assert.ok(!/logConexoes|LOG_CONEXOES/.test(ap.slice(0, ap.indexOf('module.exports'))));
 });
