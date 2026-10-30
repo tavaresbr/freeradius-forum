@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import CartaoMetrica from "../../components/super/CartaoMetrica";
+import GraficoBarras from "../../components/super/GraficoBarras";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -54,6 +56,10 @@ export default function SuperDashboard() {
   const [alertas, setAlertas] = useState({}); // empresa_id -> [{tipo, nivel, mensagem}]
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState("todas");
+  const [periodo, setPeriodo] = useState(30);
+  const [metricas, setMetricas] = useState(null); // { receita, crescimento, uso } (bloco null = falhou)
+  const [metricasEstado, setMetricasEstado] = useState("carregando"); // carregando | ok | erro
+  const pedidoMetricas = useRef(0);
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -95,6 +101,28 @@ export default function SuperDashboard() {
       console.error("Erro ao buscar alertas:", err);
     }
   };
+
+  // Uma busca por periodo; resposta de um pedido antigo (troca rapida de 7/30/90) e' ignorada.
+  const fetchMetricas = async (dias) => {
+    const pedido = ++pedidoMetricas.current;
+    setMetricasEstado("carregando");
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`/api/plataforma/metricas?dias=${dias}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const dados = await res.json();
+      if (pedido !== pedidoMetricas.current) return;
+      setMetricas(dados);
+      setMetricasEstado("ok");
+    } catch (err) {
+      console.error("Erro ao buscar métricas:", err);
+      if (pedido === pedidoMetricas.current) setMetricasEstado("erro");
+    }
+  };
+
+  useEffect(() => {
+    if (isSuperAdmin) fetchMetricas(periodo);
+  }, [periodo]);
 
   const acessarEmpresa = async (e) => {
     setErroAcesso("");
@@ -139,10 +167,28 @@ export default function SuperDashboard() {
     });
   }, [empresas, busca, filtro, alertas]);
 
-  const cartao = (rotulo, valor, destaque) => (
-    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5">
-      <p className="text-gray-500 text-sm">{rotulo}</p>
-      <p className={`text-3xl font-bold mt-1 ${destaque || "text-white"}`}>{valor}</p>
+  const cartao = (rotulo, valor, destaque, dica) => (
+    <CartaoMetrica rotulo={rotulo} valor={valor} destaque={destaque} dica={dica} />
+  );
+
+  // Saude: resumo do que /api/empresas/alertas ja devolveu (sem consulta nova).
+  const saude = useMemo(() => {
+    const t = { equipamento_offline: 0, sem_conexao: 0, whatsapp_desconectado: 0 };
+    for (const lista of Object.values(alertas)) for (const a of lista) if (a.tipo in t) t[a.tipo]++;
+    return t;
+  }, [alertas]);
+
+  const { receita, crescimento, uso } = metricas || {};
+  const blocoIndisponivel = (
+    <p className="text-gray-500 text-sm bg-[#1a1d27] border border-gray-800 rounded-xl p-5">
+      Não foi possível calcular este bloco agora.
+    </p>
+  );
+  const titulo = (t) => <h3 className="text-lg font-semibold text-white mb-3">{t}</h3>;
+  const painelGrafico = (rotulo, conteudo) => (
+    <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 min-w-0">
+      <p className="text-gray-500 text-sm mb-3">{rotulo}</p>
+      {conteudo}
     </div>
   );
 
@@ -200,6 +246,124 @@ export default function SuperDashboard() {
             </div>
           )}
         </div>
+
+        {/* Metricas da plataforma */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-semibold text-white">Métricas da plataforma</h2>
+          <div className="flex gap-1 bg-[#1a1d27] border border-gray-800 rounded-lg p-1" role="group" aria-label="Período">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => setPeriodo(d)}
+                className={`px-3 py-1 rounded text-sm ${periodo === d ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
+              >
+                {d} dias
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {metricasEstado === "erro" ? (
+          <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 text-center mb-8">
+            <p className="text-red-400 mb-3">Não foi possível carregar as métricas.</p>
+            <button onClick={() => fetchMetricas(periodo)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm">
+              Tentar de novo
+            </button>
+          </div>
+        ) : metricasEstado === "carregando" && !metricas ? (
+          <p className="text-gray-500 mb-8">Carregando métricas...</p>
+        ) : (
+          <div className={`space-y-8 mb-10 ${metricasEstado === "carregando" ? "opacity-60" : ""}`}>
+            <section>
+              {titulo("Receita")}
+              {receita ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    {cartao("Receita mensal recorrente", moeda(receita.mrr), "text-green-400", "Assinaturas ativas de plano pago, proporcional ao ciclo")}
+                    {cartao(`Faturado em ${periodo} dias`, moeda(receita.faturado_periodo), undefined, "Cobranças da plataforma aprovadas")}
+                    {cartao("Ticket médio", moeda(receita.ticket_medio), undefined, `${receita.pagamentos_periodo} pagamento(s) no período`)}
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {painelGrafico("Faturado por mês (6 meses)", <GraficoBarras dados={receita.por_mes} formato={moeda} cor="#22c55e" titulo="Faturado por mês" />)}
+                    {painelGrafico(
+                      `Por plano (${periodo} dias)`,
+                      receita.por_plano.length === 0 ? (
+                        <p className="text-gray-600 text-sm">Nenhuma cobrança aprovada no período.</p>
+                      ) : (
+                        <ul className="divide-y divide-gray-800 text-sm">
+                          {receita.por_plano.map((p) => (
+                            <li key={p.nome} className="flex justify-between gap-3 py-2">
+                              <span className="text-gray-300 min-w-0 break-words">{p.nome}</span>
+                              <span className="text-gray-400 whitespace-nowrap">{moeda(p.total)} · {p.n}x</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    )}
+                  </div>
+                </>
+              ) : blocoIndisponivel}
+            </section>
+
+            <section>
+              {titulo("Crescimento e conversão")}
+              {crescimento ? (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                    {cartao(`Empresas novas (${periodo}d)`, crescimento.empresas_novas_periodo)}
+                    {cartao("Trials ativos", crescimento.trials_ativos, "text-blue-400")}
+                    {cartao("Conversão em plano pago", crescimento.conversao === null ? "—" : `${crescimento.conversao}%`, undefined, "Empresas criadas no período que já pagaram")}
+                    {cartao("Trials vencidos sem pagar", crescimento.trials_vencidos_sem_pagar, crescimento.trials_vencidos_sem_pagar ? "text-yellow-400" : "text-white")}
+                    {cartao(`Cancelamentos (${periodo}d)`, crescimento.cancelamentos_periodo, crescimento.cancelamentos_periodo ? "text-red-400" : "text-white")}
+                  </div>
+                  {painelGrafico("Empresas novas por mês (6 meses)", <GraficoBarras dados={crescimento.empresas_por_mes} cor="#3b82f6" titulo="Empresas novas por mês" />)}
+                </>
+              ) : blocoIndisponivel}
+            </section>
+
+            <section>
+              {titulo("Uso da plataforma")}
+              {uso ? (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                    {cartao("Clientes cadastrados", uso.leads_total.toLocaleString("pt-BR"))}
+                    {cartao(`Novos clientes (${periodo}d)`, uso.leads_novos_periodo.toLocaleString("pt-BR"))}
+                    {cartao(`Conexões (${periodo}d)`, uso.conexoes_periodo.toLocaleString("pt-BR"))}
+                    {cartao("Conectados agora", uso.conectados_agora.toLocaleString("pt-BR"), "text-green-400", "Sessões abertas nas últimas 24 h")}
+                    {cartao(`Vendas do hotspot (${periodo}d)`, moeda(uso.vendas_hotspot.valor), undefined, `${uso.vendas_hotspot.n} venda(s) aprovada(s)`)}
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {painelGrafico("Conexões por dia", <GraficoBarras dados={uso.conexoes_por_dia} formato={(v) => `${v} conexões`} cor="#a855f7" titulo="Conexões por dia" />)}
+                    {painelGrafico(
+                      `Empresas mais ativas (${periodo} dias)`,
+                      uso.top_empresas.length === 0 ? (
+                        <p className="text-gray-600 text-sm">Sem vendas nem novos clientes no período.</p>
+                      ) : (
+                        <ol className="divide-y divide-gray-800 text-sm">
+                          {uso.top_empresas.map((t, i) => (
+                            <li key={t.id} className="flex justify-between gap-3 py-2">
+                              <span className="text-gray-300 min-w-0 break-words">{i + 1}. {t.nome}</span>
+                              <span className="text-gray-400 whitespace-nowrap">{moeda(t.valor)} · {t.leads} novos</span>
+                            </li>
+                          ))}
+                        </ol>
+                      )
+                    )}
+                  </div>
+                </>
+              ) : blocoIndisponivel}
+            </section>
+
+            <section>
+              {titulo("Saúde da operação")}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {cartao("Empresas com equipamento offline", saude.equipamento_offline, saude.equipamento_offline ? "text-red-400" : "text-white")}
+                {cartao("Empresas sem conexão há dias", saude.sem_conexao, saude.sem_conexao ? "text-yellow-400" : "text-white")}
+                {cartao("WhatsApp desconectado", saude.whatsapp_desconectado, saude.whatsapp_desconectado ? "text-yellow-400" : "text-white")}
+              </div>
+            </section>
+          </div>
+        )}
 
         {/* Empresas */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
