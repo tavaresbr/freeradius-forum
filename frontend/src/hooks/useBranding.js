@@ -12,6 +12,7 @@ function aplicarIcones(favicon, apple) {
     if (!el) { el = document.createElement("link"); el.rel = rel; document.head.appendChild(el); }
     return el;
   };
+  try { if (favicon) localStorage.setItem("favicon_url", favicon); } catch { /* sem storage: so perde o cache */ }
   if (favicon) {
     const el = link("icon");
     el.removeAttribute("type"); // o tipo do padrao (svg) nao vale para o arquivo enviado

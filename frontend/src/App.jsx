@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import SeoRota from "./components/SeoRota";
+import IconesSite from "./components/IconesSite";
 import Login from "./pages/admin/Login";
 import Dashboard from "./pages/admin/Dashboard";
 import Mikrotiks from "./pages/admin/Mikrotiks";
@@ -94,6 +95,7 @@ function App() {
   return (
     <>
     <SeoRota />
+    <IconesSite />
     <Routes>
       {/* Público */}
       <Route path="/" element={<ApexHome />} />
