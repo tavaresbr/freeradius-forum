@@ -95,10 +95,10 @@ export default function Dashboard() {
             <section className="mb-6" aria-label="Hoje">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">Hoje</h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {hoje.vendas && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">Vendas aprovadas</p><p className="text-2xl font-bold text-white">{hoje.vendas.aprovadas}</p><p className="text-xs text-gray-500">{(hoje.vendas.valor / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>}
-                {hoje.conexoes && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">Conectados agora</p><p className="text-2xl font-bold text-white">{hoje.conexoes.abertas}</p><p className="text-xs text-gray-500">{hoje.conexoes.novas_hoje} conexões novas hoje</p></div>}
-                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">WhatsApp: conversas abertas</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.abertas}</p><p className="text-xs text-gray-500">{hoje.whatsapp.nao_lidas} mensagens não lidas</p></div>}
-                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">WhatsApp hoje</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.recebidas_hoje}<span className="text-base text-gray-500"> / {hoje.whatsapp.enviadas_hoje}</span></p><p className="text-xs text-gray-500">recebidas / enviadas</p></div>}
+                {hoje.vendas && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-3 sm:p-4"><p className="text-xs text-gray-500">Vendas aprovadas</p><p className="text-2xl font-bold text-white">{hoje.vendas.aprovadas}</p><p className="text-xs text-gray-500">{(hoje.vendas.valor / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>}
+                {hoje.conexoes && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-3 sm:p-4"><p className="text-xs text-gray-500">Conectados agora</p><p className="text-2xl font-bold text-white">{hoje.conexoes.abertas}</p><p className="text-xs text-gray-500">{hoje.conexoes.novas_hoje} conexões novas hoje</p></div>}
+                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-3 sm:p-4"><p className="text-xs text-gray-500">WhatsApp: conversas abertas</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.abertas}</p><p className="text-xs text-gray-500">{hoje.whatsapp.nao_lidas} mensagens não lidas</p></div>}
+                {hoje.whatsapp && <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-3 sm:p-4"><p className="text-xs text-gray-500">WhatsApp hoje</p><p className="text-2xl font-bold text-white">{hoje.whatsapp.recebidas_hoje}<span className="text-base text-gray-500"> / {hoje.whatsapp.enviadas_hoje}</span></p><p className="text-xs text-gray-500">recebidas / enviadas</p></div>}
               </div>
             </section>
           )}
@@ -106,8 +106,8 @@ export default function Dashboard() {
             {cards.map((card, i) => (
               <div key={i} className={`bg-[#1a1d27] rounded-xl p-3 sm:p-5 border ${card.border} hover:border-gray-700 transition-all duration-200`}>
                 <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
-                  <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-0">{card.title}</p>
-                  <div className={`${card.bg} ${card.color} p-1.5 sm:p-2 rounded-lg shrink-0 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6`}>
+                  <p className="text-[10px] min-[360px]:text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-0 break-words">{card.title}</p>
+                  <div className={`${card.bg} ${card.color} p-1 sm:p-2 rounded-lg shrink-0 [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-6 sm:[&>svg]:h-6`}>
                     {card.icon}
                   </div>
                 </div>
