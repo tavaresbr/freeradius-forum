@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 const db = require('../../db');
 const { ssidDoPeer } = require('../utils/ssid');
 const { linhasWifi } = require('../utils/wifiScript');
-const { credenciaisRoteador, emStringRouterOS } = require('../utils/roteadorAdmin');
+const { credenciaisRoteador, linhasUsuarioRoteador } = require('../utils/roteadorAdmin');
 
 const WG_URL = `http://127.0.0.1:${process.env.WG_PANEL_PORT || '51821'}`;
 const WG_PASS = process.env.WG_PASS || '';
@@ -317,7 +317,7 @@ exports.getClientConfig = async (req, res) => {
       ...(adminSenha
         ? [
             `# --- Usuario e senha do roteador (mesmos do cadastro do equipamento no painel) ---`,
-            `/user set [find name="${emStringRouterOS(adminUsuario)}"] password="${emStringRouterOS(adminSenha)}"`,
+            ...linhasUsuarioRoteador(adminUsuario, adminSenha),
             `# --- Falta so: o wizard de Hotspot no painel ---`,
           ]
         : [
