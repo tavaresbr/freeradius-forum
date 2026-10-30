@@ -258,10 +258,10 @@ export default function Assinatura() {
         ) : (
           <>
           {periodosDosPlanos(planos).length > 1 && (
-            <div className="flex flex-wrap gap-2 mb-4" data-testid="seletor-periodo">
+            <div className={`grid gap-2 mb-4 sm:flex sm:flex-wrap ${periodosDosPlanos(planos).length === 2 ? "grid-cols-2" : periodosDosPlanos(planos).length === 3 ? "grid-cols-3" : "grid-cols-4"}`} data-testid="seletor-periodo">
               {periodosDosPlanos(planos).map((m) => (
                 <button key={m} type="button" onClick={() => { setMeses(m); try { localStorage.setItem("periodo_assinatura", String(m)); } catch { /* ignora */ } }}
-                  className={`px-4 py-2 rounded-lg text-sm border ${meses === m ? "bg-blue-600 border-blue-500 text-white" : "bg-[#1a1d27] border-gray-700 text-gray-300"}`}>{rotuloPeriodo(m)}</button>
+                  className={`px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm border whitespace-nowrap ${meses === m ? "bg-blue-600 border-blue-500 text-white" : "bg-[#1a1d27] border-gray-700 text-gray-300"}`}>{rotuloPeriodo(m)}</button>
               ))}
             </div>
           )}
@@ -278,7 +278,7 @@ export default function Assinatura() {
                   ? <p className="mt-3 text-3xl font-extrabold text-white">{brl(p.valor)}<span className="text-sm text-gray-500 font-normal"> / {p.ciclo_dias} dias</span></p>
                   : (
                     <div className="mt-3">
-                      <p className="text-3xl font-extrabold text-white">{brl(total)}<span className="text-sm text-gray-500 font-normal"> / {m} meses</span></p>
+                      <p className="text-2xl sm:text-3xl font-extrabold text-white">{brl(total)}<span className="text-sm text-gray-500 font-normal whitespace-nowrap"> / {m} meses</span></p>
                       <p className="text-xs text-gray-400">{brl(total / m)} por mês{economia > 0 && <span className="text-green-400"> · economize {brl(economia)} ({descontoDoPeriodo(p, m)}%)</span>}</p>
                     </div>
                   )}
