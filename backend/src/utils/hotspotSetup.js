@@ -1,5 +1,17 @@
 const { RouterOSAPI } = require("node-routeros");
-const { HOTSPOT_PADROES, DNS_SEGURO } = require("../constants/hotspotDefaults");
+const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT } = require("../constants/hotspotDefaults");
+
+const NOME_PORTA_VALIDO = /^[A-Za-z0-9._-]{1,32}$/;
+const TIPOS_PORTA_BRIDGE = /^(ether|wlan|wifi)/i;
+
+/** Normaliza o pedido de bridge vindo do corpo da requisicao (nunca confiar no cliente). */
+function sanitizarBridge(config = {}) {
+  if (config.criarBridge !== true) return { criarBridge: false, portasBridge: [] };
+  const lista = Array.isArray(config.portasBridge) ? config.portasBridge : [];
+  const portas = [...new Set(lista.filter((p) => typeof p === "string" && NOME_PORTA_VALIDO.test(p)))]
+    .slice(0, BRIDGE_HOTSPOT.maxPortas);
+  return { criarBridge: true, portasBridge: portas };
+}
 
 const ehInterfaceWifi = (nome = "", tipo = "") => /^wlan|^wifi/i.test(nome) || /^(wlan|wireless)/i.test(tipo);
 
@@ -42,6 +54,78 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
     return { status: "aviso", message: `Sem confirmacao do Wi-Fi. Confira: /interface wireless set ${ifName} mode=ap-bridge ssid="${nome}" disabled=no` };
   } catch (e) {
     return { status: "aviso", message: `Wi-Fi nao configurado: ${e.message}` };
+  }
+}
+
+/**
+ * Prepara a bridge do hotspot: cria `BRIDGE_HOTSPOT.nome` se faltar e coloca nela as portas escolhidas.
+ * Recusa porta inexistente, de tipo nao suportado, WAN, de outra bridge, com IP ou com DHCP server
+ * proprio (entrar na bridge invalidaria o IP e pode derrubar o acesso). Idempotente. Nunca lanca:
+ * devolve { ok, message, wifiPortas } e so escreve no roteador se TODAS as portas forem aceitas.
+ */
+async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSPOT.nome }) {
+  const falha = (message) => ({ ok: false, message, wifiPortas: [] });
+  try {
+    if (!Array.isArray(portas) || portas.length === 0) return falha("Escolha ao menos uma porta/radio para a bridge do hotspot.");
+    if (portas.length > BRIDGE_HOTSPOT.maxPortas) return falha(`Maximo de ${BRIDGE_HOTSPOT.maxPortas} portas na bridge.`);
+
+    const interfaces = await print("/interface/print");
+    const bridges = await print("/interface/bridge/print");
+    const portasBridge = await print("/interface/bridge/port/print");
+    const enderecos = await print("/ip/address/print");
+    const dhcps = await print("/ip/dhcp-server/print");
+    const dhcpClients = await print("/ip/dhcp-client/print");
+    const pppoe = await print("/interface/pppoe-client/print");
+    const rotas = await print("/ip/route/print");
+
+    const wan = new Set([
+      ...dhcpClients.map((d) => d.interface),
+      ...pppoe.map((x) => x.interface),
+      ...rotas.filter((r) => r["dst-address"] === "0.0.0.0/0")
+        .map((r) => ((r["gateway-status"] || "").match(/via\s+(\S+)/) || [])[1] || r.gateway),
+    ].filter(Boolean));
+
+    for (const porta of portas) {
+      const itf = interfaces.find((i) => i.name === porta);
+      if (!itf) return falha(`A interface ${porta} nao existe neste roteador.`);
+      if (!TIPOS_PORTA_BRIDGE.test(porta) && !TIPOS_PORTA_BRIDGE.test(itf.type || "")) {
+        return falha(`A interface ${porta} (${itf.type || "?"}) nao pode entrar na bridge do hotspot (so ethernet e Wi-Fi).`);
+      }
+      if (wan.has(porta)) return falha(`A interface ${porta} e a WAN (uplink de internet); nao pode entrar na bridge do hotspot.`);
+      const jaBridge = portasBridge.find((b) => b.interface === porta);
+      if (jaBridge && jaBridge.bridge !== nome) {
+        return falha(`A interface ${porta} ja e porta da bridge ${jaBridge.bridge}. Remova-a de la antes (/interface bridge port remove).`);
+      }
+      if (enderecos.some((a) => a.interface === porta)) {
+        return falha(`A interface ${porta} tem IP configurado; adicionar a uma bridge invalidaria o IP e pode derrubar o acesso. Remova o IP antes.`);
+      }
+      if (dhcps.some((d) => d.interface === porta)) {
+        return falha(`A interface ${porta} tem DHCP server proprio; remova-o antes de usar a porta na bridge do hotspot.`);
+      }
+    }
+
+    if (!bridges.some((b) => b.name === nome)) {
+      const r = await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"]);
+      if (r === "timeout") return falha(`Sem resposta ao criar a bridge ${nome}.`);
+    }
+    for (const porta of portas) {
+      if (portasBridge.some((b) => b.interface === porta && b.bridge === nome)) continue;
+      const r = await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`]);
+      if (r === "timeout") return falha(`Sem resposta ao adicionar ${porta} na bridge ${nome}.`);
+    }
+
+    const depois = await print("/interface/bridge/port/print");
+    const faltando = portas.filter((p) => !depois.some((b) => b.interface === p && b.bridge === nome));
+    if (faltando.length) return falha(`Sem confirmacao de que ${faltando.join(", ")} entrou na bridge ${nome}.`);
+
+    const wifiPortas = portas.filter((p) => ehInterfaceWifi(p));
+    // Isolamento entre clientes do mesmo radio (pacote wireless legado); best-effort, como no script de instalacao.
+    for (const p of wifiPortas) {
+      try { await write("/interface/wireless/set", [`=numbers=${p}`, "=default-forwarding=no"]); } catch (e) { /* pacote wifi novo */ }
+    }
+    return { ok: true, message: `Bridge ${nome} com ${portas.join(", ")}`, wifiPortas };
+  } catch (e) {
+    return falha(`Bridge do hotspot nao preparada: ${e.message}`);
   }
 }
 
@@ -100,7 +184,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   });
 
   const steps = [];
-  const ifName = config.interface || "ether2";
+  const { criarBridge, portasBridge } = sanitizarBridge(config);
+  const ifName = criarBridge ? BRIDGE_HOTSPOT.nome : (config.interface || "ether2");
   const localAddress = config.localAddress || "10.5.50.1/24";
   const poolName = config.poolName || "hs-pool";
   const poolRange = config.poolRange || "10.5.50.2-10.5.50.254";
@@ -169,6 +254,19 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     await conn.connect();
     addStep("conexao", "ok", `Conectado a ${mikrotik.ip}`);
 
+    // === 00. Bridge do hotspot (opcional): varias radios/portas na mesma rede ===
+    let wifiPortasBridge = [];
+    if (criarBridge) {
+      const b = await prepararBridgeHotspot({ portas: portasBridge, print: safePrint, write: safeWrite });
+      if (!b.ok) {
+        addStep("bridge", "erro", b.message);
+        try { await conn.close(); } catch (e) {}
+        return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
+      }
+      addStep("bridge", "ok", b.message);
+      wifiPortasBridge = b.wifiPortas;
+    }
+
     // === 0. Interface nao pode ser porta de bridge (slave) ===
     // IP/DHCP em porta de bridge ficam invalidos e o hotspot nao atende os clientes.
     const bridgePorts = await safePrint("/interface/bridge/port/print");
@@ -196,9 +294,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     }
 
     // === 0c. Wi-Fi: modo AP + SSID (so se a interface for Wi-Fi e o SSID foi informado) ===
-    if (wifiSsid && ehInterfaceWifi(ifName)) {
-      const w = await configurarWifiAP({ ifName, ssid: wifiSsid, print: safePrint, write: safeWrite });
-      addStep("wifi", w.status, w.message);
+    if (wifiSsid) {
+      const radios = criarBridge ? wifiPortasBridge : (ehInterfaceWifi(ifName) ? [ifName] : []);
+      for (const radio of radios) {
+        const w = await configurarWifiAP({ ifName: radio, ssid: wifiSsid, print: safePrint, write: safeWrite });
+        addStep("wifi", w.status, `${radio}: ${w.message}`);
+      }
     }
 
     // === 1. IP na interface ===
@@ -674,4 +775,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarDnsSeguro, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

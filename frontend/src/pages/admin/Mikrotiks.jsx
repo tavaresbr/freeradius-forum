@@ -124,7 +124,7 @@ export default function Mikrotiks() {
   const [scanData, setScanData] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [wizardConfig, setWizardConfig] = useState({
-    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: ""
+    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", criarBridge: false, portasBridge: []
   });
 
   const abrirWizard = async (id) => {
@@ -133,7 +133,7 @@ export default function Mikrotiks() {
     setScanData(null);
     setShowWizard(true);
     setWizardStep(0);
-    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "" });
+    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", criarBridge: false, portasBridge: [] });
 
     try {
       const res = await fetch(`/api/mikrotiks/${id}/scan`, {
@@ -171,6 +171,8 @@ export default function Mikrotiks() {
         body: JSON.stringify({
           ...wizardConfig,
           dnsSeguro: wizardConfig.dnsSeguro === "ligar" ? true : wizardConfig.dnsSeguro === "desligar" ? false : undefined,
+          criarBridge: wizardConfig.criarBridge === true,
+          portasBridge: wizardConfig.criarBridge ? wizardConfig.portasBridge : [],
         }),
       });
 
@@ -765,7 +767,56 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   </div>
                 </div>
 
+                {/* Bridge com varias portas/radios (opcional) */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={wizardConfig.criarBridge}
+                      onChange={(e) => {
+                        const ligar = e.target.checked;
+                        const livres = (scanData.interfaces || []).filter(i =>
+                          /^(ether|wlan|wifi)/i.test(i.name) && !i.wan && !i.bridge &&
+                          !(scanData.addresses || []).some(a => a.interface === i.name));
+                        setWizardConfig({
+                          ...wizardConfig,
+                          criarBridge: ligar,
+                          portasBridge: ligar ? livres.filter(i => /^(wlan|wifi)/i.test(i.name)).map(i => i.name) : [],
+                        });
+                      }}
+                    />
+                    Usar uma bridge com várias portas/rádios (Wi-Fi 2.4 + 5 GHz e portas)
+                  </label>
+                  <p className="text-xs text-gray-600 mt-1">Cria a bridge "bridge-hotspot" e atende todas as portas marcadas na mesma rede. Portas com IP, DHCP próprio, em outra bridge ou a WAN não podem entrar.</p>
+                </div>
+
+                {wizardConfig.criarBridge && (
+                  <div className="space-y-1">
+                    <label className="block text-xs text-gray-500">Portas/rádios da bridge</label>
+                    {(scanData.interfaces || []).filter(i => /^(ether|wlan|wifi)/i.test(i.name)).map(i => {
+                      const motivo = i.wan ? "WAN" : i.bridge ? "já é porta de bridge" : (scanData.addresses || []).some(a => a.interface === i.name) ? "tem IP" : "";
+                      return (
+                        <label key={i.name} className={`flex items-center gap-2 text-sm ${motivo ? "text-gray-600" : "text-gray-300 cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!!motivo}
+                            checked={wizardConfig.portasBridge.includes(i.name)}
+                            onChange={(e) => setWizardConfig({
+                              ...wizardConfig,
+                              portasBridge: e.target.checked
+                                ? [...wizardConfig.portasBridge, i.name]
+                                : wizardConfig.portasBridge.filter(n => n !== i.name),
+                            })}
+                          />
+                          {i.name} ({i.type}){motivo ? ` — ${motivo}` : ""}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Interface Selection */}
+                {!wizardConfig.criarBridge && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Interface do Hotspot</label>
                   <select
@@ -783,9 +834,10 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     <p key={a.address} className="text-xs text-green-500 mt-1">IP atual: {a.address}</p>
                   ))}
                 </div>
+                )}
 
                 {/* SSID (so para interface Wi-Fi) */}
-                {/^wlan|^wifi/i.test(wizardConfig.interface || "") && (
+                {(wizardConfig.criarBridge ? wizardConfig.portasBridge.some(n => /^wlan|^wifi/i.test(n)) : /^wlan|^wifi/i.test(wizardConfig.interface || "")) && (
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Nome do Wi-Fi (SSID)</label>
                     <input

@@ -29,4 +29,10 @@ const DNS_SEGURO = {
   padrao: "8.8.8.8,1.1.1.1",
 };
 
-module.exports = { HOTSPOT_PADROES, DNS_SEGURO };
+// Bridge opcional do hotspot (varias radios/portas na mesma rede de clientes), escolhida no assistente.
+const BRIDGE_HOTSPOT = {
+  nome: "bridge-hotspot",
+  maxPortas: 12,
+};
+
+module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT };
