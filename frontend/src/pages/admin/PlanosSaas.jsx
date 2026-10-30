@@ -247,7 +247,7 @@ export default function PlanosSaas() {
 
         {form && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <form onSubmit={salvarPlano} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md space-y-3">
+            <form onSubmit={salvarPlano} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3">
               <h2 className="text-lg font-bold text-white">{editId ? "Editar plano" : copiaDe ? "Duplicar plano" : "Novo plano"}</h2>
               {copiaDe && <p className="text-xs text-gray-500">Cópia de "{copiaDe}". Ajuste e salve; nasce inativo.</p>}
               <div><label className="block text-sm text-gray-400 mb-1">Nome *</label><input required className={inputCls} value={form.nome} onChange={campo("nome")} /></div>
