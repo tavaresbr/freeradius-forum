@@ -5,7 +5,7 @@
 const db = require("../../db");
 const { temRecurso } = require("../utils/assinatura");
 const m = require("../utils/manutencao");
-const pub = require("../utils/manutencaoPublico");
+const avisoClientes = require("../services/avisoClientes");
 const naoPerturbe = require("../utils/naoPerturbe");
 
 let emExecucao = false;
@@ -13,18 +13,10 @@ let emExecucao = false;
 async function criarEnvio(mt, etapa, nomeEquipamento) {
   const modelo = etapa === "fim" ? (mt.mensagem_fim || m.MENSAGEM_FIM_PADRAO) : mt.mensagem;
   const mensagem = m.renderizarMensagem(modelo, { inicio: mt.inicio_em, fim: mt.fim_em, equipamento: nomeEquipamento });
-  const sel = await pub.selecionarPublico(db, mt.empresa_id, mt.equipamento_id, mt.janela_dias);
-  if (!sel.destinatarios.length) return null;
-  const [r] = await db.query(
-    `INSERT INTO promocao_envios (empresa_id, nome, tipo, mensagem, filtros_json, status, total, iniciado_em)
-     VALUES (?, ?, 'aviso', ?, ?, 'em_andamento', ?, NOW())`,
-    [mt.empresa_id, `Manutenção: ${mt.titulo}`.slice(0, 150), mensagem, JSON.stringify({ origem: "manutencao", manutencao_id: mt.id, etapa }), sel.destinatarios.length]
-  );
-  await db.query(
-    "INSERT INTO promocao_destinatarios (envio_id, empresa_id, lead_id, telefone, nome) VALUES ?",
-    [sel.destinatarios.map((d) => [r.insertId, mt.empresa_id, d.lead_id, d.telefone, d.nome])]
-  );
-  return r.insertId;
+  return avisoClientes.criarEnvioAviso(db, {
+    empresaId: mt.empresa_id, equipamentoId: mt.equipamento_id, janelaDias: mt.janela_dias,
+    nome: `Manutenção: ${mt.titulo}`, mensagem, filtros: { origem: "manutencao", manutencao_id: mt.id, etapa },
+  });
 }
 
 async function processar(mt) {

@@ -6,7 +6,7 @@ const btnSecundario = "border border-gray-700 text-gray-300 px-3 py-2 rounded te
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const TIPOS = {
   promocao: "Promoções", renovacao: "Renovação", pos_compra: "Pós-compra",
-  aviso_expiracao: "Aviso de tempo acabando", manutencao: "Manutenções",
+  aviso_expiracao: "Aviso de tempo acabando", manutencao: "Manutenções", alerta_tecnico: "Alertas técnicos (clientes)",
 };
 const ORIGENS = { manual: "Manual", sair: "Respondeu SAIR", importado: "Importado" };
 

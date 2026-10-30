@@ -7,6 +7,7 @@ const rel = require("../controllers/atendimentoRelatoriosController");
 const contatos = require("../controllers/atendimentoContatosController");
 const np = require("../controllers/naoPerturbeController");
 const mt = require("../controllers/manutencoesController");
+const atec = require("../controllers/alertasTecnicosController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -91,5 +92,14 @@ router.post("/manutencoes/previa", mt.previa);
 router.post("/manutencoes", mt.criar);
 router.put("/manutencoes/:id", mt.atualizar);
 router.post("/manutencoes/:id/cancelar", mt.cancelar);
+
+// Alertas tecnicos (feed, config e aviso aos clientes)
+router.get("/alertas-tecnicos/config", atec.obterConfig);
+router.put("/alertas-tecnicos/config", atec.salvarConfig);
+router.get("/alertas-tecnicos", atec.listar);
+router.post("/alertas-tecnicos", atec.criarManual);
+router.post("/alertas-tecnicos/:id/resolver", atec.resolver);
+router.get("/alertas-tecnicos/:id/previa", atec.previa);
+router.post("/alertas-tecnicos/:id/avisar-clientes", atendimentoEnvioLimiter, atec.avisarClientes);
 
 module.exports = router;
