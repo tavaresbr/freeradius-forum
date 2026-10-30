@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { periodoSalvo, periodosDoPlano, periodosDosPlanos, rotuloPeriodo, totalDoPeriodo, descontoDoPeriodo } from "../../utils/periodoPlano";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../contexts/AuthContext";
 import { avisoUpgrade } from "../../utils/upgradeAviso";
@@ -26,6 +27,7 @@ export default function Assinatura() {
   const [copiado, setCopiado] = useState(false);
   const [escolhido, setEscolhido] = useState(null); // plano selecionado para pagar
   const [metodo, setMetodo] = useState("pix");
+  const [meses, setMeses] = useState(periodoSalvo);
   const [fp, setFp] = useState("loading"); // fingerprint MP: loading | ready | error
   const [cartao, setCartao] = useState({ numero: "", nome: "", validade: "", cvv: "", cpf: "" });
   const [pagandoCartao, setPagandoCartao] = useState(false);
@@ -121,7 +123,10 @@ export default function Assinatura() {
   };
 
   // Itens a pagar: plano ou adicional. `payload` e' o que o servidor recebe (o valor e' recalculado la).
-  const itemPlano = (p) => ({ chave: `p${p.id}`, nome: p.nome, rotulo: `Assinatura ${p.nome}`, valor: Number(p.valor), payload: { plano_id: p.id } });
+  const itemPlano = (p) => {
+    const m = periodosDoPlano(p).includes(meses) ? meses : 1;
+    return { chave: `p${p.id}`, nome: p.nome, rotulo: `Assinatura ${p.nome}${m > 1 ? ` (${m} meses)` : ""}`, valor: totalDoPeriodo(p, m), payload: { plano_id: p.id, meses: m } };
+  };
   const itemAdicional = (a, qtd) => ({
     chave: `a${a.id}`, nome: a.nome, rotulo: `Adicional ${a.nome}${qtd > 1 ? ` x${qtd}` : ""}`,
     valor: Math.round(a.valor * qtd * 100) / 100, payload: { adicional_id: a.id, quantidade: qtd }, extra: Math.round(a.valor * qtd * 100) / 100,
@@ -251,12 +256,32 @@ export default function Assinatura() {
             )}
           </div>
         ) : (
+          <>
+          {periodosDosPlanos(planos).length > 1 && (
+            <div className="flex flex-wrap gap-2 mb-4" data-testid="seletor-periodo">
+              {periodosDosPlanos(planos).map((m) => (
+                <button key={m} type="button" onClick={() => { setMeses(m); try { localStorage.setItem("periodo_assinatura", String(m)); } catch { /* ignora */ } }}
+                  className={`px-4 py-2 rounded-lg text-sm border ${meses === m ? "bg-blue-600 border-blue-500 text-white" : "bg-[#1a1d27] border-gray-700 text-gray-300"}`}>{rotuloPeriodo(m)}</button>
+              ))}
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {planos.map((p) => (
+            {planos.map((p) => {
+              const m = periodosDoPlano(p).includes(meses) ? meses : 1;
+              const total = totalDoPeriodo(p, m);
+              const economia = Number(p.valor) * m - total;
+              return (
               <div key={p.id} className={`bg-[#1a1d27] border rounded-xl p-5 flex flex-col ${p.id === st?.plano_id ? "border-blue-500" : "border-gray-800"}`}>
                 <h3 className="text-lg font-bold text-white">{p.nome}</h3>
                 <p className="text-sm text-gray-500">{p.descricao}</p>
-                <p className="mt-3 text-3xl font-extrabold text-white">{brl(p.valor)}<span className="text-sm text-gray-500 font-normal"> / {p.ciclo_dias} dias</span></p>
+                {m === 1
+                  ? <p className="mt-3 text-3xl font-extrabold text-white">{brl(p.valor)}<span className="text-sm text-gray-500 font-normal"> / {p.ciclo_dias} dias</span></p>
+                  : (
+                    <div className="mt-3">
+                      <p className="text-3xl font-extrabold text-white">{brl(total)}<span className="text-sm text-gray-500 font-normal"> / {m} meses</span></p>
+                      <p className="text-xs text-gray-400">{brl(total / m)} por mês{economia > 0 && <span className="text-green-400"> · economize {brl(economia)} ({descontoDoPeriodo(p, m)}%)</span>}</p>
+                    </div>
+                  )}
                 <ul className="mt-3 text-sm text-gray-300 space-y-1 flex-1">
                   <li>✓ {qtd(p.max_equipamentos, "equipamento", "equipamentos")}</li>
                   <li>✓ {qtd(p.max_admins, "administrador", "administradores")}</li>
@@ -269,8 +294,10 @@ export default function Assinatura() {
                   {p.id === st?.plano_id && st?.status === "ativa" ? "Renovar" : "Assinar"}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
+          </>
         )}
 
         {!escolhido && !cobranca && (adic.catalogo.length > 0 || adic.minhas.length > 0) && (

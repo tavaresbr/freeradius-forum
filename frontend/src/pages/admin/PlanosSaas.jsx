@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
+import { totalDoPeriodo } from "../../utils/periodoPlano";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [] };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [], desconto_3m: "", desconto_6m: "", desconto_12m: "" };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
   ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
@@ -101,9 +102,9 @@ export default function PlanosSaas() {
   const duplicar = (p) => {
     setEditId(null);
     setCopiaDe(p.nome);
-    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), ativo: false, ordem: (p.ordem ?? 0) + 1 });
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: false, ordem: (p.ordem ?? 0) + 1 });
   };
-  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), ativo: !!p.ativo }); };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: !!p.ativo }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -263,6 +264,22 @@ export default function PlanosSaas() {
                   {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     <label key={k} className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={!!form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} /> {r}</label>
                   ))}
+                </div>
+                <div className="col-span-2" data-testid="descontos-periodo">
+                  <span className="block text-sm text-gray-400 mb-1">Desconto por período de contrato (%)</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[3, 6, 12].map((m) => {
+                      const k = `desconto_${m}m`;
+                      return (
+                        <div key={m}>
+                          <label className="block text-xs text-gray-500 mb-1">{m} meses</label>
+                          <input type="number" min="0" max="90" step="0.01" placeholder="sem desconto" disabled={!!form.gratis} className={inputCls} value={form[k] ?? ""} onChange={campo(k)} />
+                          {!form.gratis && Number(form.valor) > 0 && <p className="text-xs text-gray-500 mt-1">Total: R$ {totalDoPeriodo({ valor: Number(form.valor), [k]: form[k] }, m).toFixed(2)}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Deixe vazio para não oferecer o período. O cliente paga o total de uma vez.</p>
                 </div>
                 <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2" data-testid="exibir-site">
                   <span className="w-full text-sm text-gray-400">Mostrar no card do plano (site)</span>

@@ -4,6 +4,7 @@ const { baseUrlPublica } = require("../utils/baseUrl");
 const db = require("../../db");
 const { validarAssinaturaWebhook } = require("../utils/mpSignature");
 const { obterStatus, invalidar, tabelaInexistente } = require("../utils/assinatura");
+const { mesesValidos, descontoDoPeriodo, valorDoPeriodo, normalizarDesconto } = require("../utils/periodoPlano");
 
 // ---------- helpers ----------
 
@@ -55,9 +56,12 @@ async function resolverItem(b, empresaId) {
   const adicionalId = parseInt(b.adicional_id, 10);
   if (!renovarId && !adicionalId) {
     const planoId = parseInt(b.plano_id, 10);
-    const [[plano]] = await db.execute("SELECT id, nome, valor FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
+    // SELECT * porque desconto_Nm (migration 069) pode nao existir ainda.
+    const [[plano]] = await db.execute("SELECT * FROM saas_planos WHERE id = ? AND ativo = 1", [planoId]);
     if (!plano) return { erro: { status: 404, message: "Plano não encontrado." } };
-    return { item: { tipo: "plano", id: plano.id, valor: Number(plano.valor), titulo: `Assinatura ${plano.nome}`, nome: plano.nome, cobranca: { plano_id: plano.id } } };
+    const meses = mesesValidos(b.meses);
+    const valor = valorDoPeriodo(plano.valor, meses, descontoDoPeriodo(plano, meses));
+    return { item: { tipo: "plano", id: plano.id, valor, titulo: `Assinatura ${plano.nome}${meses > 1 ? ` (${meses} meses)` : ""}`, nome: plano.nome, cobranca: { plano_id: plano.id, meses } } };
   }
 
   let quantidade = Math.floor(Number(b.quantidade) || 1);
@@ -94,6 +98,20 @@ async function resolverItem(b, empresaId) {
 async function inserirCobranca(empresaId, item, metodo) {
   const c = item.cobranca;
   if (item.tipo === "plano") {
+    const meses = c.meses || 1;
+    if (meses > 1) {
+      try {
+        const [r] = await db.execute(
+          "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status, meses) VALUES (?, ?, ?, ?, 'aguardando', ?)",
+          [empresaId, c.plano_id, item.valor, metodo, meses]
+        );
+        return r.insertId;
+      } catch (err) {
+        // Sem a migration 069 nao da para registrar o periodo: nao cobra o total de varios meses.
+        if (colunaAusente(err)) throw new Error("Contrato de vários meses indisponível: rode a migration 069 no servidor.");
+        throw err;
+      }
+    }
     const [r] = await db.execute(
       "INSERT INTO assinatura_cobrancas (empresa_id, plano_id, valor, metodo, status) VALUES (?, ?, ?, ?, 'aguardando')",
       [empresaId, c.plano_id, item.valor, metodo]
@@ -136,15 +154,19 @@ async function ativarPorCobranca(cobranca) {
 
   const [[plano]] = await db.execute("SELECT ciclo_dias FROM saas_planos WHERE id = ?", [cobranca.plano_id]);
   const ciclo = plano?.ciclo_dias || 30;
+  const meses = mesesValidos(cobranca.meses);
+  // Ciclo de 30 dias = mensal: 3/6/12 meses avancam por mes de calendario (12 meses = 1 ano cheio).
+  const unidade = ciclo === 30 ? "MONTH" : "DAY";
+  const qtdPeriodo = ciclo === 30 ? meses : ciclo * meses;
   await db.execute(
     `INSERT INTO assinaturas (empresa_id, plano_id, status, vence_em)
-     VALUES (?, ?, 'ativa', DATE_ADD(NOW(), INTERVAL ? DAY))
+     VALUES (?, ?, 'ativa', DATE_ADD(NOW(), INTERVAL ? ${unidade}))
      ON DUPLICATE KEY UPDATE
        plano_id = VALUES(plano_id),
        status = 'ativa',
        ultimo_aviso = NULL,
-       vence_em = DATE_ADD(GREATEST(NOW(), COALESCE(vence_em, NOW())), INTERVAL ? DAY)`,
-    [cobranca.empresa_id, cobranca.plano_id, ciclo, ciclo]
+       vence_em = DATE_ADD(GREATEST(NOW(), COALESCE(vence_em, NOW())), INTERVAL ? ${unidade})`,
+    [cobranca.empresa_id, cobranca.plano_id, qtdPeriodo, qtdPeriodo]
   );
   invalidar(cobranca.empresa_id);
   return true;
@@ -443,6 +465,20 @@ function dadosPlano(b) {
   ];
 }
 
+// Descontos de 3/6/12 meses (migration 069) gravados a parte: sem a coluna o plano ainda salva.
+const AVISO_069 = "Plano salvo, mas os descontos de 3/6/12 meses só funcionam depois de rodar a migration 069 no servidor.";
+async function salvarDescontos(id, b) {
+  const [d3, d6, d12] = [b.desconto_3m, b.desconto_6m, b.desconto_12m].map(normalizarDesconto);
+  if (d3 == null && d6 == null && d12 == null && !("desconto_3m" in b || "desconto_6m" in b || "desconto_12m" in b)) return null;
+  try {
+    await db.execute("UPDATE saas_planos SET desconto_3m = ?, desconto_6m = ?, desconto_12m = ? WHERE id = ?", [d3, d6, d12, id]);
+    return null;
+  } catch (err) {
+    if (!colunaAusente(err)) throw err;
+    return (d3 || d6 || d12) ? AVISO_069 : null;
+  }
+}
+
 // Itens mostrados no card do plano no site (migration 068). null = padrao.
 const ITENS_SITE = ["todos_recursos", "teste", "whatsapp", "campanhas", "exportacao", "dominio", "portais"];
 function exibirSite(v) {
@@ -475,6 +511,7 @@ exports.criarPlano = async (req, res) => {
         aviso = AVISO_047;
       }
     }
+    aviso = aviso || (await salvarDescontos(r.insertId, req.body || {})) || undefined;
     invalidar();
     res.status(201).json({ id: r.insertId, aviso });
   } catch (err) {
@@ -502,6 +539,7 @@ exports.atualizarPlano = async (req, res) => {
         aviso = AVISO_047;
       }
     }
+    aviso = aviso || (await salvarDescontos(req.params.id, req.body || {})) || undefined;
     invalidar();
     res.json({ message: "Plano atualizado", aviso });
   } catch (err) {
