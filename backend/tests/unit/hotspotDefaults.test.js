@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout } = require('../../src/utils/hotspotSetup');
+const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT } = require('../../src/constants/hotspotDefaults');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -330,4 +330,57 @@ test('assistente so aplica on-logout com true/false e nao entra em aplicarPadroe
   assert.match(src, /config\.onLogout === true \|\| config\.onLogout === false/);
   const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
   assert.ok(!/onLogout|on-logout/.test(ap.slice(0, ap.indexOf('module.exports'))));
+});
+
+// ---- BlockRedirect opcional ----
+function roteadorWg(regras) {
+  const escritas = [];
+  return { escritas, print: async () => regras, write: async (caminho, args) => { escritas.push({ caminho, args }); return []; } };
+}
+
+test('configurarBlockRedirect: ligar cria deny com comentario para cada host', async () => {
+  const r = roteadorWg([{ '.id': '*1', 'dst-host': '*meudominio*', action: 'allow' }]);
+  const out = await configurarBlockRedirect({ ligar: true, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.strictEqual(r.escritas.length, BLOCK_REDIRECT.hosts.length);
+  for (const e of r.escritas) {
+    assert.strictEqual(e.caminho, '/ip/hotspot/walled-garden/add');
+    assert.ok(e.args.includes('=action=deny'));
+    assert.ok(e.args.includes(`=comment=${BLOCK_REDIRECT.comentario}`));
+  }
+});
+
+test('configurarBlockRedirect: ligar e idempotente (so cria o que falta)', async () => {
+  const existentes = BLOCK_REDIRECT.hosts.slice(0, 4).map((h, i) => ({ '.id': `*${i}`, 'dst-host': h, action: 'deny', comment: BLOCK_REDIRECT.comentario }));
+  const r = roteadorWg(existentes);
+  await configurarBlockRedirect({ ligar: true, print: r.print, write: r.write });
+  assert.strictEqual(r.escritas.length, BLOCK_REDIRECT.hosts.length - 4);
+  const tudo = roteadorWg(BLOCK_REDIRECT.hosts.map((h, i) => ({ '.id': `*${i}`, 'dst-host': h, comment: BLOCK_REDIRECT.comentario })));
+  await configurarBlockRedirect({ ligar: true, print: tudo.print, write: tudo.write });
+  assert.strictEqual(tudo.escritas.length, 0);
+});
+
+test('configurarBlockRedirect: desligar remove so as regras com o nosso comentario', async () => {
+  const r = roteadorWg([
+    { '.id': '*1', 'dst-host': 'captive.apple.com', action: 'deny', comment: BLOCK_REDIRECT.comentario },
+    { '.id': '*2', 'dst-host': 'captive.apple.com', action: 'deny', comment: 'do dono' },
+    { '.id': '*3', 'dst-host': '*x*', action: 'allow' },
+  ]);
+  const out = await configurarBlockRedirect({ ligar: false, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.deepStrictEqual(r.escritas, [{ caminho: '/ip/hotspot/walled-garden/remove', args: ['=.id=*1'] }]);
+});
+
+test('configurarBlockRedirect: erro de leitura ou escrita avisa sem lancar', async () => {
+  let out = await configurarBlockRedirect({ ligar: true, print: async () => { throw new Error('x'); }, write: async () => {} });
+  assert.strictEqual(out.status, 'aviso');
+  out = await configurarBlockRedirect({ ligar: true, print: async () => [], write: async () => { throw new Error('falhou'); } });
+  assert.strictEqual(out.status, 'aviso');
+});
+
+test('assistente so aplica BlockRedirect com true/false e nao entra em aplicarPadroesHotspot', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.match(src, /config\.blockRedirect === true \|\| config\.blockRedirect === false/);
+  const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
+  assert.ok(!/blockRedirect|BLOCK_REDIRECT/.test(ap.slice(0, ap.indexOf('module.exports'))));
 });
