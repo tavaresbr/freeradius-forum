@@ -64,6 +64,7 @@ exports.urlWebhook = async (req, res) => {
     res.json({ url: `${baseUrlPublica(req)}/api/pagamentos/asaas/webhook/${token}` });
   } catch (err) {
     console.error("Erro ao obter URL do webhook Asaas:", err.message);
+    if (asaas.erroEnumAsaas(err)) return res.status(503).json({ message: asaas.MSG_MIGRATION_068 });
     res.status(500).json({ message: "Erro ao obter a URL do webhook" });
   }
 };
