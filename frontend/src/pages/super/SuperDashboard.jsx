@@ -44,6 +44,13 @@ function valorMensal(e) {
   return ciclo > 0 ? (valor * 30) / ciclo : 0;
 }
 
+// Vencida ou vencendo em ate 7 dias (mesma regra do cartao "Vencidas ou vencem em 7 dias").
+function precisaAtencao(e) {
+  if (e.assinatura_status === "vencida") return true;
+  const venc = vencimentoDe(e);
+  return !!venc && ["trial", "ativa"].includes(e.assinatura_status) && diasAte(venc) <= 7;
+}
+
 export default function SuperDashboard() {
   const raizRef = useRef(null);
   useTabelasMobile(raizRef);
@@ -60,6 +67,7 @@ export default function SuperDashboard() {
   const [metricas, setMetricas] = useState(null); // { receita, crescimento, uso } (bloco null = falhou)
   const [metricasEstado, setMetricasEstado] = useState("carregando"); // carregando | ok | erro
   const pedidoMetricas = useRef(0);
+  const empresasRef = useRef(null);
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -141,9 +149,7 @@ export default function SuperDashboard() {
       equipamentos += e.total_mikrotiks || 0;
       if (e.assinatura_status === "trial") trial++;
       if (e.assinatura_status === "ativa") mrr += valorMensal(e);
-      const venc = vencimentoDe(e);
-      if (e.assinatura_status === "vencida") atencao++;
-      else if (venc && ["trial", "ativa"].includes(e.assinatura_status) && diasAte(venc) <= 7) atencao++;
+      if (precisaAtencao(e)) atencao++;
     }
     return { ativas, trial, atencao, mrr, equipamentos };
   }, [empresas]);
@@ -153,6 +159,12 @@ export default function SuperDashboard() {
     const filtradas = empresas.filter((e) => {
       if (filtro === "alertas") {
         if (!alertas[e.id]) return false;
+      } else if (filtro === "atencao") {
+        if (!precisaAtencao(e)) return false;
+      } else if (filtro === "ativo") {
+        if (!e.ativo) return false;
+      } else if (filtro === "com_equipamento") {
+        if (!(e.total_mikrotiks > 0)) return false;
       } else if (filtro !== "todas" && (e.assinatura_status || "sem") !== filtro) return false;
       if (!termo) return true;
       return `${e.nome} ${e.slug}`.toLowerCase().includes(termo);
@@ -167,9 +179,16 @@ export default function SuperDashboard() {
     });
   }, [empresas, busca, filtro, alertas]);
 
-  const cartao = (rotulo, valor, destaque, dica) => (
-    <CartaoMetrica rotulo={rotulo} valor={valor} destaque={destaque} dica={dica} />
+  const cartao = (rotulo, valor, destaque, dica, aoClicar) => (
+    <CartaoMetrica rotulo={rotulo} valor={valor} destaque={destaque} dica={dica} aoClicar={aoClicar} />
   );
+
+  // Cartao do topo: filtra a lista de empresas e rola ate ela.
+  const filtrarPor = (f) => () => {
+    setFiltro(f);
+    setBusca("");
+    empresasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Saude: resumo do que /api/empresas/alertas ja devolveu (sem consulta nova).
   const saude = useMemo(() => {
@@ -218,12 +237,12 @@ export default function SuperDashboard() {
 
         {/* Indicadores */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          {cartao("Empresas ativas", `${kpis.ativas}/${empresas.length}`)}
-          {cartao("Em trial", kpis.trial, "text-blue-400")}
-          {cartao("Vencidas ou vencem em 7 dias", kpis.atencao, kpis.atencao ? "text-red-400" : "text-white")}
-          {cartao("Receita mensal (ativas)", moeda(kpis.mrr), "text-green-400")}
-          {cartao("Empresas com alertas", Object.keys(alertas).length, Object.keys(alertas).length ? "text-yellow-400" : "text-white")}
-          {cartao("Equipamentos", kpis.equipamentos)}
+          {cartao("Empresas ativas", `${kpis.ativas}/${empresas.length}`, null, "Ver empresas ativas", filtrarPor("ativo"))}
+          {cartao("Em trial", kpis.trial, "text-blue-400", "Ver empresas em trial", filtrarPor("trial"))}
+          {cartao("Vencidas ou vencem em 7 dias", kpis.atencao, kpis.atencao ? "text-red-400" : "text-white", "Ver empresas vencidas ou perto de vencer", filtrarPor("atencao"))}
+          {cartao("Receita mensal (ativas)", moeda(kpis.mrr), "text-green-400", "Ver empresas com assinatura ativa", filtrarPor("ativa"))}
+          {cartao("Empresas com alertas", Object.keys(alertas).length, Object.keys(alertas).length ? "text-yellow-400" : "text-white", "Ver empresas com alertas", filtrarPor("alertas"))}
+          {cartao("Equipamentos", kpis.equipamentos, null, "Ver empresas com equipamentos", filtrarPor("com_equipamento"))}
         </div>
 
         {/* Acoes */}
@@ -366,7 +385,7 @@ export default function SuperDashboard() {
         )}
 
         {/* Empresas */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div ref={empresasRef} className="scroll-mt-4 flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-xl font-semibold text-white">Empresas</h2>
           <div className="flex flex-wrap gap-3">
             <input
@@ -382,6 +401,9 @@ export default function SuperDashboard() {
               className="px-3 py-2 bg-[#1a1d27] border border-gray-800 rounded-lg text-sm text-gray-200"
             >
               <option value="todas">Todas</option>
+              <option value="ativo">Empresas ativas</option>
+              <option value="atencao">Vencidas ou vencem em 7 dias</option>
+              <option value="com_equipamento">Com equipamentos</option>
               <option value="alertas">Com alertas</option>
               <option value="trial">Trial</option>
               <option value="ativa">Ativas</option>
