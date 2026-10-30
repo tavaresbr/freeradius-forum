@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
+import SeletorModelo from "../../components/admin/atendimento/SeletorModelo";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
 const btnPrimario = "bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 disabled:opacity-50 cursor-pointer";
@@ -13,7 +14,7 @@ const MODELO = "Olá, {{nome}}! Estamos com uma instabilidade na internet neste 
 const fmt = (d) => (d ? new Date(d).toLocaleString("pt-BR") : "-");
 
 // Aviso operacional (queda, manutencao) para quem esta CONECTADO agora. Respeita quem pediu para nao receber mensagens.
-export default function AvisoOperacional() {
+export default function AvisoOperacional({ embutido = false }) {
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const [mensagem, setMensagem] = useState(MODELO);
@@ -76,7 +77,7 @@ export default function AvisoOperacional() {
   const acao = async (id, a) => { await chamar(`/api/avisos-operacionais/${id}/${a}`, "POST"); carregarLista(); };
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-5 max-w-3xl">
         <h1 className="text-2xl font-bold text-white">Aviso operacional</h1>
         <p className="text-sm text-gray-400">Mande um aviso de serviço (queda, manutenção) por WhatsApp só para quem está conectado agora e tem telefone no cadastro. Quem pediu para não receber mensagens fica de fora. O envio é devagar, com intervalo entre as mensagens, para proteger o número.</p>
@@ -93,6 +94,7 @@ export default function AvisoOperacional() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Mensagem (use {"{{nome}}"} para o primeiro nome)</label>
             <textarea className={`${inputCls} resize-none`} rows={4} maxLength={1000} value={mensagem} onChange={(e) => { setMensagem(e.target.value); setPrevia(null); }} />
+            <SeletorModelo headers={headers} categoria="manutencao" onEscolher={(t) => { setMensagem(t.slice(0, 1000)); setPrevia(null); }} />
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button className={btnSecundario} disabled={busy || !mensagem.trim()} onClick={verPrevia}>Ver prévia e total</button>
@@ -133,6 +135,6 @@ export default function AvisoOperacional() {
           })}
         </section>
       </div>
-    </AdminLayout>
+    </Moldura>
   );
 }

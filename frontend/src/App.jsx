@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import SeoRota from "./components/SeoRota";
 import Login from "./pages/admin/Login";
@@ -29,12 +29,9 @@ import PlanosSaas from "./pages/admin/PlanosSaas";
 import IdentidadePlataforma from "./pages/admin/IdentidadePlataforma";
 import GruposPermissao from "./pages/admin/GruposPermissao";
 import WhatsApp from "./pages/admin/WhatsApp";
-import Atendimento from "./pages/admin/Atendimento";
-import AtendimentoRelatorios from "./pages/admin/AtendimentoRelatorios";
+import WhatsAppHub from "./pages/admin/WhatsAppHub";
 import Auditoria from "./pages/admin/Auditoria";
-import AvisoOperacional from "./pages/admin/AvisoOperacional";
 import Cupons from "./pages/admin/Cupons";
-import PromocoesWhatsapp from "./pages/admin/PromocoesWhatsapp";
 import Vouchers from "./pages/admin/Vouchers";
 import Voucher from "./pages/public/Voucher";
 import Campanhas from "./pages/admin/Campanhas";
@@ -83,6 +80,12 @@ const AdminRedirect = () => {
   if (loading) return null;
   if (!user) return <Navigate to="/login" />;
   return <Navigate to={`/admin/${user.empresa_slug}`} replace />;
+};
+
+// URLs antigas (Promocoes WhatsApp, Aviso operacional) agora sao abas do hub WhatsApp
+const RedirecionaAba = ({ aba }) => {
+  const { empresaSlug } = useParams();
+  return <Navigate to={`/admin/${empresaSlug}/atendimento/${aba}`} replace />;
 };
 
 function App() {
@@ -139,14 +142,13 @@ function App() {
       <Route path="/admin/:empresaSlug/compliance" element={<RotaPrivada><Compliance /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/atendimento" element={<RotaPrivada><Atendimento /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/atendimento/:aba?" element={<RotaPrivada><WhatsAppHub /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/auditoria" element={<RotaPrivada><Auditoria /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/atendimento/relatorios" element={<RotaPrivada><AtendimentoRelatorios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/whatsapp" element={<RotaPrivada><WhatsApp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vouchers" element={<RotaPrivada><Vouchers /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/aviso-operacional" element={<RotaPrivada><AvisoOperacional /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/aviso-operacional" element={<RotaPrivada><RedirecionaAba aba="campanhas?sub=aviso" /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/cupons" element={<RotaPrivada><Cupons /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/promocoes-whatsapp" element={<RotaPrivada><PromocoesWhatsapp /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/promocoes-whatsapp" element={<RotaPrivada><RedirecionaAba aba="campanhas" /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas" element={<RotaPrivada><Campanhas /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/campanhas/:id" element={<RotaPrivada><CampanhaEditor /></RotaPrivada>} />
 

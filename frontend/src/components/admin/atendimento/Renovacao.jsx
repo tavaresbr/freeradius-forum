@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Modal, { inputCls, btnPrimary, btnSecondary } from "./Modal";
+import SeletorModelo from "./SeletorModelo";
 
 const rotuloDia = (d) => (d === 0 ? "No dia do vencimento" : `${d} dia${d > 1 ? "s" : ""} depois`);
 
@@ -76,6 +77,7 @@ export default function Renovacao({ headers, onFechar }) {
           <div>
             <label className="block text-sm text-gray-300 mb-1">Mensagem (<code>{"{{nome}}"}</code> <code>{"{{plano}}"}</code> <code>{"{{empresa}}"}</code> e obrigatório <code>{"{{link}}"}</code>)</label>
             <textarea value={cfg.template} onChange={(e) => set("template", e.target.value)} rows={3} maxLength={1000} className={`${inputCls} resize-none`} />
+            <SeletorModelo headers={headers} categoria="cobranca" onEscolher={(t) => set("template", t.slice(0, 1000))} />
           </div>
           <div>
             <label className="block text-sm text-gray-300 mb-1">Cupom no link (opcional)</label>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Modal, { inputCls, btnPrimary, btnSecondary } from "./Modal";
+import SeletorModelo from "./SeletorModelo";
 
 // Aviso "seu tempo esta acabando" (desligado por padrao): manda o link de planos antes de o acesso acabar.
 export default function AvisoExpiracao({ headers, onFechar }) {
@@ -56,6 +57,7 @@ export default function AvisoExpiracao({ headers, onFechar }) {
           <div>
             <label className="block text-sm text-gray-300 mb-1">Mensagem</label>
             <textarea value={cfg.template} onChange={(e) => set("template", e.target.value)} rows={4} maxLength={1000} className={`${inputCls} resize-none`} />
+            <SeletorModelo headers={headers} categoria="cobranca" onEscolher={(t) => set("template", t.slice(0, 1000))} />
             <p className="text-xs text-gray-500 mt-1">Variáveis: <code>{"{{nome}}"}</code> <code>{"{{minutos}}"}</code> <code>{"{{link}}"}</code> <code>{"{{plano}}"}</code> <code>{"{{empresa}}"}</code></p>
           </div>
           <div className="border-t border-gray-800 pt-3 space-y-2">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Modal, { inputCls, btnPrimary, btnSecondary } from "./Modal";
+import SeletorModelo from "./SeletorModelo";
 
 // Agradecimento depois da compra, pedido de avaliação (nota alta) e alerta de nota baixa. Desligado por padrão.
 export default function PosCompra({ headers, onFechar }) {
@@ -65,6 +66,7 @@ export default function PosCompra({ headers, onFechar }) {
           <div>
             <label className="block text-sm text-gray-300 mb-1">Mensagem de agradecimento (<code>{"{{nome}}"}</code> <code>{"{{plano}}"}</code> <code>{"{{empresa}}"}</code>)</label>
             <textarea value={cfg.msg_agradecimento} onChange={(e) => set("msg_agradecimento", e.target.value)} rows={3} maxLength={1000} className={`${inputCls} resize-none`} />
+            <SeletorModelo headers={headers} categoria="boas_vindas" onEscolher={(t) => set("msg_agradecimento", t.slice(0, 1000))} />
           </div>
           <div className="border-t border-gray-800 pt-3 space-y-2">
             <p className="text-sm text-gray-200">Quando o cliente dá nota 4 ou 5 no atendimento</p>

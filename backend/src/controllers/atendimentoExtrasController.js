@@ -9,6 +9,7 @@ const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const { temColuna } = require("../utils/schemaCache");
 const { verificarSaldoRadius } = require("../utils/leadUtils");
 const { linkPlanosDoCliente } = require("../utils/linkPlanos");
+const modelos = require("../utils/modelosMensagem");
 
 const erro500 = (res, err, msg) => {
   console.error("[atendimento]", err.message);
@@ -135,10 +136,11 @@ const ATALHO = /^[a-z0-9_-]{1,30}$/;
 
 exports.listarRespostas = async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT id, atalho, titulo, texto FROM whatsapp_respostas_rapidas WHERE empresa_id = ? ORDER BY atalho", [req.empresa_id]);
-    res.json({ respostas: rows });
+    const comCategoria = await temColuna("whatsapp_respostas_rapidas", "categoria");
+    const [rows] = await db.query(`SELECT id, atalho, titulo, texto${comCategoria ? ", categoria" : ""} FROM whatsapp_respostas_rapidas WHERE empresa_id = ? ORDER BY ${comCategoria ? "categoria, " : ""}atalho`, [req.empresa_id]);
+    res.json({ respostas: rows, categorias: modelos.CATEGORIAS, categoria_disponivel: comCategoria });
   } catch (err) {
-    res.json({ respostas: [] });
+    res.json({ respostas: [], categorias: modelos.CATEGORIAS, categoria_disponivel: false });
   }
 };
 
@@ -149,14 +151,17 @@ function lerResposta(body) {
   if (!ATALHO.test(atalho)) return { erro: "Atalho inválido: use letras minúsculas, números, - ou _ (até 30)" };
   if (!titulo) return { erro: "Informe o título" };
   if (!t) return { erro: "Informe o texto da resposta" };
-  return { atalho, titulo, texto: t };
+  return { atalho, titulo, texto: t, categoria: modelos.categoriaValida(body?.categoria) };
 }
 
 exports.criarResposta = async (req, res) => {
   const r = lerResposta(req.body);
   if (r.erro) return res.status(400).json({ error: r.erro });
   try {
-    const [ins] = await db.query("INSERT INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto) VALUES (?, ?, ?, ?)", [req.empresa_id, r.atalho, r.titulo, r.texto]);
+    const comCategoria = await temColuna("whatsapp_respostas_rapidas", "categoria");
+    const [ins] = comCategoria
+      ? await db.query("INSERT INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto, categoria) VALUES (?, ?, ?, ?, ?)", [req.empresa_id, r.atalho, r.titulo, r.texto, r.categoria])
+      : await db.query("INSERT INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto) VALUES (?, ?, ?, ?)", [req.empresa_id, r.atalho, r.titulo, r.texto]);
     res.json({ success: true, id: ins.insertId });
   } catch (err) {
     if (duplicado(err)) return res.status(409).json({ error: "Já existe uma resposta com esse atalho" });
@@ -170,12 +175,32 @@ exports.atualizarResposta = async (req, res) => {
   const r = lerResposta(req.body);
   if (r.erro) return res.status(400).json({ error: r.erro });
   try {
-    const [up] = await db.query("UPDATE whatsapp_respostas_rapidas SET atalho = ?, titulo = ?, texto = ? WHERE id = ? AND empresa_id = ?", [r.atalho, r.titulo, r.texto, id, req.empresa_id]);
+    const comCategoria = await temColuna("whatsapp_respostas_rapidas", "categoria");
+    const [up] = comCategoria
+      ? await db.query("UPDATE whatsapp_respostas_rapidas SET atalho = ?, titulo = ?, texto = ?, categoria = ? WHERE id = ? AND empresa_id = ?", [r.atalho, r.titulo, r.texto, r.categoria, id, req.empresa_id])
+      : await db.query("UPDATE whatsapp_respostas_rapidas SET atalho = ?, titulo = ?, texto = ? WHERE id = ? AND empresa_id = ?", [r.atalho, r.titulo, r.texto, id, req.empresa_id]);
     if (!up.affectedRows) return res.status(404).json({ error: "Resposta não encontrada" });
     res.json({ success: true });
   } catch (err) {
     if (duplicado(err)) return res.status(409).json({ error: "Já existe uma resposta com esse atalho" });
     erro500(res, err, "Erro ao atualizar resposta");
+  }
+};
+
+// POST /api/atendimento/respostas-rapidas/padrao -> cria os modelos prontos que ainda nao existem (nunca sobrescreve)
+exports.criarModelosPadrao = async (req, res) => {
+  try {
+    const comCategoria = await temColuna("whatsapp_respostas_rapidas", "categoria");
+    let criados = 0;
+    for (const m of modelos.MODELOS_PADRAO) {
+      const [ins] = comCategoria
+        ? await db.query("INSERT IGNORE INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto, categoria) VALUES (?, ?, ?, ?, ?)", [req.empresa_id, m.atalho, m.titulo, m.texto, m.categoria])
+        : await db.query("INSERT IGNORE INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto) VALUES (?, ?, ?, ?)", [req.empresa_id, m.atalho, m.titulo, m.texto]);
+      criados += ins.affectedRows || 0;
+    }
+    res.json({ success: true, criados });
+  } catch (err) {
+    erro500(res, err, "Erro ao criar os modelos padrão");
   }
 };
 
