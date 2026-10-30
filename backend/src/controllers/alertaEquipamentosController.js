@@ -1,5 +1,6 @@
 // Alertas de equipamento offline por WhatsApp (config + estado). Permissao 'mikrotiks' e recurso 'whatsapp' (ver server.js).
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const auto = require("../services/whatsappAutomacao");
 const al = require("../utils/alertaEquipamentos");
 const { enviarMensagemEstrita } = require("./whatsappController");
@@ -54,7 +55,7 @@ exports.testar = async (req, res) => {
     await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "alerta_equipamento_teste", status: "ok" });
     res.json({ success: true });
   } catch (err) {
-    const msg = err.response?.data?.message || err.message || "Erro ao enviar";
+    const msg = erroEvolution(err);
     res.status(502).json({ error: `Não foi possível enviar o teste: ${String(msg).slice(0, 150)}` });
   }
 };

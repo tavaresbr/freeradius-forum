@@ -202,3 +202,14 @@ test('SAIR de quem nao e lead entra na lista nao perturbe (origem sair)', async 
   const np = require('../../src/utils/naoPerturbe');
   assert.strictEqual(await np.adicionar(7, '5593988887777', { origem: 'sair' }), true);
 });
+
+test('erroEvolution: extrai o motivo real do corpo da Evolution em vez de "status code 400"', () => {
+  const { erroEvolution } = require('../../src/utils/erroEvolution');
+  const e = (data, status = 400) => Object.assign(new Error('Request failed with status code ' + status), { response: { status, data } });
+  assert.strictEqual(erroEvolution(e({ response: { message: [{ jid: 'x', exists: false, number: '1' }] } })), 'Esse número não tem WhatsApp');
+  assert.strictEqual(erroEvolution(e({ response: { message: ['Connection Closed'] } })), 'Connection Closed');
+  assert.strictEqual(erroEvolution(e({ message: 'instance not connected' })), 'instance not connected');
+  assert.match(erroEvolution(e({}, 404)), /Instância/);
+  assert.match(erroEvolution(e({}, 401)), /Chave de API/);
+  assert.strictEqual(erroEvolution(new Error('boom')), 'boom');
+});

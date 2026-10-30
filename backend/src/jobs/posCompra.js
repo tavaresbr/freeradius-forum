@@ -4,6 +4,7 @@
 // Telefone so pelo cadastro (pagamento/lead por cliente_id ou CPF; nunca por MAC). 1 envio por pagamento.
 const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("../services/whatsappNotify");
@@ -69,7 +70,7 @@ async function processarEmpresa({ empresaId, pos }, dormirFn) {
       await enviarMensagemEstrita(telefone, mensagem, empresaId);
       await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "pos_compra", referencia_id: p.id, status: "ok" });
     } catch (err) {
-      const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
+      const msg = String(erroEvolution(err)).slice(0, 500);
       await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "pos_compra", referencia_id: p.id, status: "erro", erro_msg: msg });
     }
     enviados++;

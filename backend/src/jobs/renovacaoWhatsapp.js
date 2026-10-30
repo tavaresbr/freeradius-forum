@@ -5,6 +5,7 @@
 // compra e etapa (UNIQUE), no maximo 1 por telefone a cada 20 h, 5 por empresa por rodada.
 const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("../services/whatsappNotify");
@@ -87,7 +88,7 @@ async function processarEmpresa({ empresaId, ren }, dormirFn) {
         await enviarMensagemEstrita(telefone, mensagem, empresaId);
         await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "renovacao", referencia_id: c.id, status: "ok" });
       } catch (err) {
-        const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
+        const msg = String(erroEvolution(err)).slice(0, 500);
         await db.query("UPDATE whatsapp_cobrancas SET status = 'erro' WHERE empresa_id = ? AND pagamento_id = ? AND etapa = ?", [empresaId, c.id, etapa]).catch(() => {});
         await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "renovacao", referencia_id: c.id, status: "erro", erro_msg: msg });
       }

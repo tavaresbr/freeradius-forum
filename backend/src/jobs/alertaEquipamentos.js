@@ -3,6 +3,7 @@
 // driver, guarda o estado em equipamento_status e avisa os telefones da config so apos N falhas SEGUIDAS (1 aviso por queda
 // + 1 aviso de volta). Nunca derruba o servidor: erro de um equipamento nao impede os outros.
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
@@ -51,7 +52,7 @@ async function avisar(empresaId, telefones, mensagem, dormirFn) {
       await enviarMensagemEstrita(telefones[i], mensagem, empresaId);
       await gravarLog({ empresa_id: empresaId, telefone: telefones[i], mensagem, contexto_tipo: "alerta_equipamento", status: "ok" });
     } catch (err) {
-      const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
+      const msg = String(erroEvolution(err)).slice(0, 500);
       await gravarLog({ empresa_id: empresaId, telefone: telefones[i], mensagem, contexto_tipo: "alerta_equipamento", status: "erro", erro_msg: msg });
     }
     if (i < telefones.length - 1) await dormirFn(intervalo());
