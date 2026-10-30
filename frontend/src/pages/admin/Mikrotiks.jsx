@@ -130,7 +130,7 @@ export default function Mikrotiks() {
   const [scanData, setScanData] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [wizardConfig, setWizardConfig] = useState({
-    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", criarBridge: false, portasBridge: []
+    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", onLogout: "", criarBridge: false, portasBridge: []
   });
 
   const abrirWizard = async (id) => {
@@ -139,7 +139,7 @@ export default function Mikrotiks() {
     setScanData(null);
     setShowWizard(true);
     setWizardStep(0);
-    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", criarBridge: false, portasBridge: [] });
+    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "", onLogout: "", criarBridge: false, portasBridge: [] });
 
     try {
       const res = await fetch(`/api/mikrotiks/${id}/scan`, {
@@ -177,6 +177,7 @@ export default function Mikrotiks() {
         body: JSON.stringify({
           ...wizardConfig,
           dnsSeguro: wizardConfig.dnsSeguro === "ligar" ? true : wizardConfig.dnsSeguro === "desligar" ? false : undefined,
+          onLogout: wizardConfig.onLogout === "ligar" ? true : wizardConfig.onLogout === "desligar" ? false : undefined,
           criarBridge: wizardConfig.criarBridge === true,
           portasBridge: wizardConfig.criarBridge ? wizardConfig.portasBridge : [],
         }),
@@ -870,6 +871,21 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     <option value="desligar">Desligar (volta ao DNS padrão)</option>
                   </select>
                   <p className="text-xs text-gray-600 mt-1">Aparelho com DNS fixo ou DNS seguro no navegador contorna o filtro.</p>
+                </div>
+
+                {/* on-logout */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Derrubar o aparelho do Wi-Fi ao fim da sessão</label>
+                  <select
+                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    value={wizardConfig.onLogout}
+                    onChange={(e) => setWizardConfig({ ...wizardConfig, onLogout: e.target.value })}
+                  >
+                    <option value="">Não alterar (padrão)</option>
+                    <option value="ligar">Ligar</option>
+                    <option value="desligar">Desligar</option>
+                  </select>
+                  <p className="text-xs text-gray-600 mt-1">Ao acabar o tempo, remove o aparelho do Wi-Fi para ele reconectar e abrir o portal. Só age se o aparelho não tiver outra sessão ativa; não sobrescreve um on-logout já existente.</p>
                 </div>
 
                 {/* Tamanho da rede */}

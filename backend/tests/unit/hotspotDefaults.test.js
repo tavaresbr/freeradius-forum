@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { HOTSPOT_PADROES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge } = require('../../src/utils/hotspotSetup');
+const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout } = require('../../src/constants/hotspotDefaults');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -261,4 +261,73 @@ test('assistente: bridge preparada ANTES do passo 0 e falha para o envio', () =>
   const iPasso0 = src.indexOf('// === 0. Interface nao pode ser porta de bridge');
   assert.ok(iBridge > 0 && iBridge < iPasso0);
   assert.match(src.slice(iBridge, iPasso0), /if \(!b\.ok\)[\s\S]*addStep\("bridge", "erro"[\s\S]*return \{ success: false/);
+});
+
+// ---- on-logout opcional ----
+function roteadorLogout(perfis) {
+  const escritas = [];
+  return {
+    escritas,
+    print: async () => perfis,
+    write: async (caminho, args) => { escritas.push({ caminho, args }); return []; },
+  };
+}
+
+test('scriptOnLogout: marcador, espera, checagem de sessao ativa e so lease dinamico', () => {
+  const s = scriptOnLogout();
+  assert.ok(s.startsWith(ON_LOGOUT_HOTSPOT.marcador));
+  assert.match(s, /:delay 5s/);
+  assert.match(s, /hotspot active find where mac-address=\$mac\]\] = 0/);
+  assert.match(s, /dynamic=yes/);
+  assert.match(s, /wireless registration-table/);
+  assert.match(s, /wifi registration-table/);
+});
+
+test('configurarOnLogout: ligar com perfil vazio grava o script', async () => {
+  const r = roteadorLogout([{ name: 'default', 'on-logout': '' }]);
+  const out = await configurarOnLogout({ ligar: true, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.strictEqual(r.escritas.length, 1);
+  assert.ok(r.escritas[0].args.some((a) => a.startsWith('=on-logout=') && a.includes(ON_LOGOUT_HOTSPOT.marcador)));
+});
+
+test('configurarOnLogout: script alheio nao e sobrescrito nem apagado', async () => {
+  for (const ligar of [true, false]) {
+    const r = roteadorLogout([{ name: 'default', 'on-logout': '/log info outro' }]);
+    const out = await configurarOnLogout({ ligar, print: r.print, write: r.write });
+    assert.strictEqual(out.status, 'aviso');
+    assert.strictEqual(r.escritas.length, 0);
+  }
+});
+
+test('configurarOnLogout: ligar com o nosso regrava; desligar limpa so o nosso', async () => {
+  const nosso = [{ name: 'default', 'on-logout': scriptOnLogout() }];
+  let r = roteadorLogout(nosso);
+  await configurarOnLogout({ ligar: true, print: r.print, write: r.write });
+  assert.strictEqual(r.escritas.length, 1);
+  r = roteadorLogout(nosso);
+  const out = await configurarOnLogout({ ligar: false, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'ok');
+  assert.deepStrictEqual(r.escritas[0].args, ['=numbers=default', '=on-logout=']);
+  r = roteadorLogout([{ name: 'default', 'on-logout': '' }]);
+  await configurarOnLogout({ ligar: false, print: r.print, write: r.write });
+  assert.strictEqual(r.escritas.length, 0);
+});
+
+test('configurarOnLogout: leitura vazia ou com erro avisa sem escrever', async () => {
+  let r = roteadorLogout([]);
+  let out = await configurarOnLogout({ ligar: true, print: r.print, write: r.write });
+  assert.strictEqual(out.status, 'aviso');
+  assert.strictEqual(r.escritas.length, 0);
+  r = roteadorLogout([]);
+  out = await configurarOnLogout({ ligar: true, print: async () => { throw new Error('x'); }, write: r.write });
+  assert.strictEqual(out.status, 'aviso');
+  assert.strictEqual(r.escritas.length, 0);
+});
+
+test('assistente so aplica on-logout com true/false e nao entra em aplicarPadroesHotspot', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.match(src, /config\.onLogout === true \|\| config\.onLogout === false/);
+  const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
+  assert.ok(!/onLogout|on-logout/.test(ap.slice(0, ap.indexOf('module.exports'))));
 });

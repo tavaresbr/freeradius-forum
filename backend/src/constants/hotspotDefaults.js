@@ -35,4 +35,26 @@ const BRIDGE_HOTSPOT = {
   maxPortas: 12,
 };
 
-module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT };
+// on-logout opcional (assistente): ao fim da sessao remove o lease DHCP dinamico e a associacao Wi-Fi do
+// aparelho para ele reconectar e o sistema reabrir o portal. Espera e so age se o MAC nao tiver outra
+// sessao ativa (re-login legitimo, ex. trial PIX -> pago, nao pode derrubar o cliente).
+const ON_LOGOUT_HOTSPOT = {
+  marcador: "# apex-on-logout",
+  espera: "5s",
+};
+
+function scriptOnLogout() {
+  return [
+    ON_LOGOUT_HOTSPOT.marcador,
+    `:delay ${ON_LOGOUT_HOTSPOT.espera}`,
+    ':local mac [:tostr $"mac-address"]',
+    ':local ip [:tostr $address]',
+    ':if ([:len [/ip hotspot active find where mac-address=$mac]] = 0) do={',
+    '  :do { /ip dhcp-server lease remove [find where address=$ip and mac-address=$mac and dynamic=yes] } on-error={ }',
+    '  :do { /interface wireless registration-table remove [find where mac-address=$mac] } on-error={ }',
+    '  :do { /interface wifi registration-table remove [find where mac-address=$mac] } on-error={ }',
+    '}',
+  ].join("\n");
+}
+
+module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout };
