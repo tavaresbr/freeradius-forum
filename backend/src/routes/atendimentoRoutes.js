@@ -6,6 +6,7 @@ const au = require("../controllers/atendimentoAutomacaoController");
 const rel = require("../controllers/atendimentoRelatoriosController");
 const contatos = require("../controllers/atendimentoContatosController");
 const np = require("../controllers/naoPerturbeController");
+const mt = require("../controllers/manutencoesController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -83,5 +84,12 @@ router.post("/nao-perturbe/importar", novaConversaLimiter, np.importar);
 router.get("/nao-perturbe", np.listar);
 router.post("/nao-perturbe", np.adicionar);
 router.delete("/nao-perturbe/:id", np.remover);
+
+// Manutencoes programadas (avisos aos clientes por equipamento)
+router.get("/manutencoes", mt.listar);
+router.post("/manutencoes/previa", mt.previa);
+router.post("/manutencoes", mt.criar);
+router.put("/manutencoes/:id", mt.atualizar);
+router.post("/manutencoes/:id/cancelar", mt.cancelar);
 
 module.exports = router;
