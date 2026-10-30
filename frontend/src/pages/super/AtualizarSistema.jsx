@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import ToggleTema from "../../components/ToggleTema";
 
 export default function AtualizarSistema() {
   const { user, isSuperAdmin, logout } = useAuth();
@@ -220,7 +221,7 @@ export default function AtualizarSistema() {
       : 0;
 
   return (
-    <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
+    <div className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -228,7 +229,8 @@ export default function AtualizarSistema() {
             <h1 className="text-3xl font-bold text-white">Atualizar Sistema</h1>
             <p className="text-gray-500 mt-1">Verifique e aplique atualizacoes da plataforma</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <ToggleTema className="text-gray-400" />
             <Link
               to="/super"
               className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm"

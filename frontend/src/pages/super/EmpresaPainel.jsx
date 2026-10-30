@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { useAuth } from "../../contexts/AuthContext";
+import ToggleTema from "../../components/ToggleTema";
 import CartaoMetrica from "../../components/super/CartaoMetrica";
 
 const moeda = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -169,11 +170,11 @@ export default function EmpresaPainel() {
   };
 
   if (estado === "carregando" && !dados) {
-    return <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-500 p-8">Carregando empresa...</div>;
+    return <div className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-500 p-8">Carregando empresa...</div>;
   }
   if (estado === "erro" && !dados) {
     return (
-      <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-8">
+      <div className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-300 p-8">
         <p className="text-red-400 mb-4">{erroCarga}</p>
         <button onClick={carregar} className={`${botao} bg-blue-600 text-white mr-3`}>Tentar de novo</button>
         <button onClick={() => navigate("/super")} className={`${botao} bg-gray-700 text-gray-300`}>Voltar</button>
@@ -191,7 +192,7 @@ export default function EmpresaPainel() {
   );
 
   return (
-    <div ref={raizRef} className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
+    <div ref={raizRef} className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Cabecalho */}
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -207,7 +208,8 @@ export default function EmpresaPainel() {
               <span className="text-gray-400">Cliente há {dados.cliente_ha} (desde {data(empresa.criado_em)})</span>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <ToggleTema className="text-gray-400" />
             <button onClick={acessar} className={`${botao} bg-blue-600 text-white hover:bg-blue-500`}>Acessar painel</button>
             <Link to={`/super/empresas?editar=${empresa.id}`} className={`${botao} border border-gray-700 text-gray-300 hover:bg-gray-800`}>Editar cadastro</Link>
           </div>
