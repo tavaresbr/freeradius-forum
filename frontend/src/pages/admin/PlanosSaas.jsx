@@ -5,7 +5,7 @@ import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
 import { totalDoPeriodo } from "../../utils/periodoPlano";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [], desconto_3m: "", desconto_6m: "", desconto_12m: "" };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [], desconto_3m: "", desconto_6m: "", desconto_12m: "", aplicar_todos: false };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
   ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
@@ -63,7 +63,7 @@ export default function PlanosSaas() {
       method: editId ? "PUT" : "POST", headers, body: JSON.stringify(form),
     });
     const dados = await res.json().catch(() => ({}));
-    if (res.ok) { setForm(null); setEditId(null); setCopiaDe(null); setMsg(dados.aviso || ""); carregar(); } else setMsg(dados.message || "Erro ao salvar plano");
+    if (res.ok) { setForm(null); setEditId(null); setCopiaDe(null); setMsg(dados.aviso || (dados.aplicados != null ? `Descontos aplicados a ${dados.aplicados} plano(s).` : "")); carregar(); } else setMsg(dados.message || "Erro ao salvar plano");
   };
 
   const remover = async (id) => {
@@ -266,7 +266,10 @@ export default function PlanosSaas() {
                   ))}
                 </div>
                 <div className="col-span-2" data-testid="descontos-periodo">
-                  <span className="block text-sm text-gray-400 mb-1">Desconto por período de contrato (%)</span>
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-1">
+                    <span className="text-sm text-gray-400">Desconto por período de contrato (%)</span>
+                    <label className="flex items-center gap-2 text-xs text-gray-300" title="Planos grátis ficam de fora"><input type="checkbox" disabled={!!form.gratis} checked={!!form.aplicar_todos} onChange={(e) => setForm({ ...form, aplicar_todos: e.target.checked })} /> Aplicar a todos os planos</label>
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[3, 6, 12].map((m) => {
                       const k = `desconto_${m}m`;

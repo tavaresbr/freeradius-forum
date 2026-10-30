@@ -479,6 +479,27 @@ async function salvarDescontos(id, b) {
   }
 }
 
+// "Aplicar a todos os planos": copia os 3 descontos para os planos pagos (grátis fica de fora).
+// Devolve quantos planos foram alterados (null = não pedido ou coluna 069 ausente).
+async function aplicarDescontosATodos(b) {
+  if (b.aplicar_todos !== true) return null;
+  const v = [b.desconto_3m, b.desconto_6m, b.desconto_12m].map(normalizarDesconto);
+  const set = "UPDATE saas_planos SET desconto_3m = ?, desconto_6m = ?, desconto_12m = ?";
+  try {
+    try {
+      const [r] = await db.execute(`${set} WHERE COALESCE(gratis, 0) = 0`, v);
+      return r.affectedRows;
+    } catch (err) {
+      if (!colunaAusente(err) || !/gratis/.test(err.message || "")) throw err;
+      const [r] = await db.execute(set, v);
+      return r.affectedRows;
+    }
+  } catch (err) {
+    if (!colunaAusente(err)) throw err;
+    return null;
+  }
+}
+
 // Itens mostrados no card do plano no site (migration 068). null = padrao.
 const ITENS_SITE = ["todos_recursos", "teste", "whatsapp", "campanhas", "exportacao", "dominio", "portais"];
 function exibirSite(v) {
@@ -512,8 +533,9 @@ exports.criarPlano = async (req, res) => {
       }
     }
     aviso = aviso || (await salvarDescontos(r.insertId, req.body || {})) || undefined;
+    const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
-    res.status(201).json({ id: r.insertId, aviso });
+    res.status(201).json({ id: r.insertId, aviso, aplicados });
   } catch (err) {
     console.error("[assinatura] criarPlano:", err.message);
     res.status(500).json({ message: `Erro ao salvar plano: ${err.message}` });
@@ -540,8 +562,9 @@ exports.atualizarPlano = async (req, res) => {
       }
     }
     aviso = aviso || (await salvarDescontos(req.params.id, req.body || {})) || undefined;
+    const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
-    res.json({ message: "Plano atualizado", aviso });
+    res.json({ message: "Plano atualizado", aviso, aplicados });
   } catch (err) {
     console.error("[assinatura] atualizarPlano:", err.message);
     res.status(500).json({ message: `Erro ao salvar plano: ${err.message}` });
