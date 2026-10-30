@@ -432,7 +432,7 @@ export default function SuperDashboard() {
                   return (
                     <tr key={e.id} className="border-b border-gray-800/50 hover:bg-[#252b3b]">
                       <td className="p-4 font-medium text-white">
-                        {e.nome}
+                        <Link to={`/super/empresas/${e.id}`} className="hover:text-blue-400 hover:underline">{e.nome}</Link>
                         {(alertas[e.id] || []).map((a) => (
                           <span
                             key={a.tipo}

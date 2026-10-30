@@ -41,6 +41,7 @@ import TutorialGrandstream from "./pages/admin/TutorialGrandstream";
 import TutorialUnifi from "./pages/admin/TutorialUnifi";
 import CampanhaEditor from "./pages/admin/CampanhaEditor";
 import Empresas from "./pages/super/Empresas";
+import EmpresaPainel from "./pages/super/EmpresaPainel";
 import SuperDashboard from "./pages/super/SuperDashboard";
 import Backups from "./pages/super/Backups";
 import AtualizarSistema from "./pages/super/AtualizarSistema";
@@ -157,6 +158,7 @@ function App() {
       {/* Super Admin */}
       <Route path="/super" element={<RotaDono><SuperDashboard /></RotaDono>} />
       <Route path="/super/empresas" element={<RotaDono><Empresas /></RotaDono>} />
+      <Route path="/super/empresas/:id" element={<RotaDono><EmpresaPainel /></RotaDono>} />
       <Route path="/super/atualizar" element={<RotaDono><AtualizarSistema /></RotaDono>} />
       <Route path="/super/backups" element={<RotaDono><Backups /></RotaDono>} />
       <Route path="/super/publicar-atualizacao" element={<RotaDono><PublicarAtualizacao /></RotaDono>} />

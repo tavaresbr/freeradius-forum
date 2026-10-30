@@ -632,12 +632,17 @@ exports.obterAssinaturaEmpresa = async (req, res) => {
 };
 
 // Liberar/estender/cancelar manualmente: { plano_id?, status?, estender_dias?, vence_em? }
-exports.definirAssinaturaEmpresa = async (req, res) => {
-  const empresaId = Number(req.params.empresaId);
-  const { plano_id, status, estender_dias, vence_em } = req.body;
+// Erros de validacao saem como Error com .status (400/404); usado pela rota abaixo e pelo painel da empresa.
+async function aplicarAssinatura(empresaId, { plano_id, status, estender_dias, vence_em } = {}) {
+  const falha = (codigo, msg) => Object.assign(new Error(msg), { status: codigo });
   const [[emp]] = await db.execute("SELECT id FROM empresas WHERE id = ?", [empresaId]);
-  if (!emp) return res.status(404).json({ message: "Empresa não encontrada" });
-  if (status && !["trial", "ativa", "vencida", "cancelada"].includes(status)) return res.status(400).json({ message: "Status inválido" });
+  if (!emp) throw falha(404, "Empresa não encontrada");
+  if (status && !["trial", "ativa", "vencida", "cancelada"].includes(status)) throw falha(400, "Status inválido");
+  let dataVence = null;
+  if (vence_em) {
+    dataVence = new Date(vence_em);
+    if (Number.isNaN(dataVence.getTime())) throw falha(400, "Data inválida");
+  }
 
   await db.execute("INSERT INTO assinaturas (empresa_id, status) VALUES (?, 'ativa') ON DUPLICATE KEY UPDATE empresa_id = empresa_id", [empresaId]);
   if (plano_id) await db.execute("UPDATE assinaturas SET plano_id = ? WHERE empresa_id = ?", [plano_id, empresaId]);
@@ -651,10 +656,8 @@ exports.definirAssinaturaEmpresa = async (req, res) => {
     );
     if (!status) await db.execute("UPDATE assinaturas SET status = 'ativa' WHERE empresa_id = ? AND status IN ('vencida','cancelada')", [empresaId]);
   }
-  if (vence_em) {
-    const d = new Date(vence_em);
-    if (Number.isNaN(d.getTime())) return res.status(400).json({ message: "Data inválida" });
-    await db.execute("UPDATE assinaturas SET vence_em = ?, ultimo_aviso = NULL WHERE empresa_id = ?", [d, empresaId]);
+  if (dataVence) {
+    await db.execute("UPDATE assinaturas SET vence_em = ?, ultimo_aviso = NULL WHERE empresa_id = ?", [dataVence, empresaId]);
   }
   // Plano gratis nunca vence: sem vencimento e sempre ativa (cancelada continua cancelada).
   const [[atual]] = await db.execute(
@@ -667,7 +670,18 @@ exports.definirAssinaturaEmpresa = async (req, res) => {
     await db.execute("UPDATE assinaturas SET vence_em = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE empresa_id = ? AND status = 'ativa' AND vence_em IS NULL", [empresaId]);
   }
   invalidar(empresaId);
-  res.json({ message: "Assinatura atualizada" });
+}
+
+exports.aplicarAssinatura = aplicarAssinatura;
+
+exports.definirAssinaturaEmpresa = async (req, res) => {
+  try {
+    await aplicarAssinatura(Number(req.params.empresaId), req.body || {});
+    res.json({ message: "Assinatura atualizada" });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    throw err;
+  }
 };
 
 exports.obterPlataformaConfig = async (req, res) => {
