@@ -314,6 +314,7 @@ export default function AdminLayout({ children }) {
         // Sem `key` de proposito: child sem key passa no filtro de permissoes (visivel a todos)
         { title: "Tutorial Omada", path: `${basePath}/tutorial-omada` },
         { title: "Tutorial Grandstream", path: `${basePath}/tutorial-grandstream` },
+        { title: "Tutorial Intelbras", path: `${basePath}/tutorial-intelbras` },
         { title: "Tutorial UniFi", path: `${basePath}/tutorial-unifi` },
       ]
     },

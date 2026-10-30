@@ -39,9 +39,10 @@ function detectPortalVendor(query = {}, opts = {}) {
     else vendor = "mikrotik";
   }
 
-  if (vendor === "grandstream") {
+  // Intelbras usa o mesmo formato de query do GWN (TODO(hardware): confirmar no AP).
+  if (vendor === "grandstream" || vendor === "intelbras") {
     return {
-      vendor: "grandstream",
+      vendor,
       mac: q.client_mac || q.clientMac || q.mac || null,
       ip: q.client_ip || q.clientIp || q.ip || null,
       apMac: q.ap_mac || q.apMac || null,

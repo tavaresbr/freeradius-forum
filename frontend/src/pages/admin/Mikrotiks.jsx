@@ -10,6 +10,7 @@ const TIPO_BADGES = {
   omada: { label: "Omada", cls: "bg-emerald-900/30 border-emerald-800/50 text-emerald-400" },
   unifi: { label: "UniFi", cls: "bg-indigo-900/30 border-indigo-800/50 text-indigo-400" },
   grandstream: { label: "Grandstream", cls: "bg-rose-900/30 border-rose-800/50 text-rose-400" },
+  intelbras: { label: "Intelbras", cls: "bg-teal-900/30 border-teal-800/50 text-teal-400" },
 };
 
 export default function Mikrotiks() {

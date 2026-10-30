@@ -21,7 +21,7 @@ function reloadFreeRADIUS() {
 }
 console.log("DEBUG obterInformacoes:", typeof obterInformacoes);
 
-const TIPOS_GATEWAY = ["mikrotik", "omada", "unifi", "grandstream"];
+const TIPOS_GATEWAY = ["mikrotik", "omada", "unifi", "grandstream", "intelbras"];
 
 /**
  * Valida e normaliza o body do cadastro/edicao de gateway por tipo.
@@ -63,6 +63,11 @@ function validarGateway(body) {
     if (!senha) {
       return { erro: "Informe o Secret RADIUS (o mesmo cadastrado no RADIUS do controller GWN)." };
     }
+  } else if (tipo === "intelbras") {
+    // AP standalone: External RADIUS puro, so o secret e' obrigatorio.
+    if (!senha) {
+      return { erro: "Informe o Secret RADIUS (o mesmo cadastrado no RADIUS do AP Intelbras)." };
+    }
   }
 
   return {
@@ -101,7 +106,8 @@ function usaRadius(dados) {
   // via /:id/omada-api) e' so' captura de dados, nao muda o fluxo do portal.
   // Grandstream tambem: External Web Portal + External RADIUS (o login_url do
   // GWN valida no nosso FreeRADIUS).
-  return dados.tipo === "mikrotik" || dados.tipo === "omada" || dados.tipo === "grandstream";
+  // Intelbras (AP standalone) idem.
+  return dados.tipo === "mikrotik" || dados.tipo === "omada" || dados.tipo === "grandstream" || dados.tipo === "intelbras";
 }
 
 /**
