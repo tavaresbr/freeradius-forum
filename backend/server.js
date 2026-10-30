@@ -682,6 +682,12 @@ cron.schedule('17 * * * *', () => {
   renovacaoWhatsapp().catch(err => console.error('[CRON] Erro renovacaoWhatsapp:', err.message));
 });
 
+// Avisos de manutencao programada por WhatsApp (so quando ha manutencao agendada com "avisar clientes")
+const manutencoes = require('./src/jobs/manutencoes');
+cron.schedule('*/5 * * * *', () => {
+  manutencoes().catch(err => console.error('[CRON] Erro manutencoes:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

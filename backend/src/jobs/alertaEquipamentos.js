@@ -65,6 +65,13 @@ async function processarEmpresa({ empresaId, alerta }, { dormirFn, testarFn, ago
   const [equipamentos] = await db.query("SELECT * FROM mikrotiks WHERE empresa_id = ? ORDER BY id", [empresaId]);
   const [estados] = await db.query("SELECT * FROM equipamento_status WHERE empresa_id = ?", [empresaId]);
   const porId = new Map(estados.map((e) => [e.mikrotik_id, e]));
+  // Equipamentos em manutencao programada agora (equipamento_id NULL = todos): a equipe ja sabe, nao alerta.
+  let emManutencao = new Set();
+  let todosEmManutencao = false;
+  try {
+    const [mm] = await db.query("SELECT equipamento_id FROM manutencoes WHERE empresa_id = ? AND status IN ('agendada','em_andamento') AND inicio_em <= NOW() AND fim_em >= NOW()", [empresaId]);
+    for (const x of mm) { if (x.equipamento_id) emManutencao.add(x.equipamento_id); else todosEmManutencao = true; }
+  } catch { /* sem a tabela (migration 064): nada suprimido */ }
   let avisos = 0;
   for (const eq of equipamentos) {
     const t = await testar(eq, testarFn);
@@ -74,7 +81,8 @@ async function processarEmpresa({ empresaId, alerta }, { dormirFn, testarFn, ago
     // O aviso so conta como feito se o WhatsApp esta conectado: senao a proxima rodada tenta de novo.
     let estado = r.estado;
     let acao = r.acao;
-    if (acao && !conectada) { acao = null; estado = { ...estado, alertado: atual ? atual.alertado : false, falha_desde: estado.falha_desde || (atual ? atual.falha_desde : null) }; }
+    const suprimido = todosEmManutencao || emManutencao.has(eq.id); // manutencao programada: a equipe ja sabe
+    if (acao && (!conectada || suprimido)) { acao = null; estado = { ...estado, alertado: atual ? atual.alertado : false, falha_desde: estado.falha_desde || (atual ? atual.falha_desde : null) }; }
     await db.query(
       `INSERT INTO equipamento_status (mikrotik_id, empresa_id, online, falhas, falha_desde, alertado, alertado_em, verificado_em, erro)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
