@@ -26,6 +26,14 @@ export default function ConfiguracaoAsaas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Chave de producao so funciona no ambiente de producao e a de sandbox so no sandbox (so vale p/ chave recem-digitada).
+  const avisoChave =
+    form.api_key.startsWith("$aact_prod_") && form.ambiente === "sandbox"
+      ? "Esta é uma chave de PRODUÇÃO, mas o ambiente está em Sandbox. Troque o ambiente para Produção (ou use uma chave de sandbox)."
+      : form.api_key.startsWith("$aact_hmlg_") && form.ambiente === "producao"
+      ? "Esta é uma chave de SANDBOX, mas o ambiente está em Produção. Troque o ambiente para Sandbox."
+      : "";
+
   const executar = async (fn, okTexto) => {
     setOcupado(true);
     setMsg(null);
@@ -106,6 +114,8 @@ export default function ConfiguracaoAsaas() {
           cliente aguarda.
         </p>
       </div>
+
+      {avisoChave && <p className="text-sm text-yellow-400">{avisoChave}</p>}
 
       {msg && <p className={`text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.texto}</p>}
 
