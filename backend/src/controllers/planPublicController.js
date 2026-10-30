@@ -80,6 +80,14 @@ exports.buscarPlanoPublicoPorId = async (req, res) => {
     plano.pix_trial_enabled = portalConfig.pix_trial_enabled === true;
     plano.pix_trial_duracao_minutos = parseInt(portalConfig.pix_trial_duracao_minutos || 5, 10);
 
+    // Quem processa o cartao: o formulario do Asaas pede CEP/numero e dispensa o fingerprint do Mercado Pago.
+    try {
+      const asaas = require("../utils/asaasClient");
+      plano.cartao_provider = asaas.cartaoAtivo(await asaas.carregarConfig(plano.empresa_id)) ? "asaas" : "mercadopago";
+    } catch (e) {
+      plano.cartao_provider = "mercadopago";
+    }
+
     delete plano._portal_config;
     res.json(plano);
   } catch (err) {

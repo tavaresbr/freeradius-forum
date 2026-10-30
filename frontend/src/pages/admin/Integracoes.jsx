@@ -19,6 +19,12 @@ const CATALOGO = [
     caminho: "mercado-pago",
   },
   {
+    chave: "asaas",
+    nome: "Asaas",
+    descricao: "Cobre o PIX dos planos pagos do portal pela sua conta Asaas, com confirmação automática do pagamento.",
+    caminho: "asaas",
+  },
+  {
     chave: "whatsapp",
     nome: "WhatsApp",
     descricao: "Conecte a instância do WhatsApp, envie mensagens de teste e veja o histórico de envios dos portais.",

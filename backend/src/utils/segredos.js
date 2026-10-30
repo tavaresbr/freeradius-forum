@@ -5,7 +5,7 @@
  */
 const CAMPOS_SECRETOS = [
   "access_token", "client_secret", "webhook_secret", "api_key", "api_secret", "secret",
-  "senha", "password", "api_pass", "gwn_api_key", "gwn_api_secret", "private_key", "token",
+  "senha", "password", "api_pass", "gwn_api_key", "gwn_api_secret", "private_key", "token", "webhook_token",
 ];
 
 const MARCA = "...";
