@@ -85,7 +85,7 @@ exports.validarPublico = async (req, res) => {
     if (!Number.isInteger(planoId) || planoId < 1) return res.status(400).json({ message: c.MSG_INVALIDO });
     const [[plano]] = await db.query("SELECT id, empresa_id, valor FROM planos WHERE id = ?", [planoId]);
     if (!plano) return res.status(400).json({ message: c.MSG_INVALIDO });
-    const r = await c.resolverCupom({ empresaId: plano.empresa_id, plano, codigo: req.body?.codigo, cpf: req.body?.cpf });
+    const r = await c.resolverCupom({ empresaId: plano.empresa_id, plano, codigo: req.body?.codigo, cpf: req.body?.cpf, mac: req.body?.mac, clienteId: req.body?.cliente_id });
     if (!r.ok) return res.status(400).json({ message: c.MSG_INVALIDO });
     res.json({ valor_original: r.valor_original, desconto: r.desconto, valor_final: r.valor_final });
   } catch (err) {

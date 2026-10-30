@@ -171,7 +171,7 @@ export default function Pagamento() {
       const res = await fetch("/api/cupom-portal/validar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plano_id: id, codigo, cpf: cpf || undefined }),
+        body: JSON.stringify({ plano_id: id, codigo, cpf: cpf || undefined, cliente_id: clienteId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setCupomAplicado(null); setCupomMsg(data.message || data.error || "Cupom inválido ou indisponível."); return; }

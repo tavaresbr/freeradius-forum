@@ -10,6 +10,9 @@ import Contatos from "../../components/admin/atendimento/Contatos";
 import Regua from "../../components/admin/atendimento/Regua";
 import Modelos from "../../components/admin/atendimento/Modelos";
 import NaoPerturbe from "../../components/admin/atendimento/NaoPerturbe";
+import Manutencoes from "../../components/admin/atendimento/Manutencoes";
+import AlertasTecnicos from "../../components/admin/atendimento/AlertasTecnicos";
+import Indicacoes from "../../components/admin/atendimento/Indicacoes";
 
 // Cada aba pede uma permissao de modulo (como a API que ela usa).
 const ABAS = [
@@ -17,9 +20,12 @@ const ABAS = [
   { id: "contatos", titulo: "Contatos", modulo: "leads" },
   { id: "regua", titulo: "Régua de cobrança", modulo: "configuracoes" },
   { id: "campanhas", titulo: "Campanhas", modulo: "configuracoes" },
+  { id: "indicacoes", titulo: "Indicações", modulo: "configuracoes" },
   { id: "modelos", titulo: "Modelos", modulo: "leads" },
   { id: "nao-perturbe", titulo: "Não perturbe", modulo: "configuracoes" },
   { id: "relatorios", titulo: "Relatórios", modulo: "leads" },
+  { id: "manutencoes", titulo: "Manutenções", modulo: "configuracoes" },
+  { id: "alertas", titulo: "Alertas técnicos", modulo: "configuracoes" },
 ];
 
 function Campanhas() {
@@ -71,8 +77,11 @@ export default function WhatsAppHub() {
           {atual.id === "contatos" && <Contatos headers={headers} />}
           {atual.id === "regua" && <Regua headers={headers} />}
           {atual.id === "campanhas" && <Campanhas />}
+          {atual.id === "indicacoes" && <Indicacoes headers={headers} />}
           {atual.id === "modelos" && <Modelos headers={headers} />}
           {atual.id === "nao-perturbe" && <NaoPerturbe headers={headers} />}
+          {atual.id === "manutencoes" && <Manutencoes headers={headers} />}
+          {atual.id === "alertas" && <AlertasTecnicos headers={headers} />}
           {atual.id === "relatorios" && <AtendimentoRelatorios embutido />}
         </div>
       </div>

@@ -54,7 +54,11 @@ async function processarEnvio(envio, { dormirFn }) {
   }
 
   // Horario de silencio: so promocoes (aviso operacional e' servico). Fora da janela a fila apenas espera.
-  if (envio.tipo !== "aviso" && (await naoPerturbe.emSilencio(envio.empresa_id, "promocao"))) return;
+  // Aviso operacional e' servico (nao entra no silencio); o aviso de manutencao programada entra como "manutencao".
+  let origem = null;
+  try { origem = (typeof envio.filtros_json === "string" ? JSON.parse(envio.filtros_json) : envio.filtros_json)?.origem || null; } catch { /* filtros ilegiveis */ }
+  const tipoSilencio = envio.tipo !== "aviso" ? "promocao" : (origem === "manutencao" ? "manutencao" : (origem === "alerta" ? "alerta_tecnico" : null));
+  if (tipoSilencio && (await naoPerturbe.emSilencio(envio.empresa_id, tipoSilencio))) return;
 
   const [pendentes] = await db.execute(
     `SELECT id, lead_id, telefone, nome FROM promocao_destinatarios

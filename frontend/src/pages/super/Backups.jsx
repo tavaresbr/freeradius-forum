@@ -129,6 +129,28 @@ export default function Backups() {
     }
   };
 
+  // Pede um link de 60 s e deixa o navegador baixar (streaming, sem carregar o arquivo na memoria da pagina).
+  const handleDownload = async (backup, tipo) => {
+    setMessage(null);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`/api/system-backup/${backup.id}/download-token`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        setMessage({ type: "error", text: data.message || data.error || "Erro ao liberar o download." });
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("Erro ao baixar backup:", err);
+      setMessage({ type: "error", text: "Erro de conexão ao baixar backup." });
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
     try {
@@ -172,6 +194,9 @@ export default function Backups() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Backups do Sistema</h1>
             <p className="text-gray-500 mt-1">Gerencie os backups de banco de dados e arquivos</p>
+            <p className="text-gray-600 text-xs mt-1">
+              Os arquivos baixados contêm dados de todas as empresas e credenciais: guarde em local seguro.
+            </p>
           </div>
           <div className="flex gap-3">
             <button
@@ -268,7 +293,23 @@ export default function Backups() {
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleDownload(backup, "db")}
+                            disabled={backup.db_exists === false}
+                            title={backup.db_exists === false ? "Arquivo do banco ausente" : "Baixar o dump do banco de dados (.sql)"}
+                            className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Baixar banco
+                          </button>
+                          <button
+                            onClick={() => handleDownload(backup, "files")}
+                            disabled={backup.files_exists === false}
+                            title={backup.files_exists === false ? "Arquivo de arquivos ausente" : "Baixar os arquivos do sistema"}
+                            className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Baixar arquivos
+                          </button>
                           <button
                             onClick={() => handleRestore(backup)}
                             disabled={actionLoading || !filesOk}

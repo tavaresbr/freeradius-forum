@@ -6,6 +6,9 @@ const au = require("../controllers/atendimentoAutomacaoController");
 const rel = require("../controllers/atendimentoRelatoriosController");
 const contatos = require("../controllers/atendimentoContatosController");
 const np = require("../controllers/naoPerturbeController");
+const mt = require("../controllers/manutencoesController");
+const atec = require("../controllers/alertasTecnicosController");
+const indic = require("../controllers/indicacoesController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -83,5 +86,28 @@ router.post("/nao-perturbe/importar", novaConversaLimiter, np.importar);
 router.get("/nao-perturbe", np.listar);
 router.post("/nao-perturbe", np.adicionar);
 router.delete("/nao-perturbe/:id", np.remover);
+
+// Manutencoes programadas (avisos aos clientes por equipamento)
+router.get("/manutencoes", mt.listar);
+router.post("/manutencoes/previa", mt.previa);
+router.post("/manutencoes", mt.criar);
+router.put("/manutencoes/:id", mt.atualizar);
+router.post("/manutencoes/:id/cancelar", mt.cancelar);
+
+// Alertas tecnicos (feed, config e aviso aos clientes)
+router.get("/alertas-tecnicos/config", atec.obterConfig);
+router.put("/alertas-tecnicos/config", atec.salvarConfig);
+router.get("/alertas-tecnicos", atec.listar);
+router.post("/alertas-tecnicos", atec.criarManual);
+router.post("/alertas-tecnicos/:id/resolver", atec.resolver);
+router.get("/alertas-tecnicos/:id/previa", atec.previa);
+router.post("/alertas-tecnicos/:id/avisar-clientes", atendimentoEnvioLimiter, atec.avisarClientes);
+
+// Indicacoes (cliente indica cliente)
+router.get("/indicacoes/config", indic.obterConfig);
+router.put("/indicacoes/config", indic.salvarConfig);
+router.get("/indicacoes", indic.listar);
+router.post("/indicacoes/convite", atendimentoEnvioLimiter, indic.convite);
+router.post("/indicacoes/:id/revogar", indic.revogar);
 
 module.exports = router;

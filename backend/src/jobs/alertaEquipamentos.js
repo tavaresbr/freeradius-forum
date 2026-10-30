@@ -9,6 +9,8 @@ const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/wh
 const { gravarLog } = require("../services/whatsappNotify");
 const { getDriver } = require("../gateways");
 const al = require("../utils/alertaEquipamentos");
+const at = require("../utils/alertaTecnico");
+const alertasTecnicos = require("../services/alertasTecnicos");
 
 const TIMEOUT_MS = 10000;
 const INTERVALO_MS = [3000, 8000];
@@ -34,13 +36,16 @@ async function testar(eq, testarFn) {
 const padraoTeste = (eq) => getDriver(eq).testConnection(eq);
 
 async function empresasComAlerta() {
-  const [rows] = await db.query("SELECT empresa_id, config_json FROM empresa_configs WHERE config_type = 'whatsapp' AND config_json LIKE '%alerta_equipamentos%'");
+  const [rows] = await db.query("SELECT empresa_id, config_json FROM empresa_configs WHERE config_type = 'whatsapp' AND (config_json LIKE '%alerta_equipamentos%' OR config_json LIKE '%alertas_tecnicos%')");
   const out = [];
   for (const r of rows) {
     try {
       const cfg = typeof r.config_json === "string" ? JSON.parse(r.config_json) : r.config_json;
       const alerta = al.mesclarComPadrao(cfg?.alerta_equipamentos);
-      if (cfg?.alerta_equipamentos && alerta.ativo && alerta.telefones.length) out.push({ empresaId: r.empresa_id, alerta });
+      const tec = at.mesclarComPadrao(cfg?.alertas_tecnicos);
+      const equipe = !!(cfg?.alerta_equipamentos && alerta.ativo && alerta.telefones.length); // aviso por WhatsApp a equipe
+      const monitora = !!(cfg?.alertas_tecnicos && tec.ativo); // feed de alertas tecnicos (+ aviso aos clientes se ligado)
+      if (equipe || monitora) out.push({ empresaId: r.empresa_id, alerta, tec, equipe, monitora });
     } catch { /* config ilegivel: ignora */ }
   }
   return out;
@@ -59,22 +64,38 @@ async function avisar(empresaId, telefones, mensagem, dormirFn) {
   }
 }
 
-async function processarEmpresa({ empresaId, alerta }, { dormirFn, testarFn, agora }) {
+async function processarEmpresa({ empresaId, alerta, tec, equipe, monitora }, { dormirFn, testarFn, agora }) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
   const conectada = await instanciaConectada(empresaId);
+  if (monitora) { // feed: so painel (nao envia nada)
+    if (!conectada) await alertasTecnicos.abrir(empresaId, { tipo: "whatsapp_desconectado", titulo: "WhatsApp desconectado", detalhes: "Nenhuma mensagem automática sai até reconectar em Integrações.", severidade: "media" });
+    else await alertasTecnicos.resolver(empresaId, { tipo: "whatsapp_desconectado" });
+  }
   const [equipamentos] = await db.query("SELECT * FROM mikrotiks WHERE empresa_id = ? ORDER BY id", [empresaId]);
   const [estados] = await db.query("SELECT * FROM equipamento_status WHERE empresa_id = ?", [empresaId]);
   const porId = new Map(estados.map((e) => [e.mikrotik_id, e]));
+  // Equipamentos em manutencao programada agora (equipamento_id NULL = todos): a equipe ja sabe, nao alerta.
+  let emManutencao = new Set();
+  let todosEmManutencao = false;
+  try {
+    const [mm] = await db.query("SELECT equipamento_id FROM manutencoes WHERE empresa_id = ? AND status IN ('agendada','em_andamento') AND inicio_em <= NOW() AND fim_em >= NOW()", [empresaId]);
+    for (const x of mm) { if (x.equipamento_id) emManutencao.add(x.equipamento_id); else todosEmManutencao = true; }
+  } catch { /* sem a tabela (migration 064): nada suprimido */ }
   let avisos = 0;
   for (const eq of equipamentos) {
     const t = await testar(eq, testarFn);
     const salvo = porId.get(eq.id);
     const atual = salvo ? { online: !!salvo.online, falhas: salvo.falhas, alertado: !!salvo.alertado, falha_desde: salvo.falha_desde } : null;
     const r = al.proximoEstado(atual, t.ok, agora, alerta);
+    const suprimido = todosEmManutencao || emManutencao.has(eq.id); // manutencao programada: a equipe ja sabe
+    if (monitora) { // feed de alertas tecnicos (queda confirmada apos N falhas seguidas; volta quando responde)
+      if (t.ok) await alertasTecnicos.resolver(empresaId, { tipo: "equipamento_offline", equipamentoId: eq.id });
+      else if (r.estado.falhas >= alerta.falhas && !suprimido) await alertasTecnicos.abrir(empresaId, { tipo: "equipamento_offline", equipamentoId: eq.id, titulo: `${eq.nome} offline`, detalhes: t.erro ? `Sem resposta: ${t.erro}` : null });
+    }
     // O aviso so conta como feito se o WhatsApp esta conectado: senao a proxima rodada tenta de novo.
     let estado = r.estado;
     let acao = r.acao;
-    if (acao && !conectada) { acao = null; estado = { ...estado, alertado: atual ? atual.alertado : false, falha_desde: estado.falha_desde || (atual ? atual.falha_desde : null) }; }
+    if (acao && (!conectada || suprimido || !equipe)) { acao = null; estado = { ...estado, alertado: atual ? atual.alertado : false, falha_desde: estado.falha_desde || (atual ? atual.falha_desde : null) }; }
     await db.query(
       `INSERT INTO equipamento_status (mikrotik_id, empresa_id, online, falhas, falha_desde, alertado, alertado_em, verificado_em, erro)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -84,6 +105,9 @@ async function processarEmpresa({ empresaId, alerta }, { dormirFn, testarFn, ago
     );
     if (acao === "offline") { await avisar(empresaId, alerta.telefones, al.mensagemOffline(eq, estado.falha_desde || agora), dormirFn); avisos++; }
     else if (acao === "voltou") { await avisar(empresaId, alerta.telefones, al.mensagemVoltou(eq, r.fora_min), dormirFn); avisos++; }
+  }
+  if (monitora && conectada) { // aviso automatico aos clientes (desligado por padrao; ritmo e silencio no worker/servico)
+    try { await alertasTecnicos.avisarPendentes(empresaId, tec); } catch (err) { console.error(`[alerta-equipamentos] avisos aos clientes empresa ${empresaId}:`, err.message); }
   }
   return avisos;
 }
