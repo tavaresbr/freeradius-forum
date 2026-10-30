@@ -14,6 +14,8 @@ const { validarCPF } = require("../utils/cpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { resolverCupom, registrarUsoCupom, MSG_INVALIDO: MSG_CUPOM_INVALIDO } = require("../utils/cupons");
+const asaas = require("../utils/asaasClient");
+const { confirmarPagamentoAsaas } = require("../services/asaasPagamento");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
 async function resolveEmpresaId(planoId) {
@@ -68,9 +70,12 @@ exports.gerarPagamento = async (req, res) => {
     if (!plano) return res.status(404).json({ message: "Plano não encontrado." });
 
     const empresaId = plano.empresa_id;
-    const mpConfig = await getMpConfig(empresaId);
+    // Provedor do PIX por empresa: Asaas quando ligado em Integracoes, senao Mercado Pago.
+    const asaasCfg = await asaas.carregarConfig(empresaId);
+    const usarAsaas = asaas.pixAtivo(asaasCfg);
+    const mpConfig = usarAsaas ? null : await getMpConfig(empresaId);
 
-    if (!mpConfig?.access_token) {
+    if (!usarAsaas && !mpConfig?.access_token) {
       return res.status(400).json({ message: "Configuração do Mercado Pago não encontrada." });
     }
 
@@ -82,11 +87,19 @@ exports.gerarPagamento = async (req, res) => {
     // Buscar CPF e telefone do cliente
     let clienteCpf = cpf || null;
     let clienteTelefone = null;
+    let clienteNome = null;
+    let clienteEmail = null;
     if (cliente_id) {
       // Endpoint publico: o lead tem que ser da empresa do plano (cliente_id e' sequencial)
-      const [[cliente]] = await db.query("SELECT cpf, telefone FROM leads WHERE id = ? AND empresa_id = ?", [cliente_id, empresaId]);
+      const [[cliente]] = await db.query("SELECT cpf, telefone, nome, email FROM leads WHERE id = ? AND empresa_id = ?", [cliente_id, empresaId]);
       if (!clienteCpf && cliente?.cpf) clienteCpf = cliente.cpf.replace(/\D/g, "");
       clienteTelefone = cliente?.telefone || null;
+      clienteNome = cliente?.nome || null;
+      clienteEmail = cliente?.email || null;
+    }
+    // O Asaas exige CPF/CNPJ do cliente para gerar o PIX.
+    if (usarAsaas && (!clienteCpf || !validarCPF(String(clienteCpf).replace(/\D/g, "")))) {
+      return res.status(400).json({ message: "Informe um CPF válido para pagar com PIX." });
     }
 
     // Pagar pelo CPF de quem tem acesso ativo em outro aparelho troca a senha e funde o
@@ -111,7 +124,7 @@ exports.gerarPagamento = async (req, res) => {
     const portalIdPix = (await validarPortalDaEmpresa(portalIdInput, empresaId))
       || await resolvePortalIdByMikrotik(plano.mikrotik_id, empresaId);
 
-    const payerEmail = resolvePayerEmail(mpConfig);
+    const payerEmail = usarAsaas ? null : resolvePayerEmail(mpConfig);
 
     // 1. INSERT pagamento ANTES de chamar MP (igual o cartao faz).
     //    Permite usar o id interno como external_reference e o webhook
@@ -124,6 +137,33 @@ exports.gerarPagamento = async (req, res) => {
     const pagId = insertPix.insertId;
     if (cupomAplicado) {
       await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+    }
+
+    if (usarAsaas) {
+      try {
+        const customer = await asaas.obterOuCriarCliente(asaasCfg, {
+          cpf: String(clienteCpf).replace(/\D/g, ""), nome: clienteNome, email: clienteEmail,
+        });
+        const cobranca = await asaas.criarCobrancaPix(asaasCfg, {
+          customer,
+          valor: valorCobrar / 100,
+          descricao: plano.nome,
+          referencia: `pag_${pagId}_emp_${empresaId}`,
+          vencimento: asaas.hojeBrasilia(),
+        });
+        // O id da cobranca fica em mp_pagamento_id: status/trial/polling do portal casam por essa coluna.
+        await db.query("UPDATE pagamentos SET mp_pagamento_id = ?, gateway = 'asaas' WHERE id = ?", [cobranca.id, pagId]);
+        return res.json({
+          qr_code_base64: cobranca.qr_code_base64,
+          copia_cola: cobranca.copia_cola,
+          mp_pagamento_id: cobranca.id,
+          pagamento_id: pagId,
+        });
+      } catch (err) {
+        console.error("Erro ao gerar pagamento Asaas:", err.message);
+        await db.query("UPDATE pagamentos SET status = 'rejected', observacao = ? WHERE id = ?", [String(err.message).slice(0, 250), pagId]);
+        return res.status(502).json({ message: "Não foi possível gerar o PIX. Tente novamente em instantes." });
+      }
     }
 
     // 2. Monta notification_url baseado no host do request.
@@ -1059,6 +1099,21 @@ exports.verificarStatusPagamento = async (req, res) => {
 
     if (!pagamento.length) {
       return res.status(404).json({ status: "nao_encontrado" });
+    }
+
+    // Asaas: se o webhook se perder, confirma direto na API (a fonte da verdade) e recarrega o status.
+    if (pagamento[0].status === "aguardando") {
+      try {
+        const [[gw]] = await db.query("SELECT gateway FROM pagamentos WHERE id = ?", [pagamento[0].id]);
+        if (gw?.gateway === "asaas") {
+          await confirmarPagamentoAsaas(pagamento[0].id);
+          const [[atual]] = await db.query("SELECT status FROM pagamentos WHERE id = ?", [pagamento[0].id]);
+          if (atual) pagamento[0].status = atual.status;
+        }
+      } catch (err) {
+        // sem coluna gateway (migration 064 pendente) ou Asaas fora do ar: segue com o status gravado
+        console.warn("[status] confirmacao Asaas indisponivel:", err.message);
+      }
     }
 
     const {

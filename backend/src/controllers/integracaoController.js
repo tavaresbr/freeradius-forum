@@ -43,6 +43,14 @@ async function mercadoPagoConfigurado(empresaId) {
   }
 }
 
+async function asaasConfigurado(empresaId) {
+  try {
+    return require("../utils/asaasClient").pixAtivo(await require("../utils/asaasClient").carregarConfig(empresaId));
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/integracoes  — resumo das integracoes da empresa (token nunca sai)
 exports.listar = async (req, res) => {
   try {
@@ -50,6 +58,7 @@ exports.listar = async (req, res) => {
     res.json([
       { chave: "sgp", nome: "SGP", configurado: cfg.configurado },
       { chave: "mercadopago", nome: "Mercado Pago", configurado: await mercadoPagoConfigurado(req.empresa_id) },
+      { chave: "asaas", nome: "Asaas", configurado: await asaasConfigurado(req.empresa_id) },
     ]);
   } catch (err) {
     console.error("Erro ao listar integrações:", err.message);

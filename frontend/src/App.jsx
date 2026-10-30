@@ -22,6 +22,7 @@ import Integracoes from "./pages/admin/Integracoes";
 import DominioProprio from "./pages/admin/DominioProprio";
 import IntegracaoSgp from "./pages/admin/IntegracaoSgp";
 import IntegracaoMercadoPago from "./pages/admin/IntegracaoMercadoPago";
+import IntegracaoAsaas from "./pages/admin/IntegracaoAsaas";
 import Compliance from "./pages/admin/Compliance";
 import EmpresasAdmin from "./pages/admin/EmpresasAdmin";
 import Assinatura from "./pages/admin/Assinatura";
@@ -139,6 +140,7 @@ function App() {
       <Route path="/admin/:empresaSlug/integracoes" element={<RotaPrivada><Integracoes /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/integracoes/sgp" element={<RotaPrivada><IntegracaoSgp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/integracoes/mercado-pago" element={<RotaPrivada><IntegracaoMercadoPago /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/integracoes/asaas" element={<RotaPrivada><IntegracaoAsaas /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/compliance" element={<RotaPrivada><Compliance /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/usuarios" element={<RotaPrivada><Usuarios /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/grupos-permissao" element={<RotaPrivada><GruposPermissao /></RotaPrivada>} />

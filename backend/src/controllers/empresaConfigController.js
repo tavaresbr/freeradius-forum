@@ -7,6 +7,7 @@ const CAMPOS_POR_TIPO = {
   mercadopago: ["public_key", "access_token", "client_id", "client_secret", "email_pagador", "webhook_secret"],
   efi: ["client_id", "client_secret", "chave_pix", "ambiente", "certificado_nome"],
   whatsapp: ["api_url", "api_key", "instance_name"],
+  asaas: ["api_key", "ambiente", "ativo"],
 };
 const WHATSAPP_SO_PLATAFORMA = ["api_url", "api_key"];
 
@@ -14,7 +15,7 @@ const WHATSAPP_SO_PLATAFORMA = ["api_url", "api_key"];
 exports.obterConfig = async (req, res) => {
   try {
     const { tipo } = req.params;
-    const validTypes = ["mercadopago", "efi", "whatsapp"];
+    const validTypes = ["mercadopago", "efi", "whatsapp", "asaas"];
     if (!validTypes.includes(tipo)) {
       return res.status(400).json({ message: "Tipo de configuração inválido" });
     }
@@ -43,7 +44,7 @@ exports.obterConfig = async (req, res) => {
 exports.salvarConfig = async (req, res) => {
   try {
     const { tipo } = req.params;
-    const validTypes = ["mercadopago", "efi", "whatsapp"];
+    const validTypes = ["mercadopago", "efi", "whatsapp", "asaas"];
     if (!validTypes.includes(tipo)) {
       return res.status(400).json({ message: "Tipo de configuração inválido" });
     }
@@ -67,6 +68,12 @@ exports.salvarConfig = async (req, res) => {
         for (const k of WHATSAPP_SO_PLATAFORMA) delete recebido[k];
         if (recebido.instance_name && recebido.instance_name !== `empresa_${req.empresa_id}`) delete recebido.instance_name;
       }
+    }
+    if (tipo === "asaas") {
+      if (recebido.ambiente !== undefined && !["sandbox", "producao"].includes(recebido.ambiente)) {
+        return res.status(400).json({ message: "Ambiente inválido" });
+      }
+      if (recebido.ativo !== undefined) recebido.ativo = recebido.ativo === "1" ? "1" : "0";
     }
     const novo = preservarSegredos({ ...atual, ...recebido }, atual);
     const configJson = JSON.stringify(novo);

@@ -24,6 +24,7 @@ router.post("/gerar-cartao", ...cartaoHotspotLimiters, cupomFalhasLimiter, gerar
 router.post("/mp-device-session/:tipo", proxyDeviceSession);
 router.get("/mp-public-key", obterPublicKey);
 router.post("/notificacao", notificacaoWebhook);
+router.post("/asaas/webhook/:token", require("../controllers/asaasController").webhook);
 router.get("/status", verificarStatusPagamento);
 router.post("/pix-trial", liberarPixTrial);
 
