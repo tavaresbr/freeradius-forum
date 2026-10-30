@@ -1,5 +1,6 @@
 const db = require("../../db");
 const axios = require("axios");
+const asaasClient = require("../utils/asaasClient");
 const { mascararObjeto, preservarSegredos } = require("../utils/segredos");
 
 // Campos aceitos por tipo (evita gravar JSON arbitrario) e, no WhatsApp, o que so a plataforma pode definir.
@@ -90,6 +91,9 @@ exports.salvarConfig = async (req, res) => {
     res.json({ success: true, message: "Configuração salva com sucesso" });
   } catch (err) {
     console.error("Erro ao salvar config:", err);
+    if (req.params.tipo === "asaas" && asaasClient.erroEnumAsaas(err)) {
+      return res.status(503).json({ message: asaasClient.MSG_MIGRATION_068 });
+    }
     res.status(500).json({ message: "Erro ao salvar configuração" });
   }
 };

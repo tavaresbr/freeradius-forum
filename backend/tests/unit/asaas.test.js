@@ -215,3 +215,28 @@ test('cartao asaas: sem CEP/numero, sem telefone ou sem e-mail do cadastro => 40
     assert.deepStrictEqual(estado.criou, []);
   }
 });
+
+// ---------- diagnostico da migration 068 ----------
+test('erroEnumAsaas: reconhece o erro do MySQL do ENUM sem asaas (e so ele)', () => {
+  limpar();
+  const { erroEnumAsaas } = carregar('src/utils/asaasClient.js', { db: criarDb() });
+  assert.strictEqual(erroEnumAsaas({ errno: 1265, sqlMessage: "Data truncated for column 'config_type' at row 1" }), true);
+  assert.strictEqual(erroEnumAsaas({ code: 'WARN_DATA_TRUNCATED' }), true);
+  assert.strictEqual(erroEnumAsaas({ sqlMessage: "Incorrect enum value 'asaas' for column config_type" }), true);
+  assert.strictEqual(erroEnumAsaas(new Error('ECONNREFUSED')), false);
+  assert.strictEqual(erroEnumAsaas(null), false);
+});
+
+test('salvar config asaas com ENUM sem o valor => 503 com a instrucao da migration 068', async () => {
+  const db = criarDb(async (sql) => {
+    if (/^SELECT config_json/.test(sql)) return [[undefined]];
+    if (/INSERT INTO empresa_configs/.test(sql)) throw Object.assign(new Error('x'), { errno: 1265, sqlMessage: "Data truncated for column 'config_type' at row 1" });
+    return undefined;
+  });
+  limpar();
+  const mod = carregar('src/controllers/empresaConfigController.js', { db });
+  const res = criarRes(); const un = silencia();
+  try { await mod.salvarConfig(criarReq({ params: { tipo: 'asaas' }, empresa_id: 3, user: { role: 'owner' }, body: { api_key: 'k', ambiente: 'sandbox', ativo: '1' } }), res); } finally { un(); }
+  assert.strictEqual(res.statusCode, 503);
+  assert.match(res.body.message, /068_empresa_configs_asaas/);
+});

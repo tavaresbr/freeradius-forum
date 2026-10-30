@@ -43,6 +43,18 @@ function cartaoAtivo(cfg) {
   return !!(cfg && cfg.api_key && String(cfg.cartao) === "1");
 }
 
+const MSG_MIGRATION_068 =
+  "O banco ainda não aceita a configuração do Asaas: rode `node migrations/068_empresa_configs_asaas.js` no servidor e reinicie o backend.";
+
+/** O erro do MySQL e' o ENUM empresa_configs.config_type sem 'asaas' (migration 068 pendente)? */
+function erroEnumAsaas(err) {
+  const msg = String(err?.sqlMessage || err?.message || "");
+  return (
+    err?.errno === 1265 || err?.errno === 1366 || err?.code === "WARN_DATA_TRUNCATED" || err?.code === "ER_TRUNCATED_WRONG_VALUE" ||
+    /config_type/.test(msg)
+  );
+}
+
 /** Grava o webhook_token da empresa (gerado uma vez) e o devolve. */
 async function obterOuCriarWebhookToken(empresaId) {
   const cfg = (await carregarConfig(empresaId)) || {};
@@ -194,6 +206,6 @@ function hojeBrasilia() {
 const STATUS_PAGO = ["CONFIRMED", "RECEIVED"];
 
 module.exports = {
-  AsaasError, carregarConfig, pixAtivo, cartaoAtivo, obterOuCriarWebhookToken, empresaPorWebhookToken,
+  AsaasError, MSG_MIGRATION_068, erroEnumAsaas, carregarConfig, pixAtivo, cartaoAtivo, obterOuCriarWebhookToken, empresaPorWebhookToken,
   saldo, obterOuCriarCliente, criarCobrancaPix, criarCobrancaCartao, obterCobranca, registrarWebhook, hojeBrasilia, STATUS_PAGO,
 };
