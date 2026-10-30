@@ -98,3 +98,22 @@ test('salvar plano grava os descontos; sem a migration 069 avisa', async () => {
   await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 5, desconto_12m: 20 }, params: { id: 1 } }, res2);
   assert.match(res2.body.aviso, /069/);
 });
+
+test('atualizarPlano com aplicar_todos copia os descontos so para planos pagos', async () => {
+  chamadas.length = 0;
+  respostas = [{ re: /WHERE COALESCE\(gratis, 0\) = 0/, out: [{ affectedRows: 4 }] }];
+  const res = { status(c) { res.code = c; return res; }, json(b) { res.body = b; } };
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 59.9, desconto_3m: 5, desconto_6m: 10, desconto_12m: 20, aplicar_todos: true }, params: { id: 2 } }, res);
+  const geral = chamadas.find((c) => /COALESCE\(gratis, 0\) = 0/.test(c.sql));
+  assert.deepStrictEqual(geral.params, [5, 10, 20]);
+  assert.strictEqual(res.body.aplicados, 4);
+});
+
+test('atualizarPlano sem aplicar_todos nao mexe nos outros planos', async () => {
+  chamadas.length = 0;
+  respostas = [];
+  const res = { status(c) { res.code = c; return res; }, json(b) { res.body = b; } };
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 59.9, desconto_3m: 5, aplicar_todos: false }, params: { id: 2 } }, res);
+  assert.ok(!chamadas.some((c) => /COALESCE\(gratis/.test(c.sql)));
+  assert.strictEqual(res.body.aplicados, null);
+});
