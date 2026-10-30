@@ -23,7 +23,7 @@ function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = 
 const MK = { ip: '10.8.0.3', usuario: 'admin', senha: 'x', porta: 8728 };
 
 test('padroes: valores combinados (keepalive 30m, interim 5m, timeout RADIUS 3s)', () => {
-  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '30m', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s' });
+  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '30m', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s', addressesPerMac: '1', dhcpLeaseTime: '1h' });
 });
 
 test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e cliente RADIUS', async () => {
@@ -36,7 +36,29 @@ test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e clien
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=keepalive-timeout=30m'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=idle-timeout=none'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=numbers=default'));
-  assert.deepStrictEqual(por['/radius/set'], ['=.id=*1', '=timeout=3s']);
+  const radiusSets = conn.chamadas.filter((c) => c.caminho === '/radius/set').map((c) => c.args);
+  assert.deepStrictEqual(radiusSets[0], ['=.id=*1', '=timeout=3s']);
+  assert.deepStrictEqual(radiusSets[1], ['=.id=*1', '=require-message-auth=no']);
+});
+
+test('require-message-auth: RouterOS v6 (parametro inexistente) nao conta como falha', async () => {
+  const conn = conexaoFalsa();
+  const orig = conn.write;
+  conn.write = async (c, a = []) => {
+    if (c === '/radius/set' && a.includes('=require-message-auth=no')) throw new Error('unknown parameter require-message-auth');
+    return orig(c, a);
+  };
+  const r = await aplicarPadroesHotspot(MK, () => conn);
+  assert.strictEqual(r.ok, true);
+});
+
+test('aplicarPadroesHotspot poe addresses-per-mac=1 em cada hotspot server', async () => {
+  const conn = conexaoFalsa();
+  const orig = conn.write;
+  conn.write = async (c, a = []) => (c === '/ip/hotspot/print' ? (conn.chamadas.push({ caminho: c, args: a }), [{ '.id': '*9' }]) : orig(c, a));
+  await aplicarPadroesHotspot(MK, () => conn);
+  const set = conn.chamadas.find((c) => c.caminho === '/ip/hotspot/set');
+  assert.deepStrictEqual(set.args, ['=.id=*9', '=addresses-per-mac=1']);
 });
 
 test('um ajuste que falha nao impede os outros e a falha e reportada', async () => {
