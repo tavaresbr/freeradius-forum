@@ -231,6 +231,7 @@ Migrations recentes (006-026, conforme `backend/migrations/`):
 | 065 | `065_alertas_tecnicos` | tabela `alertas_tecnicos` (empresa_id, tipo equipamento_offline/equipamento_online/whatsapp_desconectado/manual, equipamento_id, severidade, titulo, detalhes, criado_em, resolvido_em, clientes_avisados_em, clientes_volta_avisados_em); idempotente. **Rodar no servidor antes de usar Alertas tecnicos** (sem ela o feed mostra o aviso, criar responde 503 e o job ignora a tabela ausente) |
 | 066 | `066_indicacoes` | tabelas `indicacoes_codigos` (UNIQUE empresa_id+codigo e empresa_id+lead_id) e `indicacoes` (indicador, `indicado_cpf` so digitos, `pagamento_id` UNIQUE, status cadastrada/comprou/recompensada/recusada, `cupom_indicador_id`, motivo) e `pagamentos.indicacao_id`; idempotente. **Rodar no servidor antes de ligar as indicacoes** (sem ela o codigo de indicacao nunca e aceito e a aba mostra o aviso; cupons comuns seguem normais) |
 | 067 | `067_pagamentos_gateway` | `pagamentos.gateway` VARCHAR(20) (`'asaas'`; NULL = Mercado Pago) e `pagamentos.mp_pagamento_id` vira VARCHAR(64) (o id da cobranca Asaas e' `pay_xxxx`); idempotente. **Rodar no servidor antes de ligar o Asaas** (sem ela o PIX Asaas falha ao gravar `gateway`) |
+| 068 | `068_empresa_configs_asaas` | `empresa_configs.config_type` (ENUM) ganha `'asaas'`, preservando os valores existentes; idempotente. **Rodar no servidor ANTES de salvar a config do Asaas** (sem ela salvar a chave e gerar a URL do webhook falham no banco) |
 
 ---
 
