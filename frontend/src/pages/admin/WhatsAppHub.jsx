@@ -9,6 +9,7 @@ import AtendimentoRelatorios from "./AtendimentoRelatorios";
 import Contatos from "../../components/admin/atendimento/Contatos";
 import Regua from "../../components/admin/atendimento/Regua";
 import Modelos from "../../components/admin/atendimento/Modelos";
+import NaoPerturbe from "../../components/admin/atendimento/NaoPerturbe";
 
 // Cada aba pede uma permissao de modulo (como a API que ela usa).
 const ABAS = [
@@ -17,6 +18,7 @@ const ABAS = [
   { id: "regua", titulo: "Régua de cobrança", modulo: "configuracoes" },
   { id: "campanhas", titulo: "Campanhas", modulo: "configuracoes" },
   { id: "modelos", titulo: "Modelos", modulo: "leads" },
+  { id: "nao-perturbe", titulo: "Não perturbe", modulo: "configuracoes" },
   { id: "relatorios", titulo: "Relatórios", modulo: "leads" },
 ];
 
@@ -70,6 +72,7 @@ export default function WhatsAppHub() {
           {atual.id === "regua" && <Regua headers={headers} />}
           {atual.id === "campanhas" && <Campanhas />}
           {atual.id === "modelos" && <Modelos headers={headers} />}
+          {atual.id === "nao-perturbe" && <NaoPerturbe headers={headers} />}
           {atual.id === "relatorios" && <AtendimentoRelatorios embutido />}
         </div>
       </div>

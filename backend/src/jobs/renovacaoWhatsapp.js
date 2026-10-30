@@ -3,6 +3,7 @@
 // pega a ULTIMA compra paga do cliente (sem compra posterior) que venceu ha D dias (janela de 2 dias: ligar o recurso
 // nunca dispara o historico antigo). Telefone so pelo cadastro (pagamento/lead), nunca por MAC. 1 lembrete por
 // compra e etapa (UNIQUE), no maximo 1 por telefone a cada 20 h, 5 por empresa por rodada.
+const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
@@ -54,6 +55,7 @@ async function reservar(empresaId, pagamentoId, etapa, telefone, status) {
 
 async function processarEmpresa({ empresaId, ren }, dormirFn) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
+  if (await naoPerturbe.emSilencio(empresaId, "renovacao")) return 0; // adia: nada e reservado
   if (!(await instanciaConectada(empresaId))) return 0;
   const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [empresaId]).catch(() => [[{}]]);
   let enviados = 0;
@@ -73,6 +75,7 @@ async function processarEmpresa({ empresaId, ren }, dormirFn) {
       if (lead && Number(lead.whatsapp_optout) === 1) { await reservar(empresaId, c.id, etapa, null, "ignorada"); continue; }
       const telefone = normalizarTelefone(c.telefone || lead?.telefone);
       if (!telefone) { await reservar(empresaId, c.id, etapa, null, "ignorada"); continue; }
+      if (await naoPerturbe.estaBloqueado(empresaId, telefone)) { await reservar(empresaId, c.id, etapa, null, "ignorada"); continue; }
       if (telefonesRodada.has(telefone)) continue; // tenta de novo na proxima rodada
       const [recente] = await db.query("SELECT id FROM whatsapp_cobrancas WHERE empresa_id = ? AND telefone = ? AND status = 'enviada' AND enviado_em >= DATE_SUB(NOW(), INTERVAL 20 HOUR) LIMIT 1", [empresaId, telefone]);
       if (recente.length) continue; // no maximo 1 lembrete por telefone a cada 20 h

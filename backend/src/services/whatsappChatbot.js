@@ -4,9 +4,9 @@
 // ja respondeu nas ultimas 12 h, nem conversa entregue a um humano (12 h). Nunca expoe CPF.
 const crypto = require("crypto");
 const db = require("../../db");
+const naoPerturbe = require("../utils/naoPerturbe");
 const { temRecurso } = require("../utils/assinatura");
 const { temColuna } = require("../utils/schemaCache");
-const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const { verificarSaldoRadius } = require("../utils/leadUtils");
 const { linkPlanosDoCliente } = require("../utils/linkPlanos");
 const horario = require("../utils/horarioAtendimento");
@@ -113,14 +113,7 @@ async function processar(empresaId, conversaId, m, agora = new Date()) {
   );
   if (Number(humano.n) > 0) return { tratada: false, motivo: "equipe_respondeu" };
 
-  if (conv.telefone) {
-    const expr = await exprTelefoneFim10();
-    const [opt] = await db.query(
-      `SELECT id FROM leads WHERE empresa_id = ? AND whatsapp_optout = 1 AND telefone IS NOT NULL AND ${expr} = ? LIMIT 1`,
-      [empresaId, String(conv.telefone).replace(/\D/g, "").slice(-10)]
-    ).catch(() => [[]]);
-    if (opt.length) return { tratada: false, motivo: "optout" };
-  }
+  if (conv.telefone && (await naoPerturbe.estaBloqueado(empresaId, conv.telefone))) return { tratada: false, motivo: "optout" };
 
   const q = bot.interpretar(m.texto, cfg);
   const menuRecente = conv.chatbot_estado === "menu" && conv.chatbot_em && (agora - new Date(conv.chatbot_em)) < JANELA_MENU_MIN * 60 * 1000;

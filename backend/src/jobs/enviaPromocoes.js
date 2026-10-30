@@ -7,6 +7,7 @@ const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/wh
 const { gravarLog } = require("../services/whatsappNotify");
 const { montarMensagem } = require("../utils/promocaoWhatsapp");
 const { montarMensagemAviso } = require("../utils/avisoOperacional");
+const naoPerturbe = require("../utils/naoPerturbe");
 
 const LOTE = 4;
 const INTERVALO_MIN_MS = 8000;
@@ -51,6 +52,9 @@ async function processarEnvio(envio, { dormirFn }) {
     return;
   }
 
+  // Horario de silencio: so promocoes (aviso operacional e' servico). Fora da janela a fila apenas espera.
+  if (envio.tipo !== "aviso" && (await naoPerturbe.emSilencio(envio.empresa_id, "promocao"))) return;
+
   const [pendentes] = await db.execute(
     `SELECT id, lead_id, telefone, nome FROM promocao_destinatarios
       WHERE envio_id = ? AND status = 'pendente' ORDER BY id ASC LIMIT ${LOTE}`,
@@ -77,6 +81,12 @@ async function processarEnvio(envio, { dormirFn }) {
         );
         continue;
       }
+    }
+
+    // Lista "nao perturbe" (inclui quem nao e' lead e pediu SAIR)
+    if (await naoPerturbe.estaBloqueado(envio.empresa_id, d.telefone)) {
+      await db.execute("UPDATE promocao_destinatarios SET status = 'ignorado', erro_msg = ? WHERE id = ?", ["Pediu para não receber", d.id]);
+      continue;
     }
 
     // Aviso operacional nao leva o rodape de marketing ("responda SAIR")

@@ -1,8 +1,8 @@
 // Pesquisa de satisfacao do atendimento: pede nota de 1 a 5 ao resolver e captura a resposta (24 h).
 const db = require("../../db");
+const naoPerturbe = require("../utils/naoPerturbe");
 const { temRecurso } = require("../utils/assinatura");
 const { temColuna } = require("../utils/schemaCache");
-const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const auto = require("./whatsappAutomacao");
 
 const JANELA_HORAS = 24;
@@ -16,12 +16,7 @@ async function pedirNota(empresaId, adminId, conversa) {
     const cfg = await auto.obterAutomacao(empresaId);
     if (!cfg.pedir_nota) return { enviada: false, motivo: "desligado" };
     if (!(await temRecurso(empresaId, "whatsapp"))) return { enviada: false, motivo: "sem_recurso" };
-    const expr = await exprTelefoneFim10();
-    const [opt] = await db.query(
-      `SELECT id FROM leads WHERE empresa_id = ? AND whatsapp_optout = 1 AND telefone IS NOT NULL AND ${expr} = ? LIMIT 1`,
-      [empresaId, String(conversa.telefone).replace(/\D/g, "").slice(-10)]
-    ).catch(() => [[]]);
-    if (opt.length) return { enviada: false, motivo: "optout" };
+    if (conversa.telefone && (await naoPerturbe.estaBloqueado(empresaId, conversa.telefone))) return { enviada: false, motivo: "optout" };
     // Reserva (1 pedido por conversa a cada 24 h; limpa a nota anterior)
     const [claim] = await db.query(
       `UPDATE whatsapp_conversas SET satisfacao_pedida_em = NOW(), nota_satisfacao = NULL, satisfacao_em = NULL

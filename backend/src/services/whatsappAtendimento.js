@@ -2,6 +2,7 @@
 const crypto = require("crypto");
 const axios = require("axios");
 const db = require("../../db");
+const naoPerturbe = require("../utils/naoPerturbe");
 const { normalizarTelefone } = require("./whatsappNotify");
 const wpp = require("../controllers/whatsappController");
 const midiaUtil = require("../utils/whatsappMidia");
@@ -127,6 +128,7 @@ async function aplicarOptOut(empresaId, m) {
   if (m.fromMe || m.tipo !== "texto" || !m.telefone) return;
   if (m.texto.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "") !== "sair") return;
   try {
+    await naoPerturbe.adicionar(empresaId, m.telefone, { motivo: "Respondeu SAIR", origem: "sair" });
     const expr = await exprTelefoneFim10();
     await db.query(
       `UPDATE leads SET whatsapp_optout = 1, whatsapp_optout_em = NOW()

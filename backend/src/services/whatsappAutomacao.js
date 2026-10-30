@@ -1,9 +1,9 @@
 // Automacao do atendimento WhatsApp: boas-vindas / fora do horario e fila de mensagens agendadas.
 // Config por empresa em empresa_configs 'whatsapp' -> config_json.automacao (desligada por padrao).
 const db = require("../../db");
+const naoPerturbe = require("../utils/naoPerturbe");
 const { temRecurso } = require("../utils/assinatura");
 const { temColuna } = require("../utils/schemaCache");
-const { exprTelefoneFim10 } = require("../utils/telefoneBusca");
 const horario = require("../utils/horarioAtendimento");
 
 const JANELA_HORAS = 12; // no maximo 1 resposta automatica por conversa a cada 12 h (anti-loop)
@@ -71,14 +71,7 @@ async function responderAutomatico(empresaId, conversaId, m, agora = new Date())
   );
   if (Number(humano.n) > 0) return { enviada: false, motivo: "ja_respondida" };
 
-  if (conv.telefone) {
-    const expr = await exprTelefoneFim10();
-    const [opt] = await db.query(
-      `SELECT id FROM leads WHERE empresa_id = ? AND whatsapp_optout = 1 AND telefone IS NOT NULL AND ${expr} = ? LIMIT 1`,
-      [empresaId, String(conv.telefone).replace(/\D/g, "").slice(-10)]
-    ).catch(() => [[]]);
-    if (opt.length) return { enviada: false, motivo: "optout" };
-  }
+  if (conv.telefone && (await naoPerturbe.estaBloqueado(empresaId, conv.telefone))) return { enviada: false, motivo: "optout" };
 
   // Reserva a janela de forma atomica (duas mensagens quase juntas geram uma unica resposta)
   const [claim] = await db.query(

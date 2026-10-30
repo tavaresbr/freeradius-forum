@@ -2,6 +2,7 @@
 // Por empresa com o aviso LIGADO (config_json.aviso_expiracao, desligado por padrao): sessoes abertas cujo tempo
 // restante (mesma conta do sqlcounter / tela Sessoes Ativas) e' <= N minutos. Telefone so pelo cadastro do CPF
 // (username = CPF; nunca por MAC). 1 aviso por ciclo de liberacao (UNIQUE empresa+username+liberado_em).
+const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
@@ -57,6 +58,7 @@ async function empresasComAviso() {
 
 async function processarEmpresa({ empresaId, aviso }, dormirFn) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
+  if (await naoPerturbe.emSilencio(empresaId, "aviso_expiracao")) return 0;
   if (!(await instanciaConectada(empresaId))) return 0;
   const [sessoes] = await db.query(SQL_SESSOES, [empresaId, empresaId, aviso.minutos * 60]);
   const host = await portalHostDaEmpresa(empresaId);
@@ -73,6 +75,7 @@ async function processarEmpresa({ empresaId, aviso }, dormirFn) {
     if (!lead || Number(lead.whatsapp_optout) === 1) continue;
     const telefone = normalizarTelefone(lead.telefone);
     if (!telefone) continue;
+    if (await naoPerturbe.estaBloqueado(empresaId, telefone)) continue;
     // Reserva o aviso deste ciclo (idempotente: outra rodada/processo nao repete)
     const [claim] = await db.query(
       "INSERT IGNORE INTO whatsapp_avisos_expiracao (empresa_id, username, liberado_em) VALUES (?, ?, COALESCE(?, '1970-01-01 00:00:00'))",

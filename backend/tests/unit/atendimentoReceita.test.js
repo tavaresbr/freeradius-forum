@@ -54,7 +54,7 @@ const rodar = async ({ cfg, sessoes = [sessao], lead = { id: 9, nome: 'Maria Sou
   const db = criarDb((sql) => {
     if (/FROM empresa_configs WHERE config_type = 'whatsapp'/.test(sql)) return [[{ empresa_id: 7, config_json: JSON.stringify({ aviso_expiracao: cfg }) }]];
     if (/FROM radius_users ru0/.test(sql)) return [sessoes];
-    if (/FROM leads/.test(sql)) return [lead ? [lead] : []];
+    if (/FROM leads/.test(sql) && !/whatsapp_optout = 1/.test(sql)) return [lead ? [lead] : []];
     if (/INSERT IGNORE INTO whatsapp_avisos_expiracao/.test(sql)) return [{ affectedRows: claim }];
     if (/FROM empresas/.test(sql)) return [[{ nome: 'Apex' }]];
   });
