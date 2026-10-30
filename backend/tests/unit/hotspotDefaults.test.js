@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi } = require('../../src/utils/hotspotSetup');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -113,4 +113,52 @@ test('configurarWifiAP: SSID invalido, pacote sem wireless e erro viram aviso se
 test('ehInterfaceWifi reconhece wlan/wifi e ignora ether', () => {
   assert.ok(ehInterfaceWifi('wlan1')); assert.ok(ehInterfaceWifi('x', 'wlan'));
   assert.ok(!ehInterfaceWifi('ether2', 'ether'));
+});
+
+function roteadorDns({ servers = '8.8.8.8,1.1.1.1', rede = true, semDns = false } = {}) {
+  const escritas = [];
+  return {
+    escritas,
+    print: async (c) => {
+      if (c === '/ip/dns/print') return semDns ? [] : [{ servers }];
+      if (c === '/ip/dhcp-server/network/print') return rede ? [{ '.id': '*5', address: '10.5.50.0/24' }] : [];
+      return [];
+    },
+    write: async (c, a) => { escritas.push({ c, a }); return []; },
+  };
+}
+const ARGS_DNS = { gateway: '10.5.50.1', network: '10.5.50.0/24' };
+
+test('DNS seguro ligado: servidores filtrados no roteador e gateway como DNS do DHCP', async () => {
+  const r = roteadorDns();
+  const res = await configurarDnsSeguro({ ligar: true, ...ARGS_DNS, ...r });
+  assert.strictEqual(res.status, 'ok');
+  assert.deepStrictEqual(r.escritas[0], { c: '/ip/dns/set', a: ['=servers=208.67.222.123,208.67.220.123', '=allow-remote-requests=yes'] });
+  assert.deepStrictEqual(r.escritas[1], { c: '/ip/dhcp-server/network/set', a: ['=.id=*5', '=dns-server=10.5.50.1'] });
+});
+
+test('DNS seguro desligado: so reverte se o roteador usa o DNS filtrado', async () => {
+  const filtrado = roteadorDns({ servers: '208.67.222.123,208.67.220.123' });
+  const a = await configurarDnsSeguro({ ligar: false, ...ARGS_DNS, ...filtrado });
+  assert.strictEqual(a.status, 'ok');
+  assert.deepStrictEqual(filtrado.escritas[0].a, ['=servers=8.8.8.8,1.1.1.1', '=allow-remote-requests=yes']);
+  assert.deepStrictEqual(filtrado.escritas[1].a, ['=.id=*5', '=dns-server=8.8.8.8']);
+
+  const manual = roteadorDns({ servers: '9.9.9.9' });
+  const b = await configurarDnsSeguro({ ligar: false, ...ARGS_DNS, ...manual });
+  assert.strictEqual(b.status, 'ok');
+  assert.strictEqual(manual.escritas.length, 0);
+});
+
+test('DNS seguro: sem leitura do DNS ou erro de escrita vira aviso sem lancar', async () => {
+  const sem = roteadorDns({ semDns: true });
+  assert.strictEqual((await configurarDnsSeguro({ ligar: false, ...ARGS_DNS, ...sem })).status, 'aviso');
+  assert.strictEqual(sem.escritas.length, 0);
+  const falha = { ...roteadorDns(), write: async () => { throw new Error('boom'); } };
+  assert.strictEqual((await configurarDnsSeguro({ ligar: true, ...ARGS_DNS, ...falha })).status, 'aviso');
+});
+
+test('assistente so mexe no DNS quando dnsSeguro e true/false', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(src.includes('config.dnsSeguro === true || config.dnsSeguro === false'));
 });

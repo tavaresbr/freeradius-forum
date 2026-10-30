@@ -124,7 +124,7 @@ export default function Mikrotiks() {
   const [scanData, setScanData] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [wizardConfig, setWizardConfig] = useState({
-    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: ""
+    interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: ""
   });
 
   const abrirWizard = async (id) => {
@@ -133,7 +133,7 @@ export default function Mikrotiks() {
     setScanData(null);
     setShowWizard(true);
     setWizardStep(0);
-    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "" });
+    setWizardConfig({ interface: "", localAddress: "10.5.50.1/24", poolName: "hs-pool", poolRange: "10.5.50.2-10.5.50.254", dnsName: DNS_NAME_PADRAO, wifiSsid: "", dnsSeguro: "" });
 
     try {
       const res = await fetch(`/api/mikrotiks/${id}/scan`, {
@@ -168,7 +168,10 @@ export default function Mikrotiks() {
       const res = await fetch(`/api/mikrotiks/${wizardMikrotikId}/enviar-hotspot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(wizardConfig),
+        body: JSON.stringify({
+          ...wizardConfig,
+          dnsSeguro: wizardConfig.dnsSeguro === "ligar" ? true : wizardConfig.dnsSeguro === "desligar" ? false : undefined,
+        }),
       });
 
       const reader = res.body.getReader();
@@ -795,6 +798,21 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     <p className="text-xs text-gray-600 mt-1">Coloca o rádio em modo AP com este nome. Vazio = não altera o Wi-Fi.</p>
                   </div>
                 )}
+
+                {/* DNS seguro */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">DNS seguro (bloqueia conteúdo adulto)</label>
+                  <select
+                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    value={wizardConfig.dnsSeguro}
+                    onChange={(e) => setWizardConfig({ ...wizardConfig, dnsSeguro: e.target.value })}
+                  >
+                    <option value="">Não alterar (padrão)</option>
+                    <option value="ligar">Ligar (OpenDNS FamilyShield)</option>
+                    <option value="desligar">Desligar (volta ao DNS padrão)</option>
+                  </select>
+                  <p className="text-xs text-gray-600 mt-1">Aparelho com DNS fixo ou DNS seguro no navegador contorna o filtro.</p>
+                </div>
 
                 {/* Local Address */}
                 <div>
