@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro } = require('../../src/utils/hotspotSetup');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -161,4 +161,104 @@ test('DNS seguro: sem leitura do DNS ou erro de escrita vira aviso sem lancar', 
 test('assistente so mexe no DNS quando dnsSeguro e true/false', () => {
   const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
   assert.ok(src.includes('config.dnsSeguro === true || config.dnsSeguro === false'));
+});
+
+// --- bridge do hotspot ---
+function roteadorBridge({ interfaces, bridges = [], portas = [], enderecos = [], dhcps = [], wan = [], falhaEscrita = null, naoConfirma = false } = {}) {
+  const itfs = interfaces || [
+    { name: 'ether1', type: 'ether' }, { name: 'ether2', type: 'ether' },
+    { name: 'wlan1', type: 'wlan' }, { name: 'wlan2', type: 'wlan' },
+  ];
+  const estado = { bridges: [...bridges], portas: [...portas] };
+  const escritas = [];
+  return {
+    escritas,
+    estado,
+    print: async (c) => {
+      if (c === '/interface/print') return itfs;
+      if (c === '/interface/bridge/print') return estado.bridges;
+      if (c === '/interface/bridge/port/print') return estado.portas;
+      if (c === '/ip/address/print') return enderecos;
+      if (c === '/ip/dhcp-server/print') return dhcps;
+      if (c === '/ip/dhcp-client/print') return wan.map((interface_) => ({ interface: interface_ }));
+      return [];
+    },
+    write: async (c, a) => {
+      escritas.push({ c, a });
+      if (falhaEscrita) throw new Error(falhaEscrita);
+      if (c === '/interface/bridge/add') estado.bridges.push({ name: a[0].replace('=name=', '') });
+      if (c === '/interface/bridge/port/add' && !naoConfirma) {
+        estado.portas.push({ bridge: a[0].replace('=bridge=', ''), interface: a[1].replace('=interface=', '') });
+      }
+      return 'ok';
+    },
+  };
+}
+
+test('bridge: cria a bridge, adiciona as portas e isola os radios Wi-Fi', async () => {
+  const r = roteadorBridge();
+  const res = await prepararBridgeHotspot({ portas: ['wlan1', 'wlan2', 'ether2'], print: r.print, write: r.write });
+  assert.strictEqual(res.ok, true);
+  assert.deepStrictEqual(res.wifiPortas, ['wlan1', 'wlan2']);
+  const caminhos = r.escritas.map((e) => e.c);
+  assert.strictEqual(caminhos.filter((c) => c === '/interface/bridge/add').length, 1);
+  assert.strictEqual(caminhos.filter((c) => c === '/interface/bridge/port/add').length, 3);
+  assert.deepStrictEqual(r.escritas.find((e) => e.c === '/interface/wireless/set' && e.a.includes('=numbers=wlan2')).a, ['=numbers=wlan2', '=default-forwarding=no']);
+});
+
+test('bridge: idempotente (segunda execucao nao duplica bridge nem portas)', async () => {
+  const r = roteadorBridge({ bridges: [{ name: 'bridge-hotspot' }], portas: [{ bridge: 'bridge-hotspot', interface: 'wlan1' }] });
+  const res = await prepararBridgeHotspot({ portas: ['wlan1', 'ether2'], print: r.print, write: r.write });
+  assert.strictEqual(res.ok, true);
+  const adds = r.escritas.filter((e) => e.c === '/interface/bridge/port/add');
+  assert.strictEqual(adds.length, 1);
+  assert.ok(adds[0].a.includes('=interface=ether2'));
+  assert.ok(!r.escritas.some((e) => e.c === '/interface/bridge/add'));
+});
+
+test('bridge: recusa WAN, porta de outra bridge, porta com IP/DHCP, inexistente, tipo invalido e lista vazia sem escrever nada', async () => {
+  const casos = [
+    [{ wan: ['ether1'] }, ['ether1'], /WAN/],
+    [{ portas: [{ bridge: 'bridge', interface: 'ether2' }] }, ['ether2'], /ja e porta da bridge bridge/],
+    [{ enderecos: [{ interface: 'ether2', address: '192.168.88.1/24' }] }, ['ether2'], /tem IP/],
+    [{ dhcps: [{ interface: 'ether2' }] }, ['ether2'], /DHCP server proprio/],
+    [{}, ['ether9'], /nao existe/],
+    [{ interfaces: [{ name: 'vlan10', type: 'vlan' }] }, ['vlan10'], /nao pode entrar/],
+    [{}, [], /ao menos uma/],
+  ];
+  for (const [cfg, portas, esperado] of casos) {
+    const r = roteadorBridge(cfg);
+    const res = await prepararBridgeHotspot({ portas, print: r.print, write: r.write });
+    assert.strictEqual(res.ok, false, String(esperado));
+    assert.match(res.message, esperado);
+    assert.strictEqual(r.escritas.length, 0, 'nao deve escrever nada quando recusa');
+  }
+});
+
+test('bridge: erro de escrita ou porta que nao confirma viram ok:false sem lancar', async () => {
+  const erro = roteadorBridge({ falhaEscrita: 'boom' });
+  const a = await prepararBridgeHotspot({ portas: ['ether2'], print: erro.print, write: erro.write });
+  assert.strictEqual(a.ok, false);
+  assert.match(a.message, /boom/);
+  const semConfirmar = roteadorBridge({ naoConfirma: true });
+  const b = await prepararBridgeHotspot({ portas: ['ether2'], print: semConfirmar.print, write: semConfirmar.write });
+  assert.strictEqual(b.ok, false);
+  assert.match(b.message, /Sem confirmacao/);
+});
+
+test('sanitizarBridge: so aceita true, nomes validos, sem repetir e ate o maximo', () => {
+  assert.deepStrictEqual(sanitizarBridge({ criarBridge: 'true', portasBridge: ['wlan1'] }), { criarBridge: false, portasBridge: [] });
+  assert.deepStrictEqual(sanitizarBridge({}), { criarBridge: false, portasBridge: [] });
+  const r = sanitizarBridge({ criarBridge: true, portasBridge: ['wlan1', 'wlan1', 'ether2; /system reset', 7, null, 'ether 3', 'wlan2'] });
+  assert.deepStrictEqual(r, { criarBridge: true, portasBridge: ['wlan1', 'wlan2'] });
+  const muitas = Array.from({ length: 30 }, (_, i) => `ether${i}`);
+  assert.strictEqual(sanitizarBridge({ criarBridge: true, portasBridge: muitas }).portasBridge.length, 12);
+});
+
+test('assistente: bridge preparada ANTES do passo 0 e falha para o envio', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  const iBridge = src.indexOf('prepararBridgeHotspot({ portas: portasBridge');
+  const iPasso0 = src.indexOf('// === 0. Interface nao pode ser porta de bridge');
+  assert.ok(iBridge > 0 && iBridge < iPasso0);
+  assert.match(src.slice(iBridge, iPasso0), /if \(!b\.ok\)[\s\S]*addStep\("bridge", "erro"[\s\S]*return \{ success: false/);
 });
