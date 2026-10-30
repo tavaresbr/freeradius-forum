@@ -2,11 +2,13 @@
 // Por rodada: no maximo 1 promocao por empresa e LOTE mensagens, com intervalo aleatorio entre elas
 // (ritmo humano reduz risco de banimento do numero). O estado vive no banco: restart do PM2 nao perde nada.
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
 const { montarMensagem } = require("../utils/promocaoWhatsapp");
 const { montarMensagemAviso } = require("../utils/avisoOperacional");
+const naoPerturbe = require("../utils/naoPerturbe");
 
 const LOTE = 4;
 const INTERVALO_MIN_MS = 8000;
@@ -51,6 +53,9 @@ async function processarEnvio(envio, { dormirFn }) {
     return;
   }
 
+  // Horario de silencio: so promocoes (aviso operacional e' servico). Fora da janela a fila apenas espera.
+  if (envio.tipo !== "aviso" && (await naoPerturbe.emSilencio(envio.empresa_id, "promocao"))) return;
+
   const [pendentes] = await db.execute(
     `SELECT id, lead_id, telefone, nome FROM promocao_destinatarios
       WHERE envio_id = ? AND status = 'pendente' ORDER BY id ASC LIMIT ${LOTE}`,
@@ -79,6 +84,12 @@ async function processarEnvio(envio, { dormirFn }) {
       }
     }
 
+    // Lista "nao perturbe" (inclui quem nao e' lead e pediu SAIR)
+    if (await naoPerturbe.estaBloqueado(envio.empresa_id, d.telefone)) {
+      await db.execute("UPDATE promocao_destinatarios SET status = 'ignorado', erro_msg = ? WHERE id = ?", ["Pediu para não receber", d.id]);
+      continue;
+    }
+
     // Aviso operacional nao leva o rodape de marketing ("responda SAIR")
     const aviso = envio.tipo === "aviso";
     const mensagem = aviso ? montarMensagemAviso(envio.mensagem, d.nome) : montarMensagem(envio.mensagem, d.nome);
@@ -87,7 +98,7 @@ async function processarEnvio(envio, { dormirFn }) {
       await db.execute("UPDATE promocao_destinatarios SET status = 'enviado', enviado_em = NOW() WHERE id = ?", [d.id]);
       await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: aviso ? "aviso_operacional" : "promocao", referencia_id: envio.id, status: "ok" });
     } catch (err) {
-      const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
+      const msg = String(erroEvolution(err)).slice(0, 500);
       await db.execute("UPDATE promocao_destinatarios SET status = 'erro', erro_msg = ? WHERE id = ?", [msg, d.id]);
       await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: aviso ? "aviso_operacional" : "promocao", referencia_id: envio.id, status: "erro", erro_msg: msg });
     }

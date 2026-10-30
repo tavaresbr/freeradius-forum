@@ -2,7 +2,9 @@
 // So empresas com config_json.pos_compra.ativo (desligado por padrao). Pagamentos aprovados cuja liberacao
 // ocorreu ha pelo menos N horas e no maximo 3 dias (ligar o recurso nunca dispara o historico antigo).
 // Telefone so pelo cadastro (pagamento/lead por cliente_id ou CPF; nunca por MAC). 1 envio por pagamento.
+const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("../services/whatsappNotify");
@@ -41,6 +43,7 @@ const SQL_PAGAMENTOS = `
 
 async function processarEmpresa({ empresaId, pos }, dormirFn) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
+  if (await naoPerturbe.emSilencio(empresaId, "pos_compra")) return 0; // adia: nada e reservado
   if (!(await instanciaConectada(empresaId))) return 0;
   const [pagamentos] = await db.query(SQL_PAGAMENTOS, [empresaId, pos.horas_apos, JANELA_MAX_DIAS]);
   const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [empresaId]).catch(() => [[{}]]);
@@ -58,6 +61,7 @@ async function processarEmpresa({ empresaId, pos }, dormirFn) {
     if (lead && Number(lead.whatsapp_optout) === 1) { await reservar(empresaId, "agradecimento", p.id); continue; }
     const telefone = normalizarTelefone(p.telefone || lead?.telefone);
     if (!telefone) { await reservar(empresaId, "agradecimento", p.id); continue; } // sem telefone: nao tenta de novo
+    if (await naoPerturbe.estaBloqueado(empresaId, telefone)) { await reservar(empresaId, "agradecimento", p.id); continue; }
     if (jaNaRodada.has(telefone)) { await reservar(empresaId, "agradecimento", p.id); continue; } // varias compras do mesmo numero: 1 mensagem
     if (!(await reservar(empresaId, "agradecimento", p.id))) continue;
     jaNaRodada.add(telefone);
@@ -66,7 +70,7 @@ async function processarEmpresa({ empresaId, pos }, dormirFn) {
       await enviarMensagemEstrita(telefone, mensagem, empresaId);
       await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "pos_compra", referencia_id: p.id, status: "ok" });
     } catch (err) {
-      const msg = String(err.response?.data?.message || err.message || "Erro ao enviar").slice(0, 500);
+      const msg = String(erroEvolution(err)).slice(0, 500);
       await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "pos_compra", referencia_id: p.id, status: "erro", erro_msg: msg });
     }
     enviados++;

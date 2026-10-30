@@ -5,6 +5,7 @@ const x = require("../controllers/atendimentoExtrasController");
 const au = require("../controllers/atendimentoAutomacaoController");
 const rel = require("../controllers/atendimentoRelatoriosController");
 const contatos = require("../controllers/atendimentoContatosController");
+const np = require("../controllers/naoPerturbeController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -73,5 +74,14 @@ router.post("/respostas-rapidas/padrao", x.criarModelosPadrao);
 router.post("/respostas-rapidas", x.criarResposta);
 router.put("/respostas-rapidas/:id", x.atualizarResposta);
 router.delete("/respostas-rapidas/:id", x.excluirResposta);
+
+// Nao perturbe: lista central + horario de silencio
+router.get("/nao-perturbe/config", np.obterConfig);
+router.put("/nao-perturbe/config", np.salvarConfig);
+router.get("/nao-perturbe/export", np.exportar);
+router.post("/nao-perturbe/importar", novaConversaLimiter, np.importar);
+router.get("/nao-perturbe", np.listar);
+router.post("/nao-perturbe", np.adicionar);
+router.delete("/nao-perturbe/:id", np.remover);
 
 module.exports = router;

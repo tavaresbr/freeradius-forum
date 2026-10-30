@@ -307,6 +307,7 @@ async function saveConfig(req, res) {
       ...(atual.chatbot ? { chatbot: atual.chatbot } : {}),
       ...(atual.pos_compra ? { pos_compra: atual.pos_compra } : {}),
       ...(atual.renovacao ? { renovacao: atual.renovacao } : {}),
+      ...(atual.nao_perturbe ? { nao_perturbe: atual.nao_perturbe } : {}),
     });
 
     if (existing) {

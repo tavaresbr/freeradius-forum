@@ -1,6 +1,7 @@
 // Atendimento WhatsApp: configuracao da resposta automatica e mensagens agendadas / lembretes de retorno.
 // Toda query filtra por empresa_id; ids do corpo/URL sao conferidos contra a empresa.
 const db = require("../../db");
+const { erroEvolution } = require("../utils/erroEvolution");
 const auto = require("../services/whatsappAutomacao");
 const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
@@ -145,7 +146,7 @@ exports.testarAviso = async (req, res) => {
     await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "aviso_expiracao_teste", status: "ok" });
     res.json({ success: true });
   } catch (err) {
-    const msg = err.response?.data?.message || err.message || "Erro ao enviar";
+    const msg = erroEvolution(err);
     res.status(502).json({ error: `Não foi possível enviar o teste: ${String(msg).slice(0, 150)}` });
   }
 };

@@ -85,4 +85,4 @@ function renderizar(modelo, { nome, empresa }) {
   return String(modelo || "").replace(/\{\{\s*nome\s*\}\}/gi, primeiro).replace(/\{\{\s*empresa\s*\}\}/gi, empresa || "").trim();
 }
 
-module.exports = { FUSO_PADRAO, MAX_MSG, padrao, validarAutomacao, mesclarComPadrao, dentroDoHorario, renderizar };
+module.exports = { FUSO_PADRAO, MAX_MSG, partesNoFuso, padrao, validarAutomacao, mesclarComPadrao, dentroDoHorario, renderizar };
