@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0 };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [] };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
   ["portais", "Portal cativo extra"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
@@ -100,9 +101,9 @@ export default function PlanosSaas() {
   const duplicar = (p) => {
     setEditId(null);
     setCopiaDe(p.nome);
-    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", ativo: false, ordem: (p.ordem ?? 0) + 1 });
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), ativo: false, ordem: (p.ordem ?? 0) + 1 });
   };
-  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", ativo: !!p.ativo }); };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), ativo: !!p.ativo }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -261,6 +262,12 @@ export default function PlanosSaas() {
                   <span className="w-full text-sm text-gray-400">Recursos incluídos</span>
                   {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     <label key={k} className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={!!form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} /> {r}</label>
+                  ))}
+                </div>
+                <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2" data-testid="exibir-site">
+                  <span className="w-full text-sm text-gray-400">Mostrar no card do plano (site)</span>
+                  {ITENS_SITE.map(([k, r]) => (
+                    <label key={k} className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={(form.exibir_site || []).includes(k)} onChange={(e) => setForm({ ...form, exibir_site: e.target.checked ? [...(form.exibir_site || []), k] : (form.exibir_site || []).filter((x) => x !== k) })} /> {r}</label>
                   ))}
                 </div>
                 <div><label className="block text-sm text-gray-400 mb-1">Máx. admins</label><input type="number" min="0" placeholder="ilimitado" className={inputCls} value={form.max_admins} onChange={campo("max_admins")} /></div>

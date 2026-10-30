@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
+import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
 import LinkPainel from "../../components/public/LinkPainel";
 import useBranding from "../../hooks/useBranding";
 import useSeo from "../../hooks/useSeo";
@@ -29,12 +30,12 @@ const limite = (v) => (v == null ? "Ilimitados" : v);
 // "2 equipamentos", "1 administrador", "Equipamentos ilimitados"
 const rotuloLimite = (v, um, varios) => (v == null ? `${varios[0].toUpperCase()}${varios.slice(1)} ilimitados` : `${v} ${Number(v) === 1 ? um : varios}`);
 
-// Recursos e teste vem do proprio plano (saas_planos), nunca fixos: plano gratis nao tem teste e pode nao incluir recursos.
-const RECURSOS_PLANO = [["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]];
-const recursosDoPlano = (p) => RECURSOS_PLANO.filter(([k]) => Number(p[k]) === 1).map(([, n]) => n);
+// O que cada card mostra vem do plano (saas_planos.exibir_site, marcado em Planos SaaS).
+const ROTULO_ITEM = { todos_recursos: "Todos os recursos incluídos", whatsapp: "WhatsApp", campanhas: "Campanhas", exportacao: "Exportação da base", dominio: "Domínio próprio" };
 const diasDeTeste = (p) => (Number(p.gratis) === 1 ? 0 : Number(p.trial_dias) > 0 ? Number(p.trial_dias) : 7);
-const textoRecursos = (p) => { const r = recursosDoPlano(p); return r.length ? `Inclui ${r.join(", ")}` : "Recursos essenciais"; };
 const textoTeste = (p) => (Number(p.gratis) === 1 ? "Grátis, sem vencimento" : `${diasDeTeste(p)} dias grátis, sem cartão`);
+const textoItem = (p, k) => (k === "teste" ? textoTeste(p) : k === "portais" ? rotuloLimite(p.max_portais, "portal", "portais") : ROTULO_ITEM[k]);
+const itensExtras = (p) => itensDoPlano(p).filter((k) => k !== "teste" && ITENS_SITE.some(([x]) => x === k));
 
 export default function ApexHome() {
   const { nome } = useBranding();
@@ -181,8 +182,9 @@ export default function ApexHome() {
                   <ul className="mt-4 space-y-2 flex-1 text-sm">
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_equipamentos, "equipamento", "equipamentos")}</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_admins, "administrador", "administradores")}</li>
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{textoRecursos(p)}</li>
-                    <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{textoTeste(p)}</li>
+                    {ITENS_SITE.map(([k]) => k).filter((k) => itensDoPlano(p).includes(k)).map((k) => (
+                      <li key={k} className="flex items-center gap-2"><Check size={16} className="text-green-600" />{textoItem(p, k)}</li>
+                    ))}
                   </ul>
                   <LinkPainel to={cadastro(p)} className="mt-6 text-center bg-apex-500 hover:bg-apex-600 text-white py-3 rounded-lg font-semibold">{Number(p.gratis) === 1 ? "Começar grátis" : "Testar grátis"}</LinkPainel>
                 </div>
@@ -196,7 +198,7 @@ export default function ApexHome() {
                 <tr><th className="text-left px-4 py-3">Comparar</th>{planos.map((p) => <th key={p.id ?? p.nome} className="px-4 py-3 text-center">{p.nome}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-apex-100">
-                {[["Valor", (p) => `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}`], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", (p) => recursosDoPlano(p).join(", ") || "Essenciais"], ["Teste grátis", (p) => (diasDeTeste(p) ? `${diasDeTeste(p)} dias` : "Plano grátis")]].map(([rotulo, fn]) => (
+                {[["Valor", (p) => `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}`], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", (p) => itensExtras(p).map((k) => textoItem(p, k)).join(", ") || "-"], ["Teste grátis", (p) => (itensDoPlano(p).includes("teste") ? (diasDeTeste(p) ? `${diasDeTeste(p)} dias` : "Plano grátis") : "-")]].map(([rotulo, fn]) => (
                   <tr key={rotulo}><td className="px-4 py-3 font-medium text-apex-900">{rotulo}</td>{planos.map((p) => <td key={p.id ?? p.nome} className="px-4 py-3 text-center text-gray-700">{fn(p)}</td>)}</tr>
                 ))}
               </tbody>
