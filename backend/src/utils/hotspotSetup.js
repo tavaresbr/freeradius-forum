@@ -238,7 +238,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       const profiles = await safePrint("/ip/hotspot/profile/print");
       const prof = profiles && profiles.find(p => p.name === "hsprof-hotspot");
       const profArgs = [
-        "=login-by=http-chap,http-pap",
+        `=login-by=${HOTSPOT_PADROES.loginBy}`,
         "=use-radius=yes",
         "=radius-accounting=yes",
         "=html-directory=hotspot",
@@ -321,6 +321,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         `=address-pool=${poolName}`,
         `=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}`,
         `=idle-timeout=${HOTSPOT_PADROES.idleTimeout}`,
+        "=add-mac-cookie=yes",
+        `=mac-cookie-timeout=${HOTSPOT_PADROES.macCookieTimeout}`,
       ]);
       if (r === "timeout") {
         // O set pode ter sido aplicado mesmo sem resposta: confere o valor no roteador.
@@ -606,11 +608,14 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
     await aplicar("hotspot profile", () => conn.write("/ip/hotspot/profile/set", [
       "=numbers=hsprof-hotspot",
       `=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}`,
+      `=login-by=${HOTSPOT_PADROES.loginBy}`,
     ]));
     await aplicar("user profile", () => conn.write("/ip/hotspot/user/profile/set", [
       "=numbers=default",
       `=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}`,
       `=idle-timeout=${HOTSPOT_PADROES.idleTimeout}`,
+      "=add-mac-cookie=yes",
+      `=mac-cookie-timeout=${HOTSPOT_PADROES.macCookieTimeout}`,
     ]));
     await aplicar("radius", async () => {
       const lista = await conn.write("/radius/print").catch(() => []);
