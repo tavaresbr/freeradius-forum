@@ -182,7 +182,8 @@ export default function ApexHome() {
           )}
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {planos.map((p, i) => {
-              const destaque = planos.length >= 3 && i === 1;
+              // Plano favorito marcado em Planos SaaS; sem nenhum marcado vale o padrao (o 2o de 3+).
+              const destaque = planos.some((x) => x.destaque) ? !!p.destaque : planos.length >= 3 && i === 1;
               return (
                 <div key={p.id ?? p.nome} className={`rounded-2xl p-6 flex flex-col border-2 ${destaque ? "border-apex-500 shadow-xl" : "border-apex-100"}`}>
                   {destaque && <span className="self-start text-xs font-bold bg-apex-500 text-white px-3 py-1 rounded-full mb-2">Mais escolhido</span>}
