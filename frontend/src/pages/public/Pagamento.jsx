@@ -42,6 +42,8 @@ export default function Pagamento() {
     cvv: "",
     nome: "",
     cpfCartao: "",
+    cep: "",
+    numeroEndereco: "",
   });
   const [cartaoLoading, setCartaoLoading] = useState(false);
   const [cartaoErro, setCartaoErro] = useState(null);
@@ -52,6 +54,9 @@ export default function Pagamento() {
   //  - ready:   tem MP_DEVICE_SESSION_ID, pode mostrar formulario
   //  - error:   timeout ou falha, nao da pra processar cartao sem ele
   const [fingerprintStatus, setFingerprintStatus] = useState("loading");
+  // Cartao pelo Asaas: sem fingerprint do Mercado Pago; o titular informa CEP e numero do endereco.
+  const cartaoAsaas = plano?.cartao_provider === "asaas";
+  const fpStatus = cartaoAsaas ? "ready" : fingerprintStatus;
 
   // PIX trial (acesso free 5min ao copiar PIX)
   const [trialLiberado, setTrialLiberado] = useState(false);
@@ -370,7 +375,7 @@ export default function Pagamento() {
     // Safety net: nao deixa submeter sem fingerprint.
     // A UI ja esconde o form quando fingerprintStatus !== "ready", mas se
     // algo escapar (ex: usuario com extensao bloqueadora), rejeita aqui.
-    if (fingerprintStatus !== "ready" || !window.MP_DEVICE_SESSION_ID) {
+    if (!cartaoAsaas && (fingerprintStatus !== "ready" || !window.MP_DEVICE_SESSION_ID)) {
       setCartaoErro("Ambiente seguro ainda nao carregou. Aguarde alguns segundos e tente novamente.");
       return;
     }
@@ -386,6 +391,12 @@ export default function Pagamento() {
     if (cvvD.length < 3) return setCartaoErro("CVV invalido.");
     if (nomeT.length < 2) return setCartaoErro("Informe o nome no cartao.");
     if (cpfDigits.length !== 11) return setCartaoErro("CPF invalido.");
+
+    const cepDigits = cartao.cep.replace(/\D/g, "");
+    if (cartaoAsaas) {
+      if (cepDigits.length !== 8) return setCartaoErro("CEP invalido.");
+      if (!cartao.numeroEndereco.trim()) return setCartaoErro("Informe o numero do endereco.");
+    }
 
     const expMonth = validade.slice(0, 2);
     const expYearShort = validade.slice(2, 4);
@@ -416,6 +427,7 @@ export default function Pagamento() {
           cliente_id: clienteId,
           device_session_id: deviceSessionId,
           portal_id: portalId || null,
+          ...(cartaoAsaas ? { cep: cepDigits, numero_endereco: cartao.numeroEndereco.trim() } : {}),
         }),
       });
       const data = await res.json();
@@ -676,7 +688,7 @@ export default function Pagamento() {
       )}
 
       {/* Cartao - carregando fingerprint MP (seguranca antifraude) */}
-      {metodo === "cartao" && cartaoStatus !== "pending" && fingerprintStatus === "loading" && (
+      {metodo === "cartao" && cartaoStatus !== "pending" && fpStatus === "loading" && (
         <div className="w-full max-w-md bg-white rounded-lg p-8 text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Preparando ambiente seguro</h3>
@@ -687,7 +699,7 @@ export default function Pagamento() {
         </div>
       )}
 
-      {metodo === "cartao" && cartaoStatus !== "pending" && fingerprintStatus === "error" && (
+      {metodo === "cartao" && cartaoStatus !== "pending" && fpStatus === "error" && (
         <div className="w-full max-w-md bg-white rounded-lg p-6 text-center border-2 border-red-200">
           <div className="w-12 h-12 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
             <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -721,7 +733,7 @@ export default function Pagamento() {
       )}
 
       {/* Cartao - Checkout Transparente */}
-      {metodo === "cartao" && cartaoStatus !== "pending" && fingerprintStatus === "ready" && (
+      {metodo === "cartao" && cartaoStatus !== "pending" && fpStatus === "ready" && (
         <form onSubmit={submeterCartao} className="w-full max-w-md space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Numero do cartao</label>
@@ -791,6 +803,34 @@ export default function Pagamento() {
               required
             />
           </div>
+
+          {cartaoAsaas && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CEP do titular</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={cartao.cep}
+                  onChange={(e) => setCartao({ ...cartao, cep: e.target.value.replace(/\D/g, "").slice(0, 8) })}
+                  placeholder="00000000"
+                  className="w-full p-3 border border-gray-300 rounded-lg font-mono"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Numero</label>
+                <input
+                  type="text"
+                  value={cartao.numeroEndereco}
+                  onChange={(e) => setCartao({ ...cartao, numeroEndereco: e.target.value.slice(0, 10) })}
+                  placeholder="123"
+                  className="w-full p-3 border border-gray-300 rounded-lg"
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           {cartaoErro && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">

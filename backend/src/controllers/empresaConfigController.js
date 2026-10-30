@@ -7,7 +7,7 @@ const CAMPOS_POR_TIPO = {
   mercadopago: ["public_key", "access_token", "client_id", "client_secret", "email_pagador", "webhook_secret"],
   efi: ["client_id", "client_secret", "chave_pix", "ambiente", "certificado_nome"],
   whatsapp: ["api_url", "api_key", "instance_name"],
-  asaas: ["api_key", "ambiente", "ativo"],
+  asaas: ["api_key", "ambiente", "ativo", "cartao"],
 };
 const WHATSAPP_SO_PLATAFORMA = ["api_url", "api_key"];
 
@@ -73,7 +73,9 @@ exports.salvarConfig = async (req, res) => {
       if (recebido.ambiente !== undefined && !["sandbox", "producao"].includes(recebido.ambiente)) {
         return res.status(400).json({ message: "Ambiente inválido" });
       }
-      if (recebido.ativo !== undefined) recebido.ativo = recebido.ativo === "1" ? "1" : "0";
+      for (const k of ["ativo", "cartao"]) {
+        if (recebido[k] !== undefined) recebido[k] = recebido[k] === "1" ? "1" : "0";
+      }
     }
     const novo = preservarSegredos({ ...atual, ...recebido }, atual);
     const configJson = JSON.stringify(novo);

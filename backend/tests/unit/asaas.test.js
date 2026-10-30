@@ -124,3 +124,94 @@ test('webhook asaas: cobranca que nao e da empresa do token => 200 e nada confir
   assert.strictEqual((await chamarWebhook(mod, criarReq({ params: { token: TOKEN }, body: corpo }))).statusCode, 200);
   assert.deepStrictEqual(estado.confirmou, []);
 });
+
+// ---------- cartao ----------
+function montarCartao({ cartaoLigado = true, resposta = { id: 'pay_card1', status: 'CONFIRMED' }, erro = null, lead = { id: 1, nome: 'Ana', email: 'ana@x.com', cpf: '529.982.247-25', telefone: '(11) 98888-7777' } } = {}) {
+  const estado = { criou: [], confirmou: [] };
+  const db = criarDb(async (sql) => {
+    if (/FROM planos WHERE id/.test(sql)) return [[{ id: 9, empresa_id: 3, nome: 'Plano 1h', valor: 500, duracao_minutos: 60, mikrotik_id: 2 }]];
+    if (/FROM leads WHERE id/.test(sql)) return [[lead]];
+    if (/INSERT INTO pagamentos/.test(sql)) return [{ insertId: 7 }];
+    if (/FROM mikrotiks m WHERE/.test(sql)) return [[{ end_hotspot: 'hs.local', ip: '10.0.0.1' }]];
+    return undefined;
+  });
+  limpar();
+  const mod = carregar('src/controllers/pagamentoController.js', {
+    db,
+    extras: {
+      'src/utils/asaasClient.js': {
+        carregarConfig: async () => ({ api_key: 'k', cartao: cartaoLigado ? '1' : '0' }),
+        cartaoAtivo: (c) => !!(c && c.api_key && c.cartao === '1'),
+        pixAtivo: () => false,
+        STATUS_PAGO: ['CONFIRMED', 'RECEIVED'],
+        hojeBrasilia: () => '2026-10-30',
+        obterOuCriarCliente: async () => 'cus_1',
+        criarCobrancaCartao: async (cfg, args) => { estado.criou.push(args); if (erro) throw erro; return resposta; },
+      },
+      'src/services/asaasPagamento.js': {
+        confirmarPagamentoAsaas: async () => 'approved',
+        confirmarComCredencial: async (id) => { estado.confirmou.push(id); return { resultado: 'approved', cred: { username: '52998224725', password: 'senhaReal9' } }; },
+      },
+      'src/controllers/mikrotikAPIController.js': { liberarUsuario: async () => ({}) },
+      'src/utils/radiusPassword.js': { obterSenhaRadius: async () => null },
+      'src/gateways/gatewayLiberacao.js': { montarGatewayInfo: async () => ({ tipo: 'mikrotik' }) },
+      'src/utils/sessaoAtiva.js': { tratarSessaoAtiva: async () => ({}) },
+      'src/utils/leadUtils.js': { bloqueiaPagamentoAlheio: async () => false, MSG_PAGAMENTO_ALHEIO: 'x' },
+    },
+  });
+  return { mod, db, estado };
+}
+const CARTAO = { card_number: '4111 1111 1111 1111', cardholder_name: 'ANA', expiration_month: '12', expiration_year: '30', security_code: '123',
+  identification_number: '52998224725', plano_id: 9, mac: 'aa:bb:cc:dd:ee:ff', ip: '10.0.0.5', cliente_id: 1, cep: '01310-100', numero_endereco: '100' };
+const pagarCartao = async (mod, body = CARTAO) => { const res = criarRes(); const un = silencia(); try { await mod.gerarPagamentoCartao(criarReq({ body, ip: '200.1.2.3' }), res); } finally { un(); } return res; };
+
+test('cartao asaas: aprovado => libera pelo servico, devolve credenciais e manda os dados certos ao Asaas', async () => {
+  const { mod, estado, db } = montarCartao();
+  const res = await pagarCartao(mod);
+  assert.strictEqual(res.body.status, 'approved');
+  assert.strictEqual(res.body.password, 'senhaReal9');
+  assert.deepStrictEqual(estado.confirmou, [7]);
+  const a = estado.criou[0];
+  assert.strictEqual(a.valor, 5);
+  assert.strictEqual(a.referencia, 'pag_7_emp_3');
+  assert.strictEqual(a.ipCliente, '200.1.2.3');
+  assert.strictEqual(a.cartao.numero, '4111111111111111');
+  assert.strictEqual(a.cartao.ano, '2030');
+  assert.deepStrictEqual([a.titular.cep, a.titular.numeroEndereco, a.titular.telefone], ['01310100', '100', '11988887777']);
+  assert.ok(db.calls.some((c) => /gateway = 'asaas'/.test(c.sql)));
+  assert.ok(!JSON.stringify(db.calls).includes('4111'), 'numero do cartao nunca vai ao banco');
+});
+
+test('cartao asaas: em analise => pending (o portal acompanha por /status) sem liberar', async () => {
+  const { mod, estado } = montarCartao({ resposta: { id: 'pay_card1', status: 'PENDING' } });
+  const res = await pagarCartao(mod);
+  assert.strictEqual(res.body.status, 'pending');
+  assert.strictEqual(res.body.mp_pagamento_id, 'pay_card1');
+  assert.deepStrictEqual(estado.confirmou, []);
+});
+
+test('cartao asaas: recusa do Asaas (400) => rejected com a mensagem e pagamento marcado rejected', async () => {
+  const erro = Object.assign(new Error('Transacao nao autorizada'), { name: 'AsaasError', status: 400 });
+  const { mod, db } = montarCartao({ erro });
+  const res = await pagarCartao(mod);
+  assert.strictEqual(res.statusCode, 400);
+  assert.strictEqual(res.body.message, 'Transacao nao autorizada');
+  assert.ok(db.calls.some((c) => /SET status = 'rejected'/.test(c.sql)));
+});
+
+test('cartao asaas: falha de rede/Asaas fora => 502 generico', async () => {
+  const { mod } = montarCartao({ erro: Object.assign(new Error('timeout'), { name: 'AsaasError', status: null }) });
+  const res = await pagarCartao(mod);
+  assert.strictEqual(res.statusCode, 502);
+});
+
+test('cartao asaas: sem CEP/numero, sem telefone ou sem e-mail do cadastro => 400 antes de cobrar', async () => {
+  for (const [body, lead] of [[{ ...CARTAO, cep: '123' }], [{ ...CARTAO, numero_endereco: '' }],
+    [CARTAO, { id: 1, nome: 'Ana', email: 'ana@x.com', cpf: '529.982.247-25', telefone: null }],
+    [CARTAO, { id: 1, nome: 'Ana', email: null, cpf: '529.982.247-25', telefone: '11988887777' }]]) {
+    const { mod, estado } = montarCartao(lead ? { lead } : {});
+    const res = await pagarCartao(mod, body);
+    assert.strictEqual(res.statusCode, 400);
+    assert.deepStrictEqual(estado.criou, []);
+  }
+});

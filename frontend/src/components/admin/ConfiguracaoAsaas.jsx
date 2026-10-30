@@ -4,7 +4,7 @@ import axios from "axios";
 const campo = "w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500";
 
 export default function ConfiguracaoAsaas() {
-  const [form, setForm] = useState({ api_key: "", ambiente: "producao", ativo: "0" });
+  const [form, setForm] = useState({ api_key: "", ambiente: "producao", ativo: "0", cartao: "0" });
   const [webhookUrl, setWebhookUrl] = useState("");
   const [msg, setMsg] = useState(null);
   const [ocupado, setOcupado] = useState(false);
@@ -17,6 +17,7 @@ export default function ConfiguracaoAsaas() {
         api_key: res.data?.api_key || "",
         ambiente: res.data?.ambiente || "producao",
         ativo: res.data?.ativo === "1" ? "1" : "0",
+        cartao: res.data?.cartao === "1" ? "1" : "0",
       }))
       .catch(() => setMsg({ ok: false, texto: "Não foi possível carregar a configuração." }));
     axios.get("/api/empresa-config/asaas/webhook", { headers })
@@ -54,8 +55,8 @@ export default function ConfiguracaoAsaas() {
   return (
     <div className="space-y-4">
       <div className="bg-[#1a1d27] border border-gray-800 rounded-lg p-4 text-sm text-gray-400">
-        Com o Asaas ligado, o PIX dos planos pagos do portal é cobrado pela sua conta Asaas (em vez do Mercado Pago).
-        O cartão de crédito continua pelo Mercado Pago. O cliente precisa informar um CPF válido.
+        PIX e cartão podem ser ligados separadamente; o que ficar desligado continua pelo Mercado Pago. No PIX o cliente
+        precisa de um CPF válido; no cartão o cadastro precisa ter e-mail e telefone, e o titular informa CEP e número.
       </div>
 
       <div>
@@ -85,6 +86,15 @@ export default function ConfiguracaoAsaas() {
           onChange={(e) => setForm({ ...form, ativo: e.target.checked ? "1" : "0" })}
         />
         Usar o Asaas para cobrar o PIX do portal
+      </label>
+
+      <label className="flex items-center gap-2 text-gray-300">
+        <input
+          type="checkbox"
+          checked={form.cartao === "1"}
+          onChange={(e) => setForm({ ...form, cartao: e.target.checked ? "1" : "0" })}
+        />
+        Usar o Asaas para cobrar o cartão de crédito do portal
       </label>
 
       <div>

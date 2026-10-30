@@ -15,7 +15,7 @@ const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { resolverCupom, registrarUsoCupom, MSG_INVALIDO: MSG_CUPOM_INVALIDO } = require("../utils/cupons");
 const asaas = require("../utils/asaasClient");
-const { confirmarPagamentoAsaas } = require("../services/asaasPagamento");
+const { confirmarPagamentoAsaas, confirmarComCredencial } = require("../services/asaasPagamento");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
 async function resolveEmpresaId(planoId) {
@@ -397,6 +397,8 @@ exports.gerarPagamentoCartao = async (req, res) => {
     cupom,
     device_session_id,
     portal_id: portalIdInput,
+    cep,
+    numero_endereco,
   } = req.body;
 
   console.log("💳 gerarPagamentoCartao body:", { plano_id, cliente_id });
@@ -449,8 +451,11 @@ exports.gerarPagamentoCartao = async (req, res) => {
     if (!plano) return res.status(404).json({ message: "Plano nao encontrado." });
 
     const empresaId = plano.empresa_id;
-    const mpConfig = await getMpConfig(empresaId);
-    if (!mpConfig?.access_token || !mpConfig?.public_key) {
+    // Cartao pelo Asaas quando ligado em Integracoes; senao Mercado Pago.
+    const asaasCfg = await asaas.carregarConfig(empresaId);
+    const usarAsaas = asaas.cartaoAtivo(asaasCfg);
+    const mpConfig = usarAsaas ? null : await getMpConfig(empresaId);
+    if (!usarAsaas && (!mpConfig?.access_token || !mpConfig?.public_key)) {
       return res.status(400).json({ message: "Configuracao do Mercado Pago nao encontrada." });
     }
 
@@ -460,7 +465,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
 
     // Resolver email do pagador: prioridade lead (real) > config (placeholder) > fallback.
     // Email real do comprador melhora muito a aprovacao do antifraude.
-    let payerEmail = resolvePayerEmail(mpConfig);
+    let payerEmail = usarAsaas ? null : resolvePayerEmail(mpConfig);
     let leadInfo = null;
     if (cliente_id) {
       try {
@@ -478,6 +483,17 @@ exports.gerarPagamentoCartao = async (req, res) => {
     }
 
     const { first_name, last_name } = splitNome(nome);
+
+    // Asaas exige no titular: e-mail, CEP, numero do endereco e telefone.
+    const cepDigits = String(cep || "").replace(/\D/g, "");
+    const numeroEnd = String(numero_endereco || "").trim().slice(0, 10);
+    const telDigits = String(leadInfo?.telefone || "").replace(/\D/g, "");
+    if (usarAsaas) {
+      if (cepDigits.length !== 8) return res.status(400).json({ message: "CEP invalido." });
+      if (!numeroEnd) return res.status(400).json({ message: "Informe o numero do endereco." });
+      if (!payerEmail) return res.status(400).json({ message: "E-mail do cadastro obrigatorio para pagar com cartao." });
+      if (telDigits.length < 10) return res.status(400).json({ message: "Telefone do cadastro obrigatorio para pagar com cartao." });
+    }
 
     // Resolver portal_id: prioriza o explicito (redirect entre portais),
     // VALIDADO contra a empresa do plano (endpoint publico).
@@ -520,6 +536,56 @@ exports.gerarPagamentoCartao = async (req, res) => {
     pagId = insertResult.insertId;
     if (cupomAplicado) {
       await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+    }
+
+    if (usarAsaas) {
+      try {
+        const customer = await asaas.obterOuCriarCliente(asaasCfg, { cpf: clienteCpf || cardholderCpf, nome: leadInfo?.nome, email: payerEmail });
+        const cobranca = await asaas.criarCobrancaCartao(asaasCfg, {
+          customer,
+          valor: valorReais,
+          descricao: plano.nome,
+          referencia: `pag_${pagId}_emp_${empresaId}`,
+          vencimento: asaas.hojeBrasilia(),
+          cartao: { nome, numero: cardDigits, mes: String(expMonth).padStart(2, "0"), ano: String(expYear), cvv },
+          // Titular do CARTAO (pode ser diferente do cliente do hotspot)
+          titular: { nome, email: payerEmail, cpf: cardholderCpf, cep: cepDigits, numeroEndereco: numeroEnd, telefone: telDigits },
+          ipCliente: req.ip,
+        });
+        await db.query("UPDATE pagamentos SET mp_pagamento_id = ?, gateway = 'asaas' WHERE id = ?", [cobranca.id, pagId]);
+
+        if (asaas.STATUS_PAGO.includes(cobranca.status)) {
+          const { resultado, cred } = await confirmarComCredencial(pagId);
+          if (resultado === "approved") {
+            const finalUsername = cred?.username || clienteCpf || mac;
+            let senha = cred?.password || null;
+            if (!senha) {
+              try { senha = await obterSenhaRadius(finalUsername, { pagamentoId: pagId }); } catch (e) { /* tenta o polling */ }
+            }
+            if (senha) {
+              const [mk] = await db.query("SELECT m.end_hotspot, m.ip FROM mikrotiks m WHERE m.id = ? LIMIT 1", [plano.mikrotik_id]);
+              return res.json({
+                status: "approved",
+                gateway: mk[0]?.end_hotspot || mk[0]?.ip || null,
+                username: finalUsername,
+                password: senha,
+                mp_pagamento_id: cobranca.id,
+                gateway_info: await montarGatewayInfo({ mikrotik_id: plano.mikrotik_id, empresa_id: empresaId, mac, username: finalUsername }),
+                ...(await tratarSessaoAtiva({ username: finalUsername, mac, empresaId, manterMesmoAparelho: true })),
+              });
+            }
+          }
+        }
+        // Em analise (ou liberacao ja feita por outro caminho): o portal acompanha por /status
+        return res.json({ status: "pending", mp_pagamento_id: cobranca.id, message: "Pagamento em processamento. Aguarde..." });
+      } catch (err) {
+        console.error("Erro ao cobrar cartao no Asaas:", err.message);
+        await db.query("UPDATE pagamentos SET status = 'rejected', observacao = ? WHERE id = ?", [String(err.message).slice(0, 250), pagId]);
+        if (err.name === "AsaasError" && err.status === 400) {
+          return res.status(400).json({ status: "rejected", message: err.message });
+        }
+        return res.status(502).json({ message: "Nao foi possivel processar o cartao. Tente novamente em instantes." });
+      }
     }
 
     // 4. BIN lookup -> payment_method_id + issuer_id (obrigatorios pela doc)

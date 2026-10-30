@@ -45,7 +45,9 @@ async function mercadoPagoConfigurado(empresaId) {
 
 async function asaasConfigurado(empresaId) {
   try {
-    return require("../utils/asaasClient").pixAtivo(await require("../utils/asaasClient").carregarConfig(empresaId));
+    const a = require("../utils/asaasClient");
+    const cfg = await a.carregarConfig(empresaId);
+    return a.pixAtivo(cfg) || a.cartaoAtivo(cfg);
   } catch {
     return false;
   }

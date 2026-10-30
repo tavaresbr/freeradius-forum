@@ -38,6 +38,11 @@ function pixAtivo(cfg) {
   return !!(cfg && cfg.api_key && String(cfg.ativo) === "1");
 }
 
+/** A empresa cobra o cartao do portal pelo Asaas? (chave definida e opcao de cartao ligada) */
+function cartaoAtivo(cfg) {
+  return !!(cfg && cfg.api_key && String(cfg.cartao) === "1");
+}
+
 /** Grava o webhook_token da empresa (gerado uma vez) e o devolve. */
 async function obterOuCriarWebhookToken(empresaId) {
   const cfg = (await carregarConfig(empresaId)) || {};
@@ -128,6 +133,40 @@ async function criarCobrancaPix(cfg, { customer, valor, descricao, referencia, v
   return { id: cobranca.id, qr_code_base64: qr.encodedImage, copia_cola: qr.payload };
 }
 
+/**
+ * Cobranca no cartao de credito (a vista). Os dados do cartao seguem direto para o Asaas e nunca sao gravados
+ * nem logados. `titular` = { nome, email, cpf, cep, numeroEndereco, telefone } exigidos pelo Asaas.
+ */
+async function criarCobrancaCartao(cfg, { customer, valor, descricao, referencia, vencimento, cartao, titular, ipCliente }) {
+  const cobranca = await chamar(cfg, "post", "/payments", {
+    data: {
+      customer,
+      billingType: "CREDIT_CARD",
+      value: valor,
+      dueDate: vencimento,
+      description: descricao,
+      externalReference: referencia,
+      creditCard: {
+        holderName: cartao.nome,
+        number: cartao.numero,
+        expiryMonth: cartao.mes,
+        expiryYear: cartao.ano,
+        ccv: cartao.cvv,
+      },
+      creditCardHolderInfo: {
+        name: titular.nome,
+        email: titular.email,
+        cpfCnpj: titular.cpf,
+        postalCode: titular.cep,
+        addressNumber: titular.numeroEndereco,
+        phone: titular.telefone,
+      },
+      remoteIp: ipCliente,
+    },
+  });
+  return { id: cobranca.id, status: cobranca.status };
+}
+
 const obterCobranca = (cfg, id) => chamar(cfg, "get", `/payments/${encodeURIComponent(id)}`);
 
 /** Registra o webhook de cobrancas pagas apontando para a URL da empresa. */
@@ -155,6 +194,6 @@ function hojeBrasilia() {
 const STATUS_PAGO = ["CONFIRMED", "RECEIVED"];
 
 module.exports = {
-  AsaasError, carregarConfig, pixAtivo, obterOuCriarWebhookToken, empresaPorWebhookToken,
-  saldo, obterOuCriarCliente, criarCobrancaPix, obterCobranca, registrarWebhook, hojeBrasilia, STATUS_PAGO,
+  AsaasError, carregarConfig, pixAtivo, cartaoAtivo, obterOuCriarWebhookToken, empresaPorWebhookToken,
+  saldo, obterOuCriarCliente, criarCobrancaPix, criarCobrancaCartao, obterCobranca, registrarWebhook, hojeBrasilia, STATUS_PAGO,
 };

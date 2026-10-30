@@ -9,32 +9,33 @@ const { PAGADOR_DESCONHECIDO } = require("../utils/pagadorCpf");
  * aprova e libera o acesso. Idempotente: webhook repetido e polling convivem (marcador `liberado_em`).
  * Devolve 'approved' | 'pending' | 'ignorado'.
  */
-async function confirmarPagamentoAsaas(pagamentoId) {
+async function confirmarComCredencial(pagamentoId) {
+  let cred = null;
   const [[pag]] = await db.query(
     `SELECT id, empresa_id, plano_id, status, valor, mp_pagamento_id, gateway,
             mac, IP AS ip, nome_plano, cpf, cliente_id, portal_id, telefone
        FROM pagamentos WHERE id = ?`,
     [pagamentoId]
   );
-  if (!pag || pag.gateway !== "asaas" || !pag.mp_pagamento_id) return "ignorado";
+  if (!pag || pag.gateway !== "asaas" || !pag.mp_pagamento_id) return { resultado: "ignorado", cred };
 
   const cfg = await asaas.carregarConfig(pag.empresa_id);
-  if (!cfg?.api_key) return "ignorado";
+  if (!cfg?.api_key) return { resultado: "ignorado", cred };
 
   if (pag.status !== "approved" && pag.status !== "expirado") {
     const cobranca = await asaas.obterCobranca(cfg, pag.mp_pagamento_id);
-    if (!asaas.STATUS_PAGO.includes(cobranca.status)) return "pending";
+    if (!asaas.STATUS_PAGO.includes(cobranca.status)) return { resultado: "pending", cred };
 
     // A cobranca precisa ser exatamente a deste registro (referencia e valor), senao um pagamento real e
     // barato aprovaria um caro ainda em aberto.
     if (cobranca.externalReference !== `pag_${pag.id}_emp_${pag.empresa_id}`) {
       console.warn(`[asaas] externalReference nao confere (pag=${pag.id}): nao aprova`);
-      return "ignorado";
+      return { resultado: "ignorado", cred };
     }
     const esperado = Number(pag.valor) / 100; // pagamentos.valor guarda CENTAVOS; o Asaas usa reais
     if (Math.abs(esperado - Number(cobranca.value)) > 0.01) {
       console.warn(`[asaas] valor pago (${cobranca.value}) diferente do esperado (${esperado}) (pag=${pag.id}): nao aprova`);
-      return "ignorado";
+      return { resultado: "ignorado", cred };
     }
 
     let duracao = 60;
@@ -63,7 +64,7 @@ async function confirmarPagamentoAsaas(pagamentoId) {
     if (m.affectedRows > 0) {
       await registrarUsoCupom(pag.id);
       try {
-        await liberarUsuario({
+        cred = await liberarUsuario({
           mac: pag.mac,
           ip: pag.ip,
           plano: pag.nome_plano,
@@ -84,7 +85,12 @@ async function confirmarPagamentoAsaas(pagamentoId) {
       }
     }
   }
-  return "approved";
+  return { resultado: "approved", cred };
 }
 
-module.exports = { confirmarPagamentoAsaas };
+/** Devolve 'approved' | 'pending' | 'ignorado'. */
+async function confirmarPagamentoAsaas(pagamentoId) {
+  return (await confirmarComCredencial(pagamentoId)).resultado;
+}
+
+module.exports = { confirmarPagamentoAsaas, confirmarComCredencial };
