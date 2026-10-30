@@ -23,7 +23,7 @@ function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = 
 const MK = { ip: '10.8.0.3', usuario: 'admin', senha: 'x', porta: 8728 };
 
 test('padroes: valores combinados (keepalive 30m, interim 5m, timeout RADIUS 3s)', () => {
-  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '30m', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s', addressesPerMac: '1', dhcpLeaseTime: '1h' });
+  assert.deepStrictEqual(HOTSPOT_PADROES, { keepaliveTimeout: '30m', idleTimeout: 'none', radiusInterimUpdate: '5m', radiusTimeout: '3s', addressesPerMac: '1', dhcpLeaseTime: '1h', loginBy: 'http-chap,http-pap,mac-cookie', macCookieTimeout: '1h' });
 });
 
 test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e cliente RADIUS', async () => {
@@ -36,6 +36,9 @@ test('aplicarPadroesHotspot ajusta hotspot profile, user profile default e clien
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=keepalive-timeout=30m'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=idle-timeout=none'));
   assert.ok(por['/ip/hotspot/user/profile/set'].includes('=numbers=default'));
+  assert.ok(por['/ip/hotspot/profile/set'].includes('=login-by=http-chap,http-pap,mac-cookie'));
+  assert.ok(por['/ip/hotspot/user/profile/set'].includes('=add-mac-cookie=yes'));
+  assert.ok(por['/ip/hotspot/user/profile/set'].includes('=mac-cookie-timeout=1h'));
   const radiusSets = conn.chamadas.filter((c) => c.caminho === '/radius/set').map((c) => c.args);
   assert.deepStrictEqual(radiusSets[0], ['=.id=*1', '=timeout=3s']);
   assert.deepStrictEqual(radiusSets[1], ['=.id=*1', '=require-message-auth=no']);
@@ -81,7 +84,7 @@ test('roteador offline devolve ok:false sem lancar erro; sem cliente RADIUS do h
 
 test('o assistente do hotspot usa as mesmas constantes (novos equipamentos nascem certos)', () => {
   const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
-  for (const trecho of ['=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}', '=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}', '=idle-timeout=${HOTSPOT_PADROES.idleTimeout}', '=timeout=${HOTSPOT_PADROES.radiusTimeout}']) {
+  for (const trecho of ['=radius-interim-update=${HOTSPOT_PADROES.radiusInterimUpdate}', '=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}', '=idle-timeout=${HOTSPOT_PADROES.idleTimeout}', '=timeout=${HOTSPOT_PADROES.radiusTimeout}', '=login-by=${HOTSPOT_PADROES.loginBy}', '=mac-cookie-timeout=${HOTSPOT_PADROES.macCookieTimeout}']) {
     assert.ok(src.includes(trecho), trecho);
   }
 });
