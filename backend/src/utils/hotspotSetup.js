@@ -3,6 +3,19 @@ const { HOTSPOT_PADROES } = require("../constants/hotspotDefaults");
 
 const ehInterfaceWifi = (nome = "", tipo = "") => /^wlan|^wifi/i.test(nome) || /^(wlan|wireless)/i.test(tipo);
 
+// RouterOS 7.15+ exige Message-Authenticator na resposta e descarta o Access-Accept do FreeRADIUS
+// sem ele; no v6 o parametro nao existe (erro esperado, nao e falha).
+const SEM_MESSAGE_AUTH = /no such command|unknown parameter|expected end of command|no such item/i;
+async function desligarRequireMessageAuth(escrever, id) {
+  try {
+    await escrever("/radius/set", [`=.id=${id}`, "=require-message-auth=no"]);
+    return true;
+  } catch (e) {
+    if (SEM_MESSAGE_AUTH.test(e.message || "")) return false;
+    throw e;
+  }
+}
+
 /**
  * Coloca a interface Wi-Fi em modo AP com o SSID informado (pacote wireless legado).
  * `print`/`write` sao os helpers do assistente (safePrint/safeWrite). Nunca lanca:
@@ -208,6 +221,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
           `=name=dhcp-hotspot`,
           `=interface=${ifName}`,
           `=address-pool=${poolName}`,
+          `=lease-time=${HOTSPOT_PADROES.dhcpLeaseTime}`,
+          "=authoritative=after-2sec-delay",
           `=disabled=no`,
         ]);
         addStep("dhcp", "ok", `DHCP server criado em ${ifName}`);
@@ -252,6 +267,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
           `=interface=${ifName}`,
           `=address-pool=${poolName}`,
           "=profile=hsprof-hotspot",
+          `=addresses-per-mac=${HOTSPOT_PADROES.addressesPerMac}`,
           "=disabled=no",
         ]);
         addStep("hotspot", "ok", "Hotspot server atualizado");
@@ -261,6 +277,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
           `=interface=${ifName}`,
           `=address-pool=${poolName}`,
           "=profile=hsprof-hotspot",
+          `=addresses-per-mac=${HOTSPOT_PADROES.addressesPerMac}`,
           "=disabled=no",
         ]);
         if (r === "exists") {
@@ -270,6 +287,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
             `=interface=${ifName}`,
             `=address-pool=${poolName}`,
             "=profile=hsprof-hotspot",
+            `=addresses-per-mac=${HOTSPOT_PADROES.addressesPerMac}`,
             "=disabled=no",
           ]);
           addStep("hotspot", "ok", `Hotspot server ja existia, atualizado para ${ifName}`);
@@ -279,6 +297,16 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
     } catch (e) {
       addStep("hotspot", "aviso", e.message);
+    }
+
+    // === 5a. IP binding: o proprio gateway do hotspot nunca passa pelo login ===
+    try {
+      const binds = await safePrint("/ip/hotspot/ip-binding/print");
+      if (!binds.find(b => b.address === gateway && b.type === "bypassed")) {
+        await safeWrite("/ip/hotspot/ip-binding/add", [`=address=${gateway}`, "=type=bypassed", "=comment=hotspot-gateway"]);
+      }
+    } catch (e) {
+      addStep("ip_binding", "aviso", e.message);
     }
 
     // === 5b. User Profile default - garante address-pool ===
@@ -337,6 +365,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
 
       await safeWrite("/radius/incoming/set", ["=accept=yes", "=port=3799"]);
+
+      const cliRadius = (await safePrint("/radius/print")).find(r => r.service && r.service.includes("hotspot"));
+      if (cliRadius) {
+        const aplicado = await desligarRequireMessageAuth(safeWrite, cliRadius[".id"]);
+        if (aplicado) addStep("radius_msgauth", "ok", "RADIUS: require-message-auth=no (RouterOS 7.15+)");
+      }
     } catch (e) {
       addStep("radius", "aviso", e.message);
     }
@@ -476,6 +510,21 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       addStep("login_page", "aviso", e.message);
     }
 
+    // === 9b. error.html: franquia esgotada / login recusado volta ao portal (nao e' critico) ===
+    try {
+      const htmlDir = await resolveHotspotHtmlDir(conn);
+      const r = await safeWrite("/tool/fetch", [
+        `=url=https://${systemDomain}/api/hotspot-erro/${mikrotik.id}`,
+        `=dst-path=${htmlDir}/error.html`,
+        "=mode=https",
+        "=check-certificate=no",
+      ], FETCH_TIMEOUT);
+      addStep("error_page", r === "timeout" ? "aviso" : "ok",
+        r === "timeout" ? "error.html sem confirmacao (timeout); o login segue funcionando" : `error.html baixado em ${htmlDir}`);
+    } catch (e) {
+      addStep("error_page", "aviso", `error.html nao baixado: ${e.message}`);
+    }
+
     try { await conn.close(); } catch (e) {}
     addStep("finalizado", "ok", "Configuracao concluida!");
 
@@ -568,6 +617,13 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
       const cli = (Array.isArray(lista) ? lista : []).find((r) => r.service && String(r.service).includes("hotspot"));
       if (!cli) throw new Error("cliente RADIUS do hotspot nao encontrado");
       await conn.write("/radius/set", [`=.id=${cli[".id"]}`, `=timeout=${HOTSPOT_PADROES.radiusTimeout}`]);
+      await desligarRequireMessageAuth((c, a) => conn.write(c, a), cli[".id"]);
+    });
+    await aplicar("hotspot server", async () => {
+      const lista = await conn.write("/ip/hotspot/print").catch(() => []);
+      for (const h of (Array.isArray(lista) ? lista : [])) {
+        await conn.write("/ip/hotspot/set", [`=.id=${h[".id"]}`, `=addresses-per-mac=${HOTSPOT_PADROES.addressesPerMac}`]);
+      }
     });
 
     return avisos.length

@@ -300,6 +300,58 @@ app.get("/api/hotspot-login/:mikrotikId", async (req, res) => {
   }
 });
 
+// Endpoint público: serve error.html para MikroTik baixar via /tool/fetch.
+// O MikroTik mostra esta página quando o RADIUS recusa o login (ex.: franquia de tempo esgotada)
+// ou o login falha; em vez da página padrão, explica e leva o cliente de volta ao portal.
+app.get("/api/hotspot-erro/:mikrotikId", async (req, res) => {
+  const mikrotikId = normalizarId(req.params.mikrotikId);
+  if (!mikrotikId) return res.status(400).send("<h1>Hotspot invalido</h1>");
+  try {
+    const [[mikrotik]] = await db.execute(
+      `SELECT m.empresa_id, e.slug AS empresa_slug FROM mikrotiks m
+       LEFT JOIN empresas e ON m.empresa_id = e.id WHERE m.id = ?`,
+      [mikrotikId]
+    );
+    const empresaId = normalizarId(mikrotik?.empresa_id) || '';
+    const empresaSlug = normalizarSlug(mikrotik?.empresa_slug || 'default');
+    const systemDomain = normalizarHost(process.env.SYSTEM_DOMAIN || req.hostname);
+    const portalHost = normalizarHost(await portalHostDaEmpresa(mikrotik?.empresa_id).catch(() => systemDomain)) || systemDomain;
+    const fullUrl = `https://${portalHost}/hotspot/redirect/${mikrotikId}?mac=$(mac)&ip=$(ip)&mikrotik_id=${mikrotikId}&empresa_id=${empresaId}&empresa=${empresaSlug}`;
+
+    // $(error) e' preenchido pelo RouterOS (texto do motivo); fica em <pre> para nao virar HTML.
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <meta http-equiv="refresh" content="6;url=${fullUrl}">
+  <title>Acesso Wi-Fi</title>
+  <style>
+    body { background: #0f111a; color: #fff; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+    .box { text-align: center; max-width: 400px; }
+    .btn { display: inline-block; margin-top: 18px; padding: 12px 24px; background: #3b82f6; color: #fff; border-radius: 10px; text-decoration: none; font-weight: 600; }
+    pre { white-space: pre-wrap; color: #94a3b8; font-size: 12px; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Nao foi possivel conectar</h2>
+    <p>Seu tempo de acesso pode ter acabado ou o login nao foi aceito. Voce sera levado de volta ao portal para conectar de novo.</p>
+    <a class="btn" href="${fullUrl}">Voltar ao portal</a>
+    <pre>$(error)</pre>
+  </div>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send("<h1>Erro</h1>");
+  }
+});
+
 // Endpoint público: serve status.html para MikroTik baixar via /tool/fetch
 // O RouterOS substitui $(username), $(ip), $(uptime), $(bytes-in-nice), etc
 app.get("/api/hotspot-status/:mikrotikId", async (req, res) => {
