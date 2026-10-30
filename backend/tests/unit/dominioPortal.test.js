@@ -67,7 +67,7 @@ test('escreverVhost: renderiza so com host validado; nginx -t falho remove o arq
   assert.match(conf, /server_name wifi\.empresa\.com\.br;/);
   assert.match(conf, /live\/wifi\.empresa\.com\.br\/fullchain\.pem/);
   assert.match(conf, /location ~ \^\/\(admin\|super\|login\|registro\)/); // painel nunca abre no dominio do cliente
-  assert.match(conf, /location = \/ \{\s*return 404;/, 'raiz nao serve a landing da plataforma');
+  assert.ok(!/location = \/ \{/.test(conf), 'a raiz nao pode ser bloqueada: o fluxo do captive portal depende dela');
   assert.ok(!/\{\{/.test(conf), 'sem placeholders sobrando');
   assert.match(conf, /\$http_upgrade/, 'variaveis do nginx preservadas');
 
