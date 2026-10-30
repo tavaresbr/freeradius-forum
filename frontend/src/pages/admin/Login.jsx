@@ -3,29 +3,33 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import SiteHeader from '../../components/public/SiteHeader'
 import useBranding from '../../hooks/useBranding'
-import MarcaApex from '../../components/public/MarcaApex'
 
 export default function Login() {
   const { empresaSlug } = useParams() // /login/<slug>: logo da empresa
-  const { nome, logoUrl } = useBranding(empresaSlug)
+  const { nome } = useBranding(empresaSlug)
   const navigate = useNavigate()
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState(null)
   const [verSenha, setVerSenha] = useState(false)
+  const [enviando, setEnviando] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    if (enviando) return
+    setErro(null)
+    setEnviando(true)
 
     try {
+      email = email.trim()
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha })
+        body: JSON.stringify({ email: email.trim(), senha })
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
 
       if (res.ok) {
         login(data.token, data.user, data.empresas, data.permissoes)
@@ -36,6 +40,9 @@ export default function Login() {
       }
     } catch (err) {
       setErro('Erro de conexão com o servidor')
+    } finally {
+      setSenha('')
+      setEnviando(false)
     }
   }
 
@@ -54,30 +61,28 @@ export default function Login() {
       <div className="flex flex-1 items-center justify-center p-4">
         <form onSubmit={handleLogin} className="bg-white border border-apex-100 p-6 sm:p-8 rounded-2xl shadow-xl shadow-apex-500/10 w-full max-w-sm">
           <div className="mb-6 text-center">
-            {logoUrl
-              ? <div className="flex justify-center"><MarcaApex local="login" empresa={empresaSlug} /></div>
-              : <h2 className="text-2xl font-bold text-apex-900">{nome}</h2>}
-            <p className="text-sm text-gray-500 mt-1">Entre na sua conta</p>
+            <h2 className="text-2xl font-bold text-apex-900">Entrar</h2>
+            <p className="text-sm text-gray-500 mt-1">Acesse o painel de {nome}</p>
           </div>
-          {erro && <p className="text-red-600 text-sm mb-4">{erro}</p>}
+          {erro && <p role="alert" className="text-red-600 text-sm mb-4 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erro}</p>}
 
           <div className="mb-4">
             <label className="block text-gray-600 mb-2 text-sm">Email</label>
-            <input type="email" name="email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" enterKeyHint="next" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
+            <input type="email" name="email" autoFocus maxLength={254} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} inputMode="email" enterKeyHint="next" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
           </div>
 
           <div className="mb-6">
             <label className="block text-gray-600 mb-2 text-sm">Senha</label>
             <div className="relative">
-              <input type={verSenha ? "text" : "password"} name="password" autoComplete="current-password" enterKeyHint="go" value={senha} onChange={(e) => setSenha(e.target.value)} className={`${inp} pr-16`} required />
+              <input type={verSenha ? "text" : "password"} name="password" maxLength={256} autoComplete="current-password" enterKeyHint="go" value={senha} onChange={(e) => setSenha(e.target.value)} className={`${inp} pr-16`} required />
               <button type="button" onClick={() => setVerSenha((v) => !v)} className="absolute inset-y-0 right-0 px-3 text-sm text-apex-600 cursor-pointer" aria-label={verSenha ? "Ocultar senha" : "Mostrar senha"}>
                 {verSenha ? "Ocultar" : "Mostrar"}
               </button>
             </div>
           </div>
 
-          <button type="submit" className="w-full bg-apex-500 text-white py-3 rounded-lg hover:bg-apex-600 transition-colors duration-200 cursor-pointer font-medium">
-            Entrar
+          <button type="submit" disabled={enviando} className="w-full bg-apex-500 text-white py-3 rounded-lg hover:bg-apex-600 transition-colors duration-200 cursor-pointer font-medium disabled:opacity-60 disabled:cursor-wait">
+            {enviando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </div>
