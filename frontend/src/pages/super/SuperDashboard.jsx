@@ -171,7 +171,7 @@ export default function SuperDashboard() {
         </div>
 
         {/* Indicadores */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {cartao("Empresas ativas", `${kpis.ativas}/${empresas.length}`)}
           {cartao("Em trial", kpis.trial, "text-blue-400")}
           {cartao("Vencidas ou vencem em 7 dias", kpis.atencao, kpis.atencao ? "text-red-400" : "text-white")}
@@ -186,9 +186,8 @@ export default function SuperDashboard() {
             Gerenciar Empresas
           </Link>
           {donoPlataforma && (
-            <>
-              <span className="text-gray-700 hidden sm:inline">|</span>
-              <span className="text-gray-500 text-xs uppercase tracking-wide">Plataforma</span>
+            <div className="flex flex-wrap items-center gap-3 sm:ml-4 sm:pl-6 sm:border-l border-gray-800">
+              <span className="text-gray-500 text-xs uppercase tracking-wide mr-1">Plataforma</span>
               <Link to="/super/atualizar" className="px-3 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 text-sm">
                 Atualizar Sistema
               </Link>
@@ -198,7 +197,7 @@ export default function SuperDashboard() {
               <Link to="/super/publicar-atualizacao" className="px-3 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 text-sm">
                 Publicar Atualização
               </Link>
-            </>
+            </div>
           )}
         </div>
 
