@@ -55,7 +55,7 @@ function calcularDesconto(valorCentavos, cupom) {
  * Regras: da mesma empresa do plano, ativo, no prazo, com usos sobrando, do plano (ou de todos) e,
  * com CPF, nunca reusado pelo mesmo CPF (uma compra aprovada com o cupom ja o consumiu).
  */
-async function resolverCupom({ empresaId, plano, codigo, cpf }) {
+async function resolverCupom({ empresaId, plano, codigo, cpf, mac, clienteId }) {
   const nada = { ok: false };
   try {
     const cod = normalizarCodigo(codigo);
@@ -66,7 +66,7 @@ async function resolverCupom({ empresaId, plano, codigo, cpf }) {
         WHERE empresa_id = ? AND codigo = ? AND ativo = 1 AND (valido_ate IS NULL OR valido_ate >= CURDATE())`,
       [empresaId, cod]
     );
-    if (!cupom) return nada;
+    if (!cupom) return require("../services/indicacoes").resolverIndicacao({ empresaId, plano, codigo: cod, cpf, mac, clienteId }); // codigo de indicacao (cliente indica cliente)
     if (cupom.plano_id && Number(cupom.plano_id) !== Number(plano.id)) return nada;
     if (cupom.max_usos != null && Number(cupom.usos) >= Number(cupom.max_usos)) return nada;
     const cpfLimpo = String(cpf || "").replace(/\D/g, "");
@@ -93,7 +93,9 @@ async function resolverCupom({ empresaId, plano, codigo, cpf }) {
  */
 async function registrarUsoCupom(pagamentoId) {
   try {
-    const [[pg]] = await db.query("SELECT empresa_id, cupom_id FROM pagamentos WHERE id = ?", [pagamentoId]);
+    const temInd = await temColuna("pagamentos", "indicacao_id");
+    const [[pg]] = await db.query(`SELECT empresa_id, cupom_id${temInd ? ", indicacao_id" : ""} FROM pagamentos WHERE id = ?`, [pagamentoId]);
+    if (pg && pg.indicacao_id) await require("../services/indicacoes").aoAprovar(pagamentoId); // 1x por pagamento (mesmo marcador do cupom)
     if (!pg || !pg.cupom_id) return false;
     const [ins] = await db.query("INSERT IGNORE INTO cupom_usos (empresa_id, cupom_id, pagamento_id) VALUES (?, ?, ?)", [pg.empresa_id, pg.cupom_id, pagamentoId]);
     if (!ins.affectedRows) return false;

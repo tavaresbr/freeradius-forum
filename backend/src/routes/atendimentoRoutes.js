@@ -8,6 +8,7 @@ const contatos = require("../controllers/atendimentoContatosController");
 const np = require("../controllers/naoPerturbeController");
 const mt = require("../controllers/manutencoesController");
 const atec = require("../controllers/alertasTecnicosController");
+const indic = require("../controllers/indicacoesController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -101,5 +102,12 @@ router.post("/alertas-tecnicos", atec.criarManual);
 router.post("/alertas-tecnicos/:id/resolver", atec.resolver);
 router.get("/alertas-tecnicos/:id/previa", atec.previa);
 router.post("/alertas-tecnicos/:id/avisar-clientes", atendimentoEnvioLimiter, atec.avisarClientes);
+
+// Indicacoes (cliente indica cliente)
+router.get("/indicacoes/config", indic.obterConfig);
+router.put("/indicacoes/config", indic.salvarConfig);
+router.get("/indicacoes", indic.listar);
+router.post("/indicacoes/convite", atendimentoEnvioLimiter, indic.convite);
+router.post("/indicacoes/:id/revogar", indic.revogar);
 
 module.exports = router;

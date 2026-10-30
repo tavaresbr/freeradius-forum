@@ -309,6 +309,7 @@ async function saveConfig(req, res) {
       ...(atual.renovacao ? { renovacao: atual.renovacao } : {}),
       ...(atual.nao_perturbe ? { nao_perturbe: atual.nao_perturbe } : {}),
       ...(atual.alertas_tecnicos ? { alertas_tecnicos: atual.alertas_tecnicos } : {}),
+      ...(atual.indicacoes ? { indicacoes: atual.indicacoes } : {}),
     });
 
     if (existing) {

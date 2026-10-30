@@ -14,6 +14,7 @@ const { validarCPF } = require("../utils/cpf");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { tratarSessaoAtiva } = require("../utils/sessaoAtiva");
 const { resolverCupom, registrarUsoCupom, MSG_INVALIDO: MSG_CUPOM_INVALIDO } = require("../utils/cupons");
+const { vincularPagamento: vincularIndicacao } = require("../services/indicacoes");
 
 // Resolve empresa_id a partir do plano (para endpoints públicos)
 async function resolveEmpresaId(planoId) {
@@ -99,7 +100,7 @@ exports.gerarPagamento = async (req, res) => {
     let valorCobrar = Number(plano.valor);
     let cupomAplicado = null;
     if (typeof cupom === "string" && cupom.trim()) {
-      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf });
+      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf, mac, clienteId: cliente_id });
       if (!rc.ok) return res.status(400).json({ message: MSG_CUPOM_INVALIDO });
       valorCobrar = rc.valor_final;
       cupomAplicado = rc;
@@ -123,7 +124,8 @@ exports.gerarPagamento = async (req, res) => {
     `, [empresaId, cliente_id || null, plano.id, ip, mac, clienteCpf, plano.nome, valorCobrar, portalIdPix, clienteTelefone]);
     const pagId = insertPix.insertId;
     if (cupomAplicado) {
-      await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+      if (cupomAplicado.indicacao) await vincularIndicacao(pagId, cupomAplicado, clienteCpf); // codigo de indicacao (sem cupom_id)
+      else await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
     }
 
     // 2. Monta notification_url baseado no host do request.
@@ -459,7 +461,7 @@ exports.gerarPagamentoCartao = async (req, res) => {
 
     // Cupom (calculo so no servidor): invalido = recusa antes de cobrar, nunca cobranca cheia silenciosa.
     if (typeof cupom === "string" && cupom.trim()) {
-      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf });
+      const rc = await resolverCupom({ empresaId, plano, codigo: cupom, cpf: clienteCpf, mac, clienteId: cliente_id });
       if (!rc.ok) return res.status(400).json({ message: MSG_CUPOM_INVALIDO });
       valorCobrar = rc.valor_final;
       valorReais = valorCobrar / 100;
@@ -479,7 +481,8 @@ exports.gerarPagamentoCartao = async (req, res) => {
     );
     pagId = insertResult.insertId;
     if (cupomAplicado) {
-      await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
+      if (cupomAplicado.indicacao) await vincularIndicacao(pagId, cupomAplicado, clienteCpf); // codigo de indicacao (sem cupom_id)
+      else await db.query("UPDATE pagamentos SET cupom_id = ?, valor_original = ? WHERE id = ?", [cupomAplicado.cupom.id, cupomAplicado.valor_original, pagId]);
     }
 
     // 4. BIN lookup -> payment_method_id + issuer_id (obrigatorios pela doc)
