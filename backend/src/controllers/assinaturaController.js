@@ -500,6 +500,21 @@ async function aplicarDescontosATodos(b) {
   }
 }
 
+// Plano favorito do site (migration 071): so um plano fica em destaque por vez.
+const AVISO_071 = "Plano salvo, mas o plano em destaque só funciona depois de rodar a migration 071 no servidor.";
+async function salvarDestaque(id, b) {
+  if (!("destaque" in b)) return null;
+  const marcar = b.destaque === true || b.destaque === 1 || b.destaque === "1";
+  try {
+    await db.execute("UPDATE saas_planos SET destaque = ? WHERE id = ?", [marcar ? 1 : 0, id]);
+    if (marcar) await db.execute("UPDATE saas_planos SET destaque = 0 WHERE id <> ?", [id]);
+    return null;
+  } catch (err) {
+    if (!colunaAusente(err)) throw err;
+    return marcar ? AVISO_071 : null;
+  }
+}
+
 // Itens mostrados no card do plano no site (migration 068). null = padrao.
 const ITENS_SITE = ["todos_recursos", "teste", "whatsapp", "campanhas", "exportacao", "dominio", "portais"];
 function exibirSite(v) {
@@ -532,7 +547,9 @@ exports.criarPlano = async (req, res) => {
         aviso = AVISO_047;
       }
     }
-    aviso = aviso || (await salvarDescontos(r.insertId, req.body || {})) || undefined;
+    const avDesc = await salvarDescontos(r.insertId, req.body || {});
+    const avDest = await salvarDestaque(r.insertId, req.body || {});
+    aviso = aviso || avDesc || avDest || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.status(201).json({ id: r.insertId, aviso, aplicados });
@@ -561,7 +578,9 @@ exports.atualizarPlano = async (req, res) => {
         aviso = AVISO_047;
       }
     }
-    aviso = aviso || (await salvarDescontos(req.params.id, req.body || {})) || undefined;
+    const avDesc = await salvarDescontos(req.params.id, req.body || {});
+    const avDest = await salvarDestaque(req.params.id, req.body || {});
+    aviso = aviso || avDesc || avDest || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.json({ message: "Plano atualizado", aviso, aplicados });

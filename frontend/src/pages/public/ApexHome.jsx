@@ -183,7 +183,8 @@ export default function ApexHome() {
           )}
           <div className={`mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${planos.length <= 6 ? "xl:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]" : "xl:grid-cols-4"}`} style={{ "--n": planos.length }}>
             {planos.map((p, i) => {
-              const destaque = planos.length >= 3 && i === 1;
+              // Plano favorito marcado em Planos SaaS; sem nenhum marcado vale o padrao (o 2o de 3+).
+              const destaque = planos.some((x) => x.destaque) ? !!p.destaque : planos.length >= 3 && i === 1;
               const ganho = ganhosDoPlano(p, planos[i - 1]);
               const itens = ITENS_SITE.map(([k]) => k).filter((k) => itensDoPlano(p).includes(k));
               return (

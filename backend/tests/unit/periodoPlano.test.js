@@ -117,3 +117,16 @@ test('atualizarPlano sem aplicar_todos nao mexe nos outros planos', async () => 
   assert.ok(!chamadas.some((c) => /COALESCE\(gratis/.test(c.sql)));
   assert.strictEqual(res.body.aplicados, null);
 });
+
+test('plano favorito: marcar desmarca os outros; sem a migration 071 avisa', async () => {
+  chamadas.length = 0;
+  respostas = [];
+  const res = { status(c) { res.code = c; return res; }, json(b) { res.body = b; } };
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 59.9, destaque: true }, params: { id: 2 } }, res);
+  assert.ok(chamadas.some((c) => /SET destaque = 1/.test(c.sql) || (/SET destaque = \?/.test(c.sql) && c.params[0] === 1)));
+  assert.ok(chamadas.some((c) => /SET destaque = 0 WHERE id <> \?/.test(c.sql) && c.params[0] === 2));
+  chamadas.length = 0;
+  respostas = [{ re: /SET destaque/, erro: "Unknown column 'destaque'" }];
+  await ctrl.atualizarPlano({ body: { nome: 'Pop', valor: 59.9, destaque: true }, params: { id: 2 } }, res);
+  assert.match(res.body.aviso, /migration 071/);
+});
