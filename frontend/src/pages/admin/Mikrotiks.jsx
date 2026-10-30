@@ -119,6 +119,11 @@ export default function Mikrotiks() {
 
   // Wizard states
   const DNS_NAME_PADRAO = "hotspot.minharede.com";
+  const PRESETS_REDE = [
+    { id: "p24", rotulo: "Pequena — /24 (~250 clientes)", localAddress: "10.5.50.1/24", poolRange: "10.5.50.2-10.5.50.254" },
+    { id: "p23", rotulo: "Média — /23 (~500 clientes)", localAddress: "10.5.50.1/23", poolRange: "10.5.50.2-10.5.51.254" },
+    { id: "p22", rotulo: "Grande — /22 (~1000 clientes, eventos)", localAddress: "10.5.48.1/22", poolRange: "10.5.48.2-10.5.51.254" },
+  ];
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardMikrotikId, setWizardMikrotikId] = useState(null);
@@ -865,6 +870,23 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     <option value="desligar">Desligar (volta ao DNS padrão)</option>
                   </select>
                   <p className="text-xs text-gray-600 mt-1">Aparelho com DNS fixo ou DNS seguro no navegador contorna o filtro.</p>
+                </div>
+
+                {/* Tamanho da rede */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tamanho da rede (clientes ao mesmo tempo)</label>
+                  <select
+                    className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    value={PRESETS_REDE.find(p => p.localAddress === wizardConfig.localAddress && p.poolRange === wizardConfig.poolRange)?.id || "personalizado"}
+                    onChange={(e) => {
+                      const p = PRESETS_REDE.find(x => x.id === e.target.value);
+                      if (p) setWizardConfig({ ...wizardConfig, localAddress: p.localAddress, poolRange: p.poolRange });
+                    }}
+                  >
+                    {PRESETS_REDE.map(p => <option key={p.id} value={p.id}>{p.rotulo}</option>)}
+                    <option value="personalizado">Personalizado (editar abaixo)</option>
+                  </select>
+                  <p className="text-xs text-gray-600 mt-1">Para eventos e locais grandes use /22. Se o roteador já tem uma rede nessa faixa em outra interface, o envio é recusado.</p>
                 </div>
 
                 {/* Local Address */}
