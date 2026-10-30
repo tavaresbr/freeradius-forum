@@ -10,7 +10,6 @@ import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
 import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
 import Chatbot from "../../components/admin/atendimento/Chatbot";
-import { avisoAtivo, definirAviso, pedirPermissaoNotificacao, tocarAviso } from "../../utils/avisoWhatsapp";
 
 const FILTROS = [
   ["aberta", "Abertas"],
@@ -50,7 +49,7 @@ function Ticks({ status }) {
   return <span className={status === "lida" ? "text-sky-200 font-bold" : "text-white/70"}>✓✓</span>;
 }
 
-export default function Atendimento({ embutido = false }) {
+export default function Atendimento({ embutido = false, pedido = null, onPedidoTratado = () => {} }) {
   const { empresaSlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem("admin_token");
@@ -99,12 +98,18 @@ export default function Atendimento({ embutido = false }) {
   const [menuAtendente, setMenuAtendente] = useState(false);
   const [citando, setCitando] = useState(null); // mensagem que sera citada na proxima resposta
   const [menuMais, setMenuMais] = useState(false);
-  const [avisoLigado, setAvisoLigado] = useState(avisoAtivo());
   const [modo, setModo] = useState("resposta"); // resposta | nota
   const [iaAtiva, setIaAtiva] = useState(false); // "Sugerir resposta" liberado (chave no servidor + empresa ligou)
   const [sugerindo, setSugerindo] = useState(false);
   const [modal, setModal] = useState(null); // etiquetas | respostas | nova
   const [menuEtiquetas, setMenuEtiquetas] = useState(false);
+  // Acoes da engrenagem do hub (Nova conversa, Resposta automatica, Chatbot, Etiquetas) chegam como "pedido"
+  useEffect(() => {
+    if (!pedido?.modal) return;
+    setModal(pedido.modal);
+    onPedidoTratado();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido]);
   const [cliente, setCliente] = useState(null);
   const [painelAberto, setPainelAberto] = useState(false);
   const [webhook, setWebhook] = useState(null); // null = desconhecido, true/false
@@ -302,13 +307,6 @@ export default function Atendimento({ embutido = false }) {
     await Promise.all([carregarMensagens(selecionadaId), carregarConversas()]);
   };
 
-  const alternarAviso = async () => {
-    const novo = !avisoLigado;
-    setAvisoLigado(novo);
-    definirAviso(novo);
-    if (novo) { tocarAviso(); await pedirPermissaoNotificacao(); }
-  };
-
   const postarMidia = (f, legenda, conversaId) => {
     const fd = new FormData();
     fd.append("arquivo", f);
@@ -475,17 +473,7 @@ export default function Atendimento({ embutido = false }) {
   return (
     <Moldura embutido={embutido}>
       <div className="space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          {embutido ? <span /> : <h1 className="text-2xl font-bold text-white">WhatsApp</h1>}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button onClick={alternarAviso} className="text-sm text-gray-300 hover:text-white cursor-pointer" title="Som e notificação do navegador quando chegar mensagem" aria-pressed={avisoLigado}>{avisoLigado ? "🔔 Aviso ligado" : "🔕 Aviso desligado"}</button>
-            <button onClick={() => setModal("nova")} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm cursor-pointer">Nova conversa</button>
-            <button onClick={() => setModal("automacao")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Resposta automática</button>
-            <button onClick={() => setModal("chatbot")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Chatbot</button>
-            <button onClick={() => setModal("etiquetas")} className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">Etiquetas</button>
-            <Link to={`/admin/${empresaSlug}/whatsapp`} className="text-sm text-blue-400 hover:text-blue-300">Conexão e histórico de envios</Link>
-          </div>
-        </div>
+        {!embutido && <h1 className="text-2xl font-bold text-white">WhatsApp</h1>}
 
         {webhook === false && (
           <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
