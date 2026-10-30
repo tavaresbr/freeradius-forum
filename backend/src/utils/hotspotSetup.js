@@ -1,6 +1,6 @@
 const { RouterOSAPI } = require("node-routeros");
 const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
-const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout } = require("../constants/hotspotDefaults");
+const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT } = require("../constants/hotspotDefaults");
 
 const NOME_PORTA_VALIDO = /^[A-Za-z0-9._-]{1,32}$/;
 const TIPOS_PORTA_BRIDGE = /^(ether|wlan|wifi)/i;
@@ -180,6 +180,32 @@ async function configurarOnLogout({ ligar, print, write }) {
     return { status: "ok", message: "on-logout desligado" };
   } catch (e) {
     return { status: "aviso", message: `on-logout nao alterado: ${e.message}` };
+  }
+}
+
+/**
+ * BlockRedirect opcional (nunca lanca): regras deny no walled garden para os hosts de teste de conexao
+ * (BLOCK_REDIRECT). Ligar so cria o que falta; desligar remove SO as regras com o nosso comentario.
+ */
+async function configurarBlockRedirect({ ligar, print, write }) {
+  try {
+    const regras = await print("/ip/hotspot/walled-garden/print");
+    if (!Array.isArray(regras)) return { status: "aviso", message: "Nao foi possivel ler o walled garden; BlockRedirect nao alterado." };
+    const nossas = regras.filter((r) => r.comment === BLOCK_REDIRECT.comentario);
+    if (ligar) {
+      let criadas = 0;
+      for (const host of BLOCK_REDIRECT.hosts) {
+        if (nossas.some((r) => r["dst-host"] === host)) continue;
+        await write("/ip/hotspot/walled-garden/add", [`=dst-host=${host}`, "=action=deny", `=comment=${BLOCK_REDIRECT.comentario}`]);
+        criadas++;
+      }
+      return { status: "ok", message: criadas ? `BlockRedirect ligado (${criadas} regra(s) criada(s))` : "BlockRedirect ja estava ligado" };
+    }
+    if (!nossas.length) return { status: "ok", message: "BlockRedirect ja estava desligado" };
+    for (const r of nossas) await write("/ip/hotspot/walled-garden/remove", [`=.id=${r[".id"]}`]);
+    return { status: "ok", message: `BlockRedirect desligado (${nossas.length} regra(s) removida(s))` };
+  } catch (e) {
+    return { status: "aviso", message: `BlockRedirect nao alterado: ${e.message}` };
   }
 }
 
@@ -600,6 +626,12 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
     }
 
+    // === 7b. BlockRedirect (so se o assistente pediu: true liga, false desliga, ausente nao mexe) ===
+    if (config.blockRedirect === true || config.blockRedirect === false) {
+      const b = await configurarBlockRedirect({ ligar: config.blockRedirect, print: safePrint, write: safeWrite });
+      addStep("block_redirect", b.status, b.message);
+    }
+
     // === 8. Masquerade (NAT) ===
     try {
       const natRules = await safePrint("/ip/firewall/nat/print");
@@ -829,4 +861,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarOnLogout, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

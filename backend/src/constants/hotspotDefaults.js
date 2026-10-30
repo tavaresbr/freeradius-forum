@@ -57,4 +57,19 @@ function scriptOnLogout() {
   ].join("\n");
 }
 
-module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout };
+// BlockRedirect opcional (assistente): regras "deny" no walled garden para os hosts que Android, iOS,
+// Windows e Firefox consultam para detectar portal cativo; "deny" = continua redirecionando ao portal
+// (o pop-up abre) mesmo que um wildcard liberado depois cubra o host. Nossas regras levam o comentario.
+const BLOCK_REDIRECT = {
+  comentario: "apex-blockredirect",
+  hosts: [
+    "captive.apple.com",
+    "www.apple.com",
+    "connectivitycheck.gstatic.com",
+    "clients3.google.com",
+    "www.msftconnecttest.com",
+    "detectportal.firefox.com",
+  ],
+};
+
+module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT };
