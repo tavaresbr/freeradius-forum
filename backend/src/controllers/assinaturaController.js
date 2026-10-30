@@ -439,10 +439,19 @@ function dadosPlano(b) {
     b.inclui_dominio ? 1 : 0,
     b.gratis ? 1 : 0,
     nulo(b.trial_dias) ? Math.min(nulo(b.trial_dias), 365) : null,
+    exibirSite(b.exibir_site),
   ];
 }
 
+// Itens mostrados no card do plano no site (migration 068). null = padrao.
+const ITENS_SITE = ["todos_recursos", "teste", "whatsapp", "campanhas", "exportacao", "dominio", "portais"];
+function exibirSite(v) {
+  if (!Array.isArray(v)) return null;
+  return JSON.stringify(ITENS_SITE.filter((k) => v.includes(k)));
+}
+
 const AVISO_047 = "Plano salvo, mas 'Plano grátis' e 'Dias de teste' só funcionam depois de rodar a migration 047 no servidor.";
+const AVISO_068 = "Plano salvo, mas 'Mostrar no site' só funciona depois de rodar a migration 068 no servidor.";
 const colunaAusente = (err) => err && (err.code === "ER_BAD_FIELD_ERROR" || err.errno === 1054);
 
 exports.criarPlano = async (req, res) => {
@@ -452,12 +461,19 @@ exports.criarPlano = async (req, res) => {
   try {
     let r, aviso;
     try {
-      [r] = await db.execute(`INSERT INTO saas_planos (${cols}, gratis, trial_dias) VALUES (${d.map(() => "?").join(", ")})`, d);
+      [r] = await db.execute(`INSERT INTO saas_planos (${cols}, gratis, trial_dias, exibir_site) VALUES (${d.map(() => "?").join(", ")})`, d);
     } catch (err) {
       if (!colunaAusente(err)) throw err;
-      // Migration 047 ainda nao rodou: grava sem as colunas novas.
-      [r] = await db.execute(`INSERT INTO saas_planos (${cols}) VALUES (${d.slice(0, 13).map(() => "?").join(", ")})`, d.slice(0, 13));
-      aviso = AVISO_047;
+      try {
+        // Migration 068 ainda nao rodou: grava sem exibir_site.
+        [r] = await db.execute(`INSERT INTO saas_planos (${cols}, gratis, trial_dias) VALUES (${d.slice(0, 15).map(() => "?").join(", ")})`, d.slice(0, 15));
+        aviso = AVISO_068;
+      } catch (err2) {
+        if (!colunaAusente(err2)) throw err2;
+        // Migration 047 ainda nao rodou: grava sem as colunas novas.
+        [r] = await db.execute(`INSERT INTO saas_planos (${cols}) VALUES (${d.slice(0, 13).map(() => "?").join(", ")})`, d.slice(0, 13));
+        aviso = AVISO_047;
+      }
     }
     invalidar();
     res.status(201).json({ id: r.insertId, aviso });
@@ -474,11 +490,17 @@ exports.atualizarPlano = async (req, res) => {
   try {
     let aviso;
     try {
-      await db.execute(`UPDATE saas_planos SET ${set}, gratis=?, trial_dias=? WHERE id=?`, [...d, req.params.id]);
+      await db.execute(`UPDATE saas_planos SET ${set}, gratis=?, trial_dias=?, exibir_site=? WHERE id=?`, [...d, req.params.id]);
     } catch (err) {
       if (!colunaAusente(err)) throw err;
-      await db.execute(`UPDATE saas_planos SET ${set} WHERE id=?`, [...d.slice(0, 13), req.params.id]);
-      aviso = AVISO_047;
+      try {
+        await db.execute(`UPDATE saas_planos SET ${set}, gratis=?, trial_dias=? WHERE id=?`, [...d.slice(0, 15), req.params.id]);
+        aviso = AVISO_068;
+      } catch (err2) {
+        if (!colunaAusente(err2)) throw err2;
+        await db.execute(`UPDATE saas_planos SET ${set} WHERE id=?`, [...d.slice(0, 13), req.params.id]);
+        aviso = AVISO_047;
+      }
     }
     invalidar();
     res.json({ message: "Plano atualizado", aviso });
