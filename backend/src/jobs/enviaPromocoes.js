@@ -57,7 +57,7 @@ async function processarEnvio(envio, { dormirFn }) {
   // Aviso operacional e' servico (nao entra no silencio); o aviso de manutencao programada entra como "manutencao".
   let origem = null;
   try { origem = (typeof envio.filtros_json === "string" ? JSON.parse(envio.filtros_json) : envio.filtros_json)?.origem || null; } catch { /* filtros ilegiveis */ }
-  const tipoSilencio = envio.tipo !== "aviso" ? "promocao" : (origem === "manutencao" ? "manutencao" : null);
+  const tipoSilencio = envio.tipo !== "aviso" ? "promocao" : (origem === "manutencao" ? "manutencao" : (origem === "alerta" ? "alerta_tecnico" : null));
   if (tipoSilencio && (await naoPerturbe.emSilencio(envio.empresa_id, tipoSilencio))) return;
 
   const [pendentes] = await db.execute(

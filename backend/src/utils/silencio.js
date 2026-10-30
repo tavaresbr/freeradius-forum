@@ -2,7 +2,7 @@
 const { partesNoFuso, FUSO_PADRAO } = require("./horarioAtendimento");
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
-const TIPOS = ["promocao", "renovacao", "pos_compra", "aviso_expiracao", "manutencao"];
+const TIPOS = ["promocao", "renovacao", "pos_compra", "aviso_expiracao", "manutencao", "alerta_tecnico"];
 
 const padrao = () => ({
   ativo: false,
