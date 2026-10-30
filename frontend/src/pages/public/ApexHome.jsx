@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import SiteHeader from "../../components/public/SiteHeader";
+import { periodosDoPlano, periodosDosPlanos, rotuloPeriodo, totalDoPeriodo, descontoDoPeriodo } from "../../utils/periodoPlano";
 import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
 import LinkPainel from "../../components/public/LinkPainel";
 import useBranding from "../../hooks/useBranding";
@@ -41,6 +42,7 @@ export default function ApexHome() {
   const { nome } = useBranding();
   useSeo({ titulo: TITULO, descricao: DESCRICAO, caminho: "/" });
   const [planos, setPlanos] = useState(PLANOS_FALLBACK);
+  const [meses, setMeses] = useState(1);
   const { hash } = useLocation();
 
   // Vindo de /login ou /registro com /#planos: o React Router nao rola sozinho ate a ancora
@@ -87,7 +89,8 @@ export default function ApexHome() {
     return () => el.remove();
   }, [planos, nome]);
 
-  const cadastro = (p) => (p?.id ? `/registro?plano=${p.id}` : "/registro");
+  const mesesDe = (p) => (periodosDoPlano(p).includes(meses) ? meses : 1);
+  const cadastro = (p) => (p?.id ? `/registro?plano=${p.id}${mesesDe(p) > 1 ? `&meses=${mesesDe(p)}` : ""}` : "/registro");
 
   return (
     <div className="tema-site min-h-screen bg-white text-gray-800">
@@ -170,6 +173,13 @@ export default function ApexHome() {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-balance">Escolha seu plano</h2>
           <p className="text-center text-gray-600 mt-2">Compare os limites e os recursos de cada plano. Os planos pagos começam com teste grátis, sem cartão.</p>
+          {periodosDosPlanos(planos).length > 1 && (
+            <div className="mt-6 flex flex-wrap justify-center gap-2" data-testid="seletor-periodo">
+              {periodosDosPlanos(planos).map((m) => (
+                <button key={m} type="button" onClick={() => setMeses(m)} className={`px-4 py-2 rounded-full text-sm font-semibold border ${meses === m ? "bg-apex-500 border-apex-500 text-white" : "bg-white border-apex-200 text-apex-700"}`}>{rotuloPeriodo(m)}</button>
+              ))}
+            </div>
+          )}
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {planos.map((p, i) => {
               const destaque = planos.length >= 3 && i === 1;
@@ -178,7 +188,14 @@ export default function ApexHome() {
                   {destaque && <span className="self-start text-xs font-bold bg-apex-500 text-white px-3 py-1 rounded-full mb-2">Mais escolhido</span>}
                   <h3 className="text-2xl font-bold">{p.nome}</h3>
                   <p className="text-sm text-gray-500">{p.descricao}</p>
-                  <p className="mt-3"><span className="text-4xl font-extrabold text-apex-900">{brl(p.valor)}</span><span className="text-gray-500">/{p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}</span></p>
+                  {mesesDe(p) === 1
+                    ? <p className="mt-3"><span className="text-4xl font-extrabold text-apex-900">{brl(p.valor)}</span><span className="text-gray-500">/{p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}</span></p>
+                    : (
+                      <div className="mt-3">
+                        <p><span className="text-4xl font-extrabold text-apex-900">{brl(totalDoPeriodo(p, mesesDe(p)))}</span><span className="text-gray-500">/{mesesDe(p)} meses</span></p>
+                        <p className="text-sm text-green-700">{brl(totalDoPeriodo(p, mesesDe(p)) / mesesDe(p))} por mês · {descontoDoPeriodo(p, mesesDe(p))}% de desconto</p>
+                      </div>
+                    )}
                   <ul className="mt-4 space-y-2 flex-1 text-sm">
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_equipamentos, "equipamento", "equipamentos")}</li>
                     <li className="flex items-center gap-2"><Check size={16} className="text-green-600" />{rotuloLimite(p.max_admins, "administrador", "administradores")}</li>
@@ -198,7 +215,7 @@ export default function ApexHome() {
                 <tr><th className="text-left px-4 py-3">Comparar</th>{planos.map((p) => <th key={p.id ?? p.nome} className="px-4 py-3 text-center">{p.nome}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-apex-100">
-                {[["Valor", (p) => `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}`], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", (p) => itensExtras(p).map((k) => textoItem(p, k)).join(", ") || "-"], ["Teste grátis", (p) => (itensDoPlano(p).includes("teste") ? (diasDeTeste(p) ? `${diasDeTeste(p)} dias` : "Plano grátis") : "-")]].map(([rotulo, fn]) => (
+                {[["Valor", (p) => (mesesDe(p) === 1 ? `${brl(p.valor)}/${p.ciclo_dias === 30 ? "mês" : `${p.ciclo_dias} dias`}` : `${brl(totalDoPeriodo(p, mesesDe(p)))}/${mesesDe(p)} meses`)], ["Equipamentos", (p) => limite(p.max_equipamentos)], ["Administradores", (p) => limite(p.max_admins)], ["Recursos", (p) => itensExtras(p).map((k) => textoItem(p, k)).join(", ") || "-"], ["Teste grátis", (p) => (itensDoPlano(p).includes("teste") ? (diasDeTeste(p) ? `${diasDeTeste(p)} dias` : "Plano grátis") : "-")]].map(([rotulo, fn]) => (
                   <tr key={rotulo}><td className="px-4 py-3 font-medium text-apex-900">{rotulo}</td>{planos.map((p) => <td key={p.id ?? p.nome} className="px-4 py-3 text-center text-gray-700">{fn(p)}</td>)}</tr>
                 ))}
               </tbody>

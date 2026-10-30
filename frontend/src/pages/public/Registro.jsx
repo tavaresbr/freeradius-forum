@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import SiteHeader from "../../components/public/SiteHeader";
+import { PERIODOS, periodosDoPlano, rotuloPeriodo, totalDoPeriodo } from "../../utils/periodoPlano";
 import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS } from "../../components/CamposEmpresa";
 
 export default function Registro() {
@@ -18,8 +19,16 @@ export default function Registro() {
     confirmarSenha: "",
     ...CAMPOS_EMPRESA_VAZIOS,
   });
+  const [planoEscolhido, setPlanoEscolhido] = useState(null);
+  const [meses, setMeses] = useState(() => { const m = parseInt(searchParams.get("meses"), 10); return PERIODOS.includes(m) ? m : 1; });
   const [erro, setErro] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Plano escolhido na landing: mostra o periodo de contrato (o cadastro inicia o teste, sem cobranca).
+  useEffect(() => {
+    if (!planoId) return;
+    fetch("/api/assinatura/planos").then((r) => (r.ok ? r.json() : [])).then((l) => setPlanoEscolhido(l.find((p) => String(p.id) === String(planoId)) || null)).catch(() => {});
+  }, [planoId]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -65,6 +74,7 @@ export default function Registro() {
       const data = await res.json();
 
       if (res.ok) {
+        try { localStorage.setItem("periodo_assinatura", String(planoEscolhido && periodosDoPlano(planoEscolhido).includes(meses) ? meses : 1)); } catch { /* ignora */ }
         login(data.token, data.user, data.empresas);
         navigate(`/admin/${data.user.empresa_slug}`);
       } else {
@@ -91,6 +101,18 @@ export default function Registro() {
 
         {erro && (
           <p className="text-red-600 text-sm mb-4 text-center">{erro}</p>
+        )}
+
+        {planoEscolhido && periodosDoPlano(planoEscolhido).length > 1 && (
+          <div className="mb-4" data-testid="periodo-registro">
+            <label className="block text-gray-600 mb-2 text-sm">Período do contrato ({planoEscolhido.nome})</label>
+            <select value={periodosDoPlano(planoEscolhido).includes(meses) ? meses : 1} onChange={(e) => setMeses(parseInt(e.target.value, 10))} className="w-full bg-white border border-gray-300 text-gray-900 rounded px-3 py-2">
+              {periodosDoPlano(planoEscolhido).map((m) => (
+                <option key={m} value={m}>{rotuloPeriodo(m)} — {m === 1 ? `R$ ${Number(planoEscolhido.valor).toFixed(2)}/mês` : `R$ ${totalDoPeriodo(planoEscolhido, m).toFixed(2)}`}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Você testa grátis primeiro; o pagamento do período é feito depois, na tela Assinatura.</p>
+          </div>
         )}
 
         <div className="space-y-4 mb-4">
