@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import CamposEmpresa, { CAMPOS_EMPRESA_VAZIOS, mascaraCnpj, mascaraCpf } from "../../components/CamposEmpresa";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import ToggleTema from "../../components/ToggleTema";
 
 export default function Empresas() {
   const { isSuperAdmin } = useAuth();
@@ -86,7 +87,7 @@ export default function Empresas() {
   };
 
   return (
-    <div className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
+    <div className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
@@ -95,12 +96,15 @@ export default function Empresas() {
             </Link>
             <h1 className="text-2xl font-bold text-white">Gerenciar Empresas</h1>
           </div>
+          <div className="flex items-center gap-3">
+          <ToggleTema className="text-gray-400" />
           <button
             onClick={() => { setEditId(null); setForm({ nome: "", cnpj: "", email: "", telefone: "", ...CAMPOS_EMPRESA_VAZIOS }); setShowModal(true); }}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 text-sm"
           >
             Nova Empresa
           </button>
+          </div>
         </div>
 
         {loading ? (

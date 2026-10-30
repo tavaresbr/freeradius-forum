@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import ToggleTema from "../../components/ToggleTema";
 
 export default function Backups() {
   const raizRef = useRef(null);
@@ -187,7 +188,7 @@ export default function Backups() {
   };
 
   return (
-    <div ref={raizRef} className="super-pagina min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
+    <div ref={raizRef} className="super-pagina painel min-h-screen bg-[#0f111a] text-gray-300 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -198,7 +199,8 @@ export default function Backups() {
               Os arquivos baixados contêm dados de todas as empresas e credenciais: guarde em local seguro.
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <ToggleTema className="text-gray-400" />
             <button
               onClick={() => navigate("/super")}
               className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm"

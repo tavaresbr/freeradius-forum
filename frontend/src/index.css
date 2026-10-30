@@ -43,6 +43,7 @@
 [data-theme="claro"] .painel .bg-\[\#0d1117\] { background-color: #ffffff; }
 [data-theme="claro"] .painel .bg-\[\#252b3b\],
 [data-theme="claro"] .painel .hover\:bg-\[\#252b3b\]:hover { background-color: #e0f2fe; }
+[data-theme="claro"] .painel .hover\:bg-\[\#1f2330\]:hover { background-color: #f0f9ff; }
 [data-theme="claro"] .painel .bg-gray-800 { background-color: #e5e7eb; }
 [data-theme="claro"] .painel .bg-gray-700 { background-color: #e5e7eb; }
 [data-theme="claro"] .painel .bg-gray-600 { background-color: #d1d5db; }
