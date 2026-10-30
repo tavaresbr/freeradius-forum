@@ -1,4 +1,5 @@
 const { RouterOSAPI } = require("node-routeros");
+const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
 const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT } = require("../constants/hotspotDefaults");
 
 const NOME_PORTA_VALIDO = /^[A-Za-z0-9._-]{1,32}$/;
@@ -188,16 +189,17 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   const ifName = criarBridge ? BRIDGE_HOTSPOT.nome : (config.interface || "ether2");
   const localAddress = config.localAddress || "10.5.50.1/24";
   const poolName = config.poolName || "hs-pool";
-  const poolRange = config.poolRange || "10.5.50.2-10.5.50.254";
   const dnsName = config.dnsName || "";
   const wifiSsid = (config.wifiSsid || "").trim();
   const radiusServerIp = config.radiusServerIp || "10.8.0.1";
   const radiusSecret = config.radiusSecret || mikrotik.senha;
 
-  const gateway = localAddress.split("/")[0];
-  const mask = localAddress.split("/")[1] || "24";
-  const ipParts = gateway.split(".");
-  const network = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/${mask}`;
+  // Rede calculada de verdade (antes assumia /24 alinhado e errava /23 e /22).
+  const infoRede = calcularRede(localAddress);
+  const gateway = infoRede.ok ? infoRede.gateway : localAddress.split("/")[0];
+  const network = infoRede.ok ? infoRede.network : localAddress;
+  // Sem faixa informada, o pool cobre a rede inteira (menos o gateway).
+  const poolRange = (config.poolRange && String(config.poolRange).trim()) || (infoRede.ok ? infoRede.poolPadrao : "");
 
   const PRINT_TIMEOUT = 3000;
   const WRITE_TIMEOUT = 10000;
@@ -251,6 +253,13 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   };
 
   try {
+    // Rede e pool invalidos param ANTES de qualquer conexao ou escrita no roteador.
+    const poolOk = infoRede.ok ? validarPool(poolRange, infoRede) : { ok: false, erro: infoRede.erro };
+    if (!poolOk.ok) {
+      addStep("rede", "erro", poolOk.erro);
+      return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
+    }
+
     await conn.connect();
     addStep("conexao", "ok", `Conectado a ${mikrotik.ip}`);
 
@@ -300,6 +309,19 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         const w = await configurarWifiAP({ ifName: radio, ssid: wifiSsid, print: safePrint, write: safeWrite });
         addStep("wifi", w.status, `${radio}: ${w.message}`);
       }
+    }
+
+    // === 0d. A rede nao pode se sobrepor a de outra interface (rota ambigua derruba clientes) ===
+    {
+      const jaTem = await safePrint("/ip/address/print");
+      const conflito = jaTem.find((a) => a.interface !== ifName && a.address && redesSobrepoem(localAddress, a.address));
+      if (conflito) {
+        addStep("rede", "erro",
+          `A rede ${network} se sobrepoe a ${conflito.address} da interface ${conflito.interface}. Escolha outra faixa de IP para o hotspot.`);
+        try { await conn.close(); } catch (e) {}
+        return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
+      }
+      if (infoRede.hosts) addStep("rede", "ok", `Rede ${network}: ate ${infoRede.hosts} clientes`);
     }
 
     // === 1. IP na interface ===
