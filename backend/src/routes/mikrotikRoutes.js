@@ -11,6 +11,7 @@ const { peersLivres } = require("../utils/vpnPeers");
 const { credenciaisRoteador } = require("../utils/roteadorAdmin");
 const { checarLimiteSeguro } = require("../utils/assinatura");
 const { trilhaDaEmpresa } = require("../utils/trilhaAtivacao");
+const { criarPlanoPadraoEquipamento } = require("../utils/empresaSetup");
 
 // FreeRADIUS só lê NAS clients na inicialização, precisamos recarregar após mudanças
 function reloadFreeRADIUS() {
@@ -180,6 +181,13 @@ router.post("/", async (req, res) => {
       "UPDATE planos SET mikrotik_id = ? WHERE empresa_id = ? AND mikrotik_id IS NULL",
       [insGw.insertId, req.empresa_id]
     );
+
+    // Todo equipamento novo ja nasce com o "Plano 60 minutos" gratis. Falha aqui nunca derruba o cadastro.
+    try {
+      await criarPlanoPadraoEquipamento(db, req.empresa_id, insGw.insertId, dados.nome);
+    } catch (errPlano) {
+      console.error("⚠️ Plano padrao do equipamento nao criado:", errPlano.message);
+    }
 
     if (usaRadius(dados)) {
       // secret do NAS = campo senha (MikroTik: senha da API; Omada ext-RADIUS: secret RADIUS)
