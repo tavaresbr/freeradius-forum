@@ -301,7 +301,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
       if (res.ok) {
         alert("✅ Conexão bem-sucedida com o Mikrotik.");
       } else {
-        alert(`❌ Falha: ${data.message}`);
+        alert(`❌ Falha: ${data.message || "Sem detalhe do servidor"}`);
       }
     } catch {
       alert("Erro ao testar conexão");
