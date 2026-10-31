@@ -69,7 +69,7 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
  * proprio (entrar na bridge invalidaria o IP e pode derrubar o acesso). Idempotente. Nunca lanca:
  * devolve { ok, message, wifiPortas } e so escreve no roteador se TODAS as portas forem aceitas.
  */
-async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSPOT.nome }) {
+async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSPOT.nome, esperarMs = 2000 }) {
   const falha = (message) => ({ ok: false, message, wifiPortas: [] });
   try {
     if (!Array.isArray(portas) || portas.length === 0) return falha("Escolha ao menos uma porta/radio para a bridge do hotspot.");
@@ -110,16 +110,25 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
       }
     }
 
+    // O RouterOS aplica o "add" mas a resposta da API as vezes nao chega (timeout). Em vez de falhar na
+    // hora, espera um pouco e confere no roteador se a bridge/porta foi criada de fato.
+    const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let houveTimeout = false;
     if (!bridges.some((b) => b.name === nome)) {
       const r = await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"]);
-      if (r === "timeout") return falha(`Sem resposta ao criar a bridge ${nome}.`);
+      if (r === "timeout") {
+        await esperar(esperarMs);
+        const agora = await print("/interface/bridge/print");
+        if (!agora.some((b) => b.name === nome)) return falha(`Sem resposta ao criar a bridge ${nome} e ela nao apareceu no roteador. Confira /interface bridge print e tente de novo.`);
+      }
     }
     for (const porta of portas) {
       if (portasBridge.some((b) => b.interface === porta && b.bridge === nome)) continue;
       const r = await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`]);
-      if (r === "timeout") return falha(`Sem resposta ao adicionar ${porta} na bridge ${nome}.`);
+      if (r === "timeout") houveTimeout = true;
     }
 
+    if (houveTimeout) await esperar(esperarMs);
     const depois = await print("/interface/bridge/port/print");
     const faltando = portas.filter((p) => !depois.some((b) => b.interface === p && b.bridge === nome));
     if (faltando.length) return falha(`Sem confirmacao de que ${faltando.join(", ")} entrou na bridge ${nome}.`);

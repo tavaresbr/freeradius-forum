@@ -461,3 +461,47 @@ test('assistente confere o tunel antes de mexer no roteador', () => {
   assert.match(src, /ehInterfaceTunel\(ifName, info && info\.type\)/);
   assert.ok(src.indexOf('0a. Interface nao pode ser VPN') < src.indexOf('0. Interface nao pode ser porta de bridge'));
 });
+
+// ---- bridge: resposta da API que nao chega (timeout) mas o roteador aplicou ----
+function roteadorTimeout({ timeoutBridge = false, criaBridge = true, timeoutPorta = false, criaPorta = true } = {}) {
+  const r = roteadorBridge();
+  const escreverOriginal = r.write;
+  r.write = async (c, a) => {
+    if (c === '/interface/bridge/add' && timeoutBridge) {
+      r.escritas.push({ c, a });
+      if (criaBridge) r.estado.bridges.push({ name: a[0].replace('=name=', '') });
+      return 'timeout';
+    }
+    if (c === '/interface/bridge/port/add' && timeoutPorta) {
+      r.escritas.push({ c, a });
+      if (criaPorta) r.estado.portas.push({ bridge: a[0].replace('=bridge=', ''), interface: a[1].replace('=interface=', '') });
+      return 'timeout';
+    }
+    return escreverOriginal(c, a);
+  };
+  return r;
+}
+
+test('bridge: timeout ao criar a bridge mas ela existe no roteador = segue', async () => {
+  const r = roteadorTimeout({ timeoutBridge: true });
+  const res = await prepararBridgeHotspot({ portas: ['ether2', 'wlan1'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, true);
+});
+
+test('bridge: timeout ao criar a bridge e ela nao aparece = falha clara', async () => {
+  const r = roteadorTimeout({ timeoutBridge: true, criaBridge: false });
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.message, /nao apareceu no roteador/);
+  assert.ok(!r.escritas.some((e) => e.c === '/interface/bridge/port/add'));
+});
+
+test('bridge: timeout ao adicionar porta mas ela entrou = ok; se nao entrou = falha', async () => {
+  let r = roteadorTimeout({ timeoutPorta: true });
+  let res = await prepararBridgeHotspot({ portas: ['ether2', 'wlan1'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, true);
+  r = roteadorTimeout({ timeoutPorta: true, criaPorta: false });
+  res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.message, /Sem confirmacao/);
+});
