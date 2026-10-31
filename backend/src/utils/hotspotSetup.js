@@ -1,4 +1,5 @@
 const { RouterOSAPI } = require("node-routeros");
+require("./routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
 const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require("../constants/hotspotDefaults");
 

@@ -1,5 +1,6 @@
 const db = require("../../db");
 const { RouterOSAPI } = require("node-routeros");
+require("../utils/routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 
 // mikrotik_id vem do corpo: precisa ser equipamento desta empresa (senao o plano liberaria acesso
 // no roteador de outra empresa). Sem equipamento (null) e permitido (planos gratis padrao).

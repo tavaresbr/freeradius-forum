@@ -5,6 +5,7 @@
  * sem apagar credenciais nem saldo.
  */
 const { RouterOSAPI } = require("node-routeros");
+require("./routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 const db = require("../../db");
 const coa = require("./coa");
 
