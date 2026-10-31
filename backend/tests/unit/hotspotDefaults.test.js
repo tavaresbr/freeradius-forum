@@ -576,3 +576,30 @@ test('verificacao final: assistente chama a conferencia antes de concluir', () =
   assert.ok(fonte.includes('verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName })'));
   assert.ok(fonte.indexOf('addStep("verificacao"') < fonte.indexOf('Configuracao concluida!'));
 });
+
+test('bridge: print vazio (expirou) nas 2 primeiras conferencias e a bridge aparece na 3a = ok', async () => {
+  const r = roteadorTimeout({ timeoutBridge: true });
+  let leituras = 0;
+  const print = async (c, ...resto) => {
+    if (c === '/interface/bridge/print' && r.escritas.some((e) => e.c === '/interface/bridge/add')) {
+      leituras++;
+      if (leituras < 3) return [];
+    }
+    return r.print(c, ...resto);
+  };
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, true);
+  assert.ok(leituras >= 3);
+});
+
+test('bridge: ausente nas 3 conferencias repete o add 1x e so entao falha', async () => {
+  const r = roteadorTimeout({ timeoutBridge: true, criaBridge: false });
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(r.escritas.filter((e) => e.c === '/interface/bridge/add').length, 2);
+});
+
+test('assistente: print padrao espera 8 s (roteador lento nao vira falso negativo)', () => {
+  const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(fonte.includes('const PRINT_TIMEOUT = 8000;'));
+});
