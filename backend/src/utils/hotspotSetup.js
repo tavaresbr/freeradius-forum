@@ -14,6 +14,11 @@ function sanitizarBridge(config = {}) {
   return { criarBridge: true, portasBridge: portas };
 }
 
+// Tunel/VPN/loopback nunca pode ser a interface do hotspot: o hotspot, o DHCP e o IP do hotspot em cima
+// do WireGuard (wg-hotspot) derrubam a VPN pela qual o painel administra o roteador.
+const TIPOS_TUNEL = /^(wg|wireguard|ovpn|ovpn-out|ovpn-in|l2tp|l2tp-out|sstp|sstp-out|pptp|pptp-out|gre|eoip|ipip|6to4|vxlan|lo|loopback)$/i;
+const ehInterfaceTunel = (nome = "", tipo = "") => TIPOS_TUNEL.test(String(tipo)) || /^(wg|wireguard|ovpn|l2tp|sstp|pptp|gre|eoip|ipip)[-_]?/i.test(String(nome)) || String(nome).toLowerCase() === "lo";
+
 const ehInterfaceWifi = (nome = "", tipo = "") => /^wlan|^wifi/i.test(nome) || /^(wlan|wireless)/i.test(tipo);
 
 // RouterOS 7.15+ exige Message-Authenticator na resposta e descarta o Access-Accept do FreeRADIUS
@@ -364,6 +369,18 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       }
       addStep("bridge", "ok", b.message);
       wifiPortasBridge = b.wifiPortas;
+    }
+
+    // === 0a. Interface nao pode ser VPN/tunel/loopback (derrubaria o acesso do painel ao roteador) ===
+    if (!criarBridge) {
+      const todas = await safePrint("/interface/print");
+      const info = todas.find(i => i.name === ifName);
+      if (ehInterfaceTunel(ifName, info && info.type)) {
+        addStep("interface", "erro",
+          `A interface ${ifName} e uma VPN/tunel (o painel administra o roteador por ela). Escolha uma porta ether ou o Wi-Fi da rede local.`);
+        try { await conn.close(); } catch (e) {}
+        return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
+      }
     }
 
     // === 0. Interface nao pode ser porta de bridge (slave) ===
@@ -905,4 +922,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

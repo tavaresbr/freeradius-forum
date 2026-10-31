@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes } = require('../../src/utils/hotspotSetup');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, ehInterfaceTunel } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -444,4 +444,20 @@ test('assistente so aplica log de conexoes com true/false e nao entra em aplicar
   assert.match(src, /config\.logConexoes === true \|\| config\.logConexoes === false/);
   const ap = src.slice(src.indexOf('async function aplicarPadroesHotspot'));
   assert.ok(!/logConexoes|LOG_CONEXOES/.test(ap.slice(0, ap.indexOf('module.exports'))));
+});
+
+// ---- interface do hotspot nao pode ser VPN/tunel ----
+test('ehInterfaceTunel: wg-hotspot e outros tuneis sao recusados; ether e wlan nao', () => {
+  assert.ok(ehInterfaceTunel('wg-hotspot', 'wg'));
+  assert.ok(ehInterfaceTunel('wg1', ''));
+  assert.ok(ehInterfaceTunel('qualquer', 'wg'));
+  assert.ok(ehInterfaceTunel('ovpn-out1', 'ovpn-out'));
+  assert.ok(ehInterfaceTunel('lo', 'loopback'));
+  for (const n of ['ether1', 'ether2', 'wlan1', 'wifi1', 'bridge-hotspot']) assert.ok(!ehInterfaceTunel(n, 'ether'), n);
+});
+
+test('assistente confere o tunel antes de mexer no roteador', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.match(src, /ehInterfaceTunel\(ifName, info && info\.type\)/);
+  assert.ok(src.indexOf('0a. Interface nao pode ser VPN') < src.indexOf('0. Interface nao pode ser porta de bridge'));
 });

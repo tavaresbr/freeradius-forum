@@ -150,7 +150,7 @@ export default function Mikrotiks() {
       if (!res.ok) { alert(data.message); setShowWizard(false); return; }
       setScanData(data);
       if (data.interfaces?.length > 0) {
-        const livre = data.interfaces.find(i => !i.wan && !i.bridge && i.disabled !== "true" && /^(ether|wlan|wifi)/.test(i.name));
+        const livre = data.interfaces.find(i => !i.wan && !i.bridge && !i.tunel && i.disabled !== "true" && /^(ether|wlan|wifi)/.test(i.name));
         setWizardConfig(c => ({ ...c, interface: livre?.name || "" }));
       }
       if (data.pools?.length > 0) {
@@ -834,8 +834,8 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     onChange={(e) => setWizardConfig({ ...wizardConfig, interface: e.target.value })}
                   >
                     {scanData.interfaces?.map(i => (
-                      <option key={i.name} value={i.name} disabled={i.wan || i.bridge}>
-                        {i.name} ({i.type}){i.wan ? " [WAN - nao usar]" : ""}{i.bridge ? " [porta de bridge]" : ""}{i.disabled === "true" ? " [desabilitada]" : ""}
+                      <option key={i.name} value={i.name} disabled={i.wan || i.bridge || i.tunel}>
+                        {i.name} ({i.type}){i.wan ? " [WAN - nao usar]" : ""}{i.tunel ? " [VPN/tunel - nao usar]" : ""}{i.bridge ? " [porta de bridge]" : ""}{i.disabled === "true" ? " [desabilitada]" : ""}
                       </option>
                     ))}
                   </select>
