@@ -4,6 +4,8 @@ import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { useAuth } from "../../contexts/AuthContext";
 import ToggleTema from "../../components/ToggleTema";
 import CartaoMetrica from "../../components/super/CartaoMetrica";
+import EnviarMensagemEmpresa from "../../components/super/EnviarMensagemEmpresa";
+import { linkWhatsapp, aplicarVariaveis } from "../../utils/linkWhatsapp";
 
 const moeda = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const data = (v) => (v ? new Date(v).toLocaleDateString("pt-BR") : "—");
@@ -79,6 +81,8 @@ export default function EmpresaPainel() {
   const [motivoSusp, setMotivoSusp] = useState("");
   const [confirmaSlug, setConfirmaSlug] = useState("");
   const [nota, setNota] = useState("");
+  const [enviandoMsg, setEnviandoMsg] = useState(false);
+  const [copiado, setCopiado] = useState("");
 
   const req = useCallback(async (caminho, opcoes = {}) => {
     const token = localStorage.getItem("admin_token");
@@ -154,6 +158,16 @@ export default function EmpresaPainel() {
     }
   };
 
+  const copiar = async (texto, rotulo) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(rotulo);
+      setTimeout(() => setCopiado(""), 2000);
+    } catch {
+      setMsg({ tipo: "erro", texto: "Não foi possível copiar." });
+    }
+  };
+
   const salvarNota = async (ev) => {
     ev.preventDefault();
     setOcupado(true);
@@ -217,6 +231,15 @@ export default function EmpresaPainel() {
 
         {mensagem}
 
+        {enviandoMsg && (
+          <EnviarMensagemEmpresa
+            empresa={empresa}
+            req={req}
+            onFechar={() => setEnviandoMsg(false)}
+            onEnviada={(texto) => { setEnviandoMsg(false); setMsg({ tipo: "ok", texto }); carregarExtras(); }}
+          />
+        )}
+
         {/* Abas */}
         <div className="flex gap-1 overflow-x-auto border-b border-gray-800 mb-6" role="tablist">
           {ABAS.map(([chave, rotulo]) => (
@@ -246,9 +269,48 @@ export default function EmpresaPainel() {
             <Caixa titulo="Cadastro">
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div><dt className="text-gray-500">{empresa.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</dt><dd className="text-gray-200">{empresa.cnpj || empresa.cpf || "—"}</dd></div>
-                <div><dt className="text-gray-500">E-mail</dt><dd className="text-gray-200 break-words">{empresa.email || "—"}</dd></div>
-                <div><dt className="text-gray-500">Telefone</dt><dd className="text-gray-200">{empresa.telefone || "—"}</dd></div>
+                <div>
+                  <dt className="text-gray-500">E-mail</dt>
+                  <dd className="text-gray-200 break-words">{empresa.email || "—"}</dd>
+                  {empresa.email && (
+                    <button type="button" onClick={() => copiar(empresa.email, "email")} className="mt-2 px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">
+                      {copiado === "email" ? "Copiado!" : "Copiar"}
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <dt className="text-gray-500">Telefone</dt>
+                  <dd className="text-gray-200">{empresa.telefone || "—"}</dd>
+                  {empresa.telefone && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {linkWhatsapp(empresa.telefone) && (
+                        <a
+                          href={linkWhatsapp(empresa.telefone, aplicarVariaveis("Olá, {{nome}}! Aqui é da Apex Telecom.", { nome: String(empresa.nome || "").split(/\s+/)[0] }))}
+                          target="_blank" rel="noopener noreferrer"
+                          className="px-3 py-1 rounded-lg text-xs bg-green-600 text-white hover:bg-green-500"
+                        >Abrir WhatsApp</a>
+                      )}
+                      {linkWhatsapp(empresa.telefone) && (
+                        <button type="button" onClick={() => setEnviandoMsg(true)} className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">Enviar mensagem</button>
+                      )}
+                      <button type="button" onClick={() => copiar(empresa.telefone, "telefone")} className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">
+                        {copiado === "telefone" ? "Copiado!" : "Copiar"}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div><dt className="text-gray-500">Cadastrada em</dt><dd className="text-gray-200">{dataHora(empresa.criado_em)}</dd></div>
+                <div>
+                  <dt className="text-gray-500">Boas-vindas no WhatsApp</dt>
+                  <dd className="text-gray-200">{empresa.boas_vindas_em ? `Enviada em ${dataHora(empresa.boas_vindas_em)}` : "Ainda não enviada"}</dd>
+                  {empresa.telefone && (
+                    <button type="button" disabled={ocupado}
+                      onClick={() => agir("/boas-vindas", {}, `Enviar a mensagem de boas-vindas agora para ${empresa.nome}?`)}
+                      className="mt-2 px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50">
+                      {empresa.boas_vindas_em ? "Reenviar boas-vindas" : "Enviar boas-vindas"}
+                    </button>
+                  )}
+                </div>
               </dl>
             </Caixa>
             <Caixa titulo="Alertas">
