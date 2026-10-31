@@ -3,7 +3,7 @@ const router = express.Router()
 const { mascararObjeto, preservarSegredos, semAlteracao } = require("../utils/segredos");
 const db = require("../../db")
 const { getDriver } = require("../gateways");
-const { resolveHotspotHtmlDir, aplicarPadroesHotspot } = require("../utils/hotspotSetup");
+const { resolveHotspotHtmlDir, aplicarPadroesHotspot, ehInterfaceTunel } = require("../utils/hotspotSetup");
 const { obterInformacoes } = require("../controllers/mikrotikAPIController");
 const { exec } = require("child_process");
 const { listarPeersDaEmpresa } = require("../controllers/wireguardController");
@@ -541,7 +541,7 @@ router.post("/:id/scan", somenteMikrotik, async (req, res) => {
     const bridgeIfs = new Set(bridgePorts.map(b => b.interface));
     result.interfaces = interfaces.map(i => ({
       name: i.name, type: i.type, disabled: i.disabled,
-      wan: wanIfs.has(i.name), bridge: bridgeIfs.has(i.name),
+      wan: wanIfs.has(i.name), bridge: bridgeIfs.has(i.name), tunel: ehInterfaceTunel(i.name, i.type),
     }));
 
     const addresses = await timedQuery("/ip/address/print");
