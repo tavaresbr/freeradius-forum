@@ -317,8 +317,8 @@ exports.enviarWhatsapp = async (req, res) => {
     if (!emp) return;
     const { erro, texto } = validarTextoManual(req.body && req.body.texto);
     if (erro) return res.status(400).json({ message: erro });
-    await boasVindas.enviarManual(emp.id, texto, req.user && req.user.id);
-    res.json({ message: "Mensagem enviada pelo WhatsApp." });
+    const r = await boasVindas.enviarManual(emp.id, texto, req.user && req.user.id);
+    res.json({ message: "Mensagem enviada pelo chat do WhatsApp.", conversa_id: r.conversa_id });
   } catch (err) {
     resposta(res, err);
   }
@@ -339,6 +339,19 @@ exports.reenviarBoasVindas = async (req, res) => {
     if (r.ok) return res.json({ message: "Boas-vindas enviada." });
     const [status, message] = MOTIVOS_BV[r.motivo] || [502, "Não foi possível enviar agora."];
     res.status(status).json({ message });
+  } catch (err) {
+    resposta(res, err);
+  }
+};
+
+// Abre/cria a conversa da empresa no chat (aba WhatsApp) da plataforma; o painel navega ate ela.
+exports.abrirConversa = async (req, res) => {
+  try {
+    const emp = await empresaDoParametro(req, res);
+    if (!emp) return;
+    const c = await boasVindas.abrirConversaDaEmpresa(emp.id);
+    if (!c.plataformaSlug) return res.status(500).json({ message: "Empresa da plataforma não encontrada (SITE_EMPRESA_ID)." });
+    res.json({ conversa_id: c.id, plataforma_id: c.plataformaId, plataforma_slug: c.plataformaSlug });
   } catch (err) {
     resposta(res, err);
   }
