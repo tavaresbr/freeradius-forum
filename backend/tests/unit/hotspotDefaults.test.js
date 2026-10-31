@@ -241,7 +241,7 @@ test('bridge: erro de escrita ou porta que nao confirma viram ok:false sem lanca
   assert.strictEqual(a.ok, false);
   assert.match(a.message, /boom/);
   const semConfirmar = roteadorBridge({ naoConfirma: true });
-  const b = await prepararBridgeHotspot({ portas: ['ether2'], print: semConfirmar.print, write: semConfirmar.write });
+  const b = await prepararBridgeHotspot({ portas: ['ether2'], print: semConfirmar.print, write: semConfirmar.write, esperarMs: 0 });
   assert.strictEqual(b.ok, false);
   assert.match(b.message, /Sem confirmacao/);
 });
@@ -504,4 +504,25 @@ test('bridge: timeout ao adicionar porta mas ela entrou = ok; se nao entrou = fa
   res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
   assert.strictEqual(res.ok, false);
   assert.match(res.message, /Sem confirmacao/);
+});
+
+test('bridge: print que expira (vazio) na 1a conferencia e a porta existe = ok na 2a tentativa', async () => {
+  const r = roteadorBridge();
+  let conferencias = 0;
+  const printLento = async (c, ...resto) => {
+    if (c === '/interface/bridge/port/print') {
+      conferencias++;
+      if (conferencias <= 2) return []; // 1a leitura (antes das escritas) e 1a conferencia: vazias
+    }
+    return r.print(c, ...resto);
+  };
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print: printLento, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, true);
+});
+
+test('bridge: sem confirmacao apos 3 conferencias = falha com instrucao de conferir no roteador', async () => {
+  const r = roteadorBridge({ naoConfirma: true });
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.message, /bridge port print/);
 });
