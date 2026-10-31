@@ -128,10 +128,21 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
       if (r === "timeout") houveTimeout = true;
     }
 
+    // Roteador lento: o print pode expirar e voltar vazio (falso negativo). Confere ate 3 vezes, com
+    // espera entre elas, e re-adiciona so o que ainda falta ("ja existe" nao e erro).
     if (houveTimeout) await esperar(esperarMs);
-    const depois = await print("/interface/bridge/port/print");
-    const faltando = portas.filter((p) => !depois.some((b) => b.interface === p && b.bridge === nome));
-    if (faltando.length) return falha(`Sem confirmacao de que ${faltando.join(", ")} entrou na bridge ${nome}.`);
+    let faltando = portas;
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      const depois = await print("/interface/bridge/port/print", 8000);
+      faltando = portas.filter((p) => !depois.some((b) => b.interface === p && b.bridge === nome));
+      if (!faltando.length) break;
+      if (tentativa < 3) {
+        await esperar(esperarMs);
+        for (const porta of faltando) await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`]);
+        await esperar(esperarMs);
+      }
+    }
+    if (faltando.length) return falha(`Sem confirmacao de que ${faltando.join(", ")} entrou na bridge ${nome}. Confira no roteador: /interface bridge port print (se as portas estiverem la, rode o assistente de novo).`);
 
     const wifiPortas = portas.filter((p) => ehInterfaceWifi(p));
     // Isolamento entre clientes do mesmo radio (pacote wireless legado); best-effort, como no script de instalacao.
@@ -312,13 +323,13 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   const FETCH_TIMEOUT = 45000;
   const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  const safePrint = async (path) => {
+  const safePrint = async (path, timeoutMs = PRINT_TIMEOUT) => {
     return Promise.race([
       conn.write(path).then(r => Array.isArray(r) ? r : []).catch(e => {
         if (e.errno === "UNKNOWNREPLY" || (e.message && e.message.includes("!empty"))) return [];
         throw e;
       }),
-      new Promise(resolve => setTimeout(() => resolve([]), PRINT_TIMEOUT))
+      new Promise(resolve => setTimeout(() => resolve([]), timeoutMs))
     ]);
   };
 
