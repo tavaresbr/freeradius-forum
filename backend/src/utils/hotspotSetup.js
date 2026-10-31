@@ -608,14 +608,30 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
         `=mac-cookie-timeout=${HOTSPOT_PADROES.macCookieTimeout}`,
       ]);
       if (r === "timeout") {
-        // O set pode ter sido aplicado mesmo sem resposta: confere o valor no roteador.
-        await esperar(2000);
-        const perfis = await Promise.race([
-          conn.write("/ip/hotspot/user/profile/print", ["=.proplist=name,address-pool"]).then(x => Array.isArray(x) ? x : []).catch(() => []),
-          new Promise(resolve => setTimeout(() => resolve([]), 8000)),
-        ]);
-        const padrao = perfis.find(p => p.name === "default");
-        if (padrao && padrao["address-pool"] === poolName) {
+        // O set pode ter sido aplicado mesmo sem resposta: confere o valor no roteador e,
+        // se nao pegou, repete UMA vez com mais folga (API lenta, ex. RB951).
+        const confere = async () => {
+          await esperar(2000);
+          const perfis = await Promise.race([
+            conn.write("/ip/hotspot/user/profile/print", ["=.proplist=name,address-pool,keepalive-timeout"]).then(x => Array.isArray(x) ? x : []).catch(() => []),
+            new Promise(resolve => setTimeout(() => resolve([]), 8000)),
+          ]);
+          const padrao = perfis.find(p => p.name === "default");
+          return !!(padrao && padrao["address-pool"] === poolName);
+        };
+        let aplicado = await confere();
+        if (!aplicado) {
+          await safeWrite("/ip/hotspot/user/profile/set", [
+            "=numbers=default",
+            `=address-pool=${poolName}`,
+            `=keepalive-timeout=${HOTSPOT_PADROES.keepaliveTimeout}`,
+            `=idle-timeout=${HOTSPOT_PADROES.idleTimeout}`,
+            "=add-mac-cookie=yes",
+            `=mac-cookie-timeout=${HOTSPOT_PADROES.macCookieTimeout}`,
+          ], 30000);
+          aplicado = await confere();
+        }
+        if (aplicado) {
           addStep("user-profile", "ok", `User profile default apontando para ${poolName} (confirmado no roteador)`);
         } else {
           addStep("user-profile", "aviso",
@@ -816,20 +832,42 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     // === 9b. error.html: franquia esgotada / login recusado volta ao portal (nao e' critico) ===
     try {
       const htmlDir = await resolveHotspotHtmlDir(conn);
-      const r = await safeWrite("/tool/fetch", [
-        `=url=https://${systemDomain}/api/hotspot-erro/${mikrotik.id}`,
-        `=dst-path=${htmlDir}/error.html`,
-        "=mode=https",
-        "=check-certificate=no",
-      ], FETCH_TIMEOUT);
-      addStep("error_page", r === "timeout" ? "aviso" : "ok",
-        r === "timeout" ? "error.html sem confirmacao (timeout); o login segue funcionando" : `error.html baixado em ${htmlDir}`);
+      const dstErro = `${htmlDir}/error.html`;
+      const antesErro = await lerArquivo(dstErro);
+      let okErro = false;
+      for (let tentativa = 0; tentativa < 2 && !okErro; tentativa++) {
+        const r = await safeWrite("/tool/fetch", [
+          `=url=https://${systemDomain}/api/hotspot-erro/${mikrotik.id}`,
+          `=dst-path=${dstErro}`,
+          "=mode=https",
+          "=check-certificate=no",
+        ], FETCH_TIMEOUT);
+        if (r !== "timeout") { okErro = true; break; }
+        await esperar(3000);
+        const depois = await lerArquivo(dstErro);
+        if (depois && Number(depois.size) > 0 && (!antesErro || depois["creation-time"] !== antesErro["creation-time"])) okErro = true;
+      }
+      addStep("error_page", okErro ? "ok" : "aviso",
+        okErro ? `error.html baixado em ${htmlDir}` : "error.html sem confirmacao (timeout); o login segue funcionando");
     } catch (e) {
       addStep("error_page", "aviso", `error.html nao baixado: ${e.message}`);
     }
 
+    // === 10. Conferencia final: o que foi criado esta mesmo no roteador? ===
+    {
+      const v = await verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName });
+      if (v.ok) {
+        addStep("verificacao", "ok", "Conferido no roteador: hotspot, pool, profile com RADIUS e cliente RADIUS presentes");
+      } else {
+        addStep("verificacao", "erro",
+          `O roteador NAO confirma a configuracao: ${v.faltando.join("; ")}. Confira /ip hotspot print, /ip pool print e /radius print; se faltar, rode o assistente de novo (e nao reaplique o script de instalacao rapida depois).`);
+      }
+    }
+
     try { await conn.close(); } catch (e) {}
-    addStep("finalizado", "ok", "Configuracao concluida!");
+    const faltouVerificar = steps.some(s => s.step === "verificacao" && s.status === "erro");
+    addStep("finalizado", faltouVerificar ? "aviso" : "ok",
+      faltouVerificar ? "Assistente terminou, mas a conferencia final falhou (veja acima)" : "Configuracao concluida!");
 
     const hasErrors = steps.some(s => s.status === "erro");
     return { success: !hasErrors, steps, log: steps.map(s => `[${s.status}] ${s.message}`) };
@@ -838,6 +876,49 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     try { await conn.close(); } catch (e) {}
     return { success: false, steps, log: steps.map(s => `[${s.status}] ${s.message}`), error: err.message };
   }
+}
+
+/**
+ * Conferencia final do assistente: le do roteador se o hotspot realmente existe.
+ * Sem isso o assistente dizia "concluida" mesmo quando as escritas nao pegaram (API lenta,
+ * reset/reboot do roteador). `print(path)` e' o safePrint (devolve [] se expirar), entao cada
+ * leitura e' repetida algumas vezes antes de dar o item como ausente. Nunca lanca.
+ * Devolve { ok, faltando: [textos] }.
+ */
+async function verificarConfiguracaoHotspot({ print, ifName, poolName, tentativas = 3, esperarMs = 2000 }) {
+  const dorme = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const verdadeiro = (v) => v === true || v === "true" || v === "yes";
+  const ler = async (path) => {
+    for (let i = 0; i < tentativas; i++) {
+      if (i > 0) await dorme(esperarMs);
+      try {
+        const r = await print(path, 8000);
+        if (Array.isArray(r) && r.length > 0) return r;
+      } catch (e) { /* tenta de novo */ }
+    }
+    return [];
+  };
+  const faltando = [];
+  try {
+    const servers = await ler("/ip/hotspot/print");
+    const hs = servers.find(s => s.name === "hotspot1");
+    if (!hs) faltando.push("hotspot server hotspot1 nao existe");
+    else {
+      if (hs.interface && hs.interface !== ifName) faltando.push(`hotspot1 esta em ${hs.interface} (esperado ${ifName})`);
+      if (verdadeiro(hs.disabled)) faltando.push("hotspot1 esta desabilitado");
+    }
+    const pools = await ler("/ip/pool/print");
+    if (!pools.find(p => p.name === poolName)) faltando.push(`pool ${poolName} nao existe`);
+    const perfis = await ler("/ip/hotspot/profile/print");
+    const prof = perfis.find(p => p.name === "hsprof-hotspot");
+    if (!prof) faltando.push("profile hsprof-hotspot nao existe");
+    else if (!verdadeiro(prof["use-radius"])) faltando.push("profile hsprof-hotspot sem use-radius");
+    const radius = await ler("/radius/print");
+    if (!radius.find(r => r.service && String(r.service).includes("hotspot"))) faltando.push("cliente RADIUS do hotspot nao existe");
+  } catch (e) {
+    faltando.push(`verificacao interrompida: ${e.message}`);
+  }
+  return { ok: faltando.length === 0, faltando };
 }
 
 // Descobre o html-directory do hotspot ativo no MikroTik.
@@ -942,4 +1023,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };

@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, ehInterfaceTunel } = require('../../src/utils/hotspotSetup');
+const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, ehInterfaceTunel, verificarConfiguracaoHotspot } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -525,4 +525,54 @@ test('bridge: sem confirmacao apos 3 conferencias = falha com instrucao de confe
   const res = await prepararBridgeHotspot({ portas: ['ether2'], print: r.print, write: r.write, esperarMs: 0 });
   assert.strictEqual(res.ok, false);
   assert.match(res.message, /bridge port print/);
+});
+
+// === Conferencia final do assistente ===
+const roteadorCompleto = () => ({
+  '/ip/hotspot/print': [{ name: 'hotspot1', interface: 'bridge-hotspot', disabled: 'false' }],
+  '/ip/pool/print': [{ name: 'hs-pool' }],
+  '/ip/hotspot/profile/print': [{ name: 'hsprof-hotspot', 'use-radius': 'true' }],
+  '/radius/print': [{ service: 'hotspot' }],
+});
+const printDe = (tabela) => async (caminho) => tabela[caminho] || [];
+
+test('verificacao final: roteador completo = ok', async () => {
+  const r = await verificarConfiguracaoHotspot({ print: printDe(roteadorCompleto()), ifName: 'bridge-hotspot', poolName: 'hs-pool', esperarMs: 0 });
+  assert.deepStrictEqual(r, { ok: true, faltando: [] });
+});
+
+test('verificacao final: roteador vazio (reset) lista tudo que falta', async () => {
+  const r = await verificarConfiguracaoHotspot({ print: printDe({}), ifName: 'bridge-hotspot', poolName: 'hs-pool', esperarMs: 0 });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.faltando.length, 4);
+  assert.ok(r.faltando.some((t) => t.includes('hotspot1')));
+  assert.ok(r.faltando.some((t) => t.includes('RADIUS')));
+});
+
+test('verificacao final: profile sem use-radius, hotspot em outra interface e desabilitado', async () => {
+  const t = roteadorCompleto();
+  t['/ip/hotspot/profile/print'] = [{ name: 'hsprof-hotspot', 'use-radius': 'false' }];
+  t['/ip/hotspot/print'] = [{ name: 'hotspot1', interface: 'ether2', disabled: 'true' }];
+  const r = await verificarConfiguracaoHotspot({ print: printDe(t), ifName: 'bridge-hotspot', poolName: 'hs-pool', esperarMs: 0 });
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.faltando.some((x) => x.includes('use-radius')));
+  assert.ok(r.faltando.some((x) => x.includes('ether2')));
+  assert.ok(r.faltando.some((x) => x.includes('desabilitado')));
+});
+
+test('verificacao final: print que expira na 1a leitura e responde na 2a nao gera falso negativo', async () => {
+  const t = roteadorCompleto();
+  const chamadas = {};
+  const print = async (caminho) => {
+    chamadas[caminho] = (chamadas[caminho] || 0) + 1;
+    return chamadas[caminho] === 1 ? [] : t[caminho];
+  };
+  const r = await verificarConfiguracaoHotspot({ print, ifName: 'bridge-hotspot', poolName: 'hs-pool', esperarMs: 0 });
+  assert.strictEqual(r.ok, true);
+});
+
+test('verificacao final: assistente chama a conferencia antes de concluir', () => {
+  const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(fonte.includes('verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName })'));
+  assert.ok(fonte.indexOf('addStep("verificacao"') < fonte.indexOf('Configuracao concluida!'));
 });
