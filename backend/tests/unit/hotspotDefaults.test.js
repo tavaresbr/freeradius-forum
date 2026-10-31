@@ -603,3 +603,25 @@ test('assistente: print padrao espera 8 s (roteador lento nao vira falso negativ
   const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
   assert.ok(fonte.includes('const PRINT_TIMEOUT = 8000;'));
 });
+
+test('bridge: portas so aparecem na 6a leitura (roteador ocupado) = ok, sem re-adicionar em excesso', async () => {
+  const r = roteadorBridge();
+  let leituras = 0;
+  const print = async (c, ...resto) => {
+    if (c === '/interface/bridge/port/print') {
+      leituras++;
+      if (leituras <= 6) return []; // 1a = leitura inicial; as demais = conferencias vazias
+    }
+    return r.print(c, ...resto);
+  };
+  const res = await prepararBridgeHotspot({ portas: ['ether2'], print, write: r.write, esperarMs: 0 });
+  assert.strictEqual(res.ok, true);
+  // so re-adiciona nas leituras 4 (e nao na 7): 1 add inicial + 1 re-add
+  assert.strictEqual(r.escritas.filter((e) => e.c === '/interface/bridge/port/add').length, 2);
+});
+
+test('bridge: adds de bridge e de porta usam timeout de escrita de 30 s', async () => {
+  const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(fonte.includes('"=comment=hotspot"], 30000)'));
+  assert.ok(fonte.includes('`=interface=${porta}`], 30000)'));
+});
