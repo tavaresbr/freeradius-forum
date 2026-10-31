@@ -117,9 +117,16 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
     if (!bridges.some((b) => b.name === nome)) {
       const r = await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"]);
       if (r === "timeout") {
-        await esperar(esperarMs);
-        const agora = await print("/interface/bridge/print");
-        if (!agora.some((b) => b.name === nome)) return falha(`Sem resposta ao criar a bridge ${nome} e ela nao apareceu no roteador. Confira /interface bridge print e tente de novo.`);
+        // Ate 3 leituras (print vazio por expirar nao prova que a bridge nao existe); se continuar
+        // ausente, repete o add 1x ("ja existe" nao e erro).
+        let existe = false;
+        for (let tentativa = 1; tentativa <= 3 && !existe; tentativa++) {
+          await esperar(esperarMs);
+          const agora = await print("/interface/bridge/print", 8000);
+          existe = agora.some((b) => b.name === nome);
+          if (!existe && tentativa === 2) await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"]);
+        }
+        if (!existe) return falha(`Sem resposta ao criar a bridge ${nome} e ela nao apareceu no roteador. Confira /interface bridge print e tente de novo.`);
       }
     }
     for (const porta of portas) {
@@ -316,7 +323,9 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
   // Sem faixa informada, o pool cobre a rede inteira (menos o gateway).
   const poolRange = (config.poolRange && String(config.poolRange).trim()) || (infoRede.ok ? infoRede.poolPadrao : "");
 
-  const PRINT_TIMEOUT = 3000;
+  // Print vazio de verdade volta na hora; 8 s so pesam quando a API do roteador esta lenta (RB951 expirava
+  // em 3 s e gerava falso negativo: 'a bridge nao apareceu' com a bridge criada).
+  const PRINT_TIMEOUT = 8000;
   const WRITE_TIMEOUT = 10000;
   // /tool/fetch conclui no roteador mas, em alguns modelos (hAP), a resposta da API
   // demora ou nunca volta; por isso o resultado e confirmado em /file/print.
