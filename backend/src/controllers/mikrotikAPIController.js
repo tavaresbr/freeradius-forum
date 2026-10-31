@@ -1,5 +1,6 @@
 const db = require("../../db");
 const { RouterOSAPI } = require("node-routeros");
+require("../utils/routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 const axios = require("axios");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { upgradeSessaoCoA } = require("../utils/coa");

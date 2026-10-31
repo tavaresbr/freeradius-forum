@@ -1,4 +1,5 @@
 const { RouterOSAPI } = require("node-routeros");
+require("./routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 
 // Os erros do node-routeros (e do socket) muitas vezes chegam com `message` vazio; o motivo fica em
 // `errno` (ex.: SOCKTMOUT, CANTLOGIN) ou `code` (ex.: ECONNREFUSED). Traduz para algo que o admin entende.

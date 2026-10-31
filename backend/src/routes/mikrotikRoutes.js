@@ -1,4 +1,5 @@
 const express = require("express")
+require("../utils/routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
 const router = express.Router()
 const { mascararObjeto, preservarSegredos, semAlteracao } = require("../utils/segredos");
 const db = require("../../db")
