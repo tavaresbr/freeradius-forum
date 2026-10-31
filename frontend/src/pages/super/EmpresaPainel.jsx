@@ -5,7 +5,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import ToggleTema from "../../components/ToggleTema";
 import CartaoMetrica from "../../components/super/CartaoMetrica";
 import EnviarMensagemEmpresa from "../../components/super/EnviarMensagemEmpresa";
-import { linkWhatsapp, aplicarVariaveis } from "../../utils/linkWhatsapp";
 
 const moeda = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const data = (v) => (v ? new Date(v).toLocaleDateString("pt-BR") : "—");
@@ -158,6 +157,20 @@ export default function EmpresaPainel() {
     }
   };
 
+  // Abre a conversa desta empresa no chat (aba WhatsApp) da empresa da plataforma.
+  const abrirChat = async () => {
+    setMsg(null);
+    try {
+      const r = await req("/conversa", { method: "POST" });
+      if (!r.ok) { setMsg({ tipo: "erro", texto: r.corpo.message || "Não foi possível abrir a conversa." }); return; }
+      const alvo = r.corpo;
+      await switchEmpresa(alvo.plataforma_id);
+      window.location.href = `/admin/${alvo.plataforma_slug}/atendimento/conversas?conversa=${alvo.conversa_id}`;
+    } catch (err) {
+      setMsg({ tipo: "erro", texto: `Não foi possível abrir o chat: ${err.message}` });
+    }
+  };
+
   const copiar = async (texto, rotulo) => {
     try {
       await navigator.clipboard.writeText(texto);
@@ -202,7 +215,10 @@ export default function EmpresaPainel() {
   const planosPagos = (planos || []).filter((p) => !p.gratis);
 
   const mensagem = msg && (
-    <p className={`mb-4 px-4 py-3 rounded-lg text-sm ${msg.tipo === "ok" ? "bg-green-900/20 text-green-400" : "bg-red-900/20 text-red-400"}`}>{msg.texto}</p>
+    <p className={`mb-4 px-4 py-3 rounded-lg text-sm ${msg.tipo === "ok" ? "bg-green-900/20 text-green-400" : "bg-red-900/20 text-red-400"}`}>
+      {msg.texto}
+      {msg.verConversa && <button type="button" onClick={abrirChat} className="ml-3 underline">Ver conversa</button>}
+    </p>
   );
 
   return (
@@ -236,7 +252,7 @@ export default function EmpresaPainel() {
             empresa={empresa}
             req={req}
             onFechar={() => setEnviandoMsg(false)}
-            onEnviada={(texto) => { setEnviandoMsg(false); setMsg({ tipo: "ok", texto }); carregarExtras(); }}
+            onEnviada={(texto) => { setEnviandoMsg(false); setMsg({ tipo: "ok", texto, verConversa: true }); carregarExtras(); }}
           />
         )}
 
@@ -283,16 +299,8 @@ export default function EmpresaPainel() {
                   <dd className="text-gray-200">{empresa.telefone || "—"}</dd>
                   {empresa.telefone && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {linkWhatsapp(empresa.telefone) && (
-                        <a
-                          href={linkWhatsapp(empresa.telefone, aplicarVariaveis("Olá, {{nome}}! Aqui é da Apex Telecom.", { nome: String(empresa.nome || "").split(/\s+/)[0] }))}
-                          target="_blank" rel="noopener noreferrer"
-                          className="px-3 py-1 rounded-lg text-xs bg-green-600 text-white hover:bg-green-500"
-                        >Abrir WhatsApp</a>
-                      )}
-                      {linkWhatsapp(empresa.telefone) && (
-                        <button type="button" onClick={() => setEnviandoMsg(true)} className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">Enviar mensagem</button>
-                      )}
+                      <button type="button" disabled={ocupado} onClick={abrirChat} className="px-3 py-1 rounded-lg text-xs bg-green-600 text-white hover:bg-green-500 disabled:opacity-50">Conversar no WhatsApp</button>
+                      <button type="button" onClick={() => setEnviandoMsg(true)} className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">Enviar mensagem</button>
                       <button type="button" onClick={() => copiar(empresa.telefone, "telefone")} className="px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">
                         {copiado === "telefone" ? "Copiado!" : "Copiar"}
                       </button>

@@ -18,6 +18,7 @@ router.post("/empresas/:id/plano-pago", auth, exigeDonoPlataforma, e.planoPago);
 router.post("/empresas/:id/status-assinatura", auth, exigeDonoPlataforma, e.statusAssinatura);
 router.post("/empresas/:id/suspender", auth, exigeDonoPlataforma, e.suspender);
 router.post("/empresas/:id/reativar", auth, exigeDonoPlataforma, e.reativar);
+router.post("/empresas/:id/conversa", auth, exigeDonoPlataforma, promocaoLimiter, e.abrirConversa);
 router.post("/empresas/:id/whatsapp", auth, exigeDonoPlataforma, promocaoLimiter, e.enviarWhatsapp);
 router.post("/empresas/:id/boas-vindas", auth, exigeDonoPlataforma, promocaoLimiter, e.reenviarBoasVindas);
 router.get("/boas-vindas", auth, exigeDonoPlataforma, bv.obter);

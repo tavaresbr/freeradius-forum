@@ -29,12 +29,16 @@ test('texto manual e variaveis', () => {
   assert.equal(u.linkPainelDaEmpresa('minha', ''), '');
 });
 
-function criarServico({ telefone = '(85) 99138-0459', conectada = true, jaEnviada = false, enviar, temColuna = true, empresaId = 21 } = {}) {
+function criarServico({ telefone = '(85) 99138-0459', conectada = true, jaEnviada = false, enviar, temColuna = true, empresaId = 21, conversaExistente = false } = {}) {
   const enviadas = [];
   const db = criarDb((sql) => {
     if (/FROM plataforma_configs/i.test(sql)) return [[]];
     if (/SELECT id, nome, slug, telefone, criado_em FROM empresas/i.test(sql)) return [[{ id: empresaId, nome: 'Francisco Robson', slug: 'fr', telefone, criado_em: new Date() }]];
     if (/FROM assinaturas a LEFT JOIN saas_planos/i.test(sql)) return [[{ plano: 'Popular', trial_ate: new Date('2026-11-06T15:00:00Z'), vence_em: null }]];
+    if (/SELECT \* FROM whatsapp_conversas WHERE empresa_id = \? AND telefone IS NOT NULL/i.test(sql)) return [conversaExistente ? [{ id: 9, empresa_id: 1, telefone: '5585991380459', jid: 'x@s.whatsapp.net' }] : []];
+    if (/INSERT INTO whatsapp_conversas/i.test(sql)) return [{ insertId: 11 }];
+    if (/SELECT \* FROM whatsapp_conversas WHERE id = \?/i.test(sql)) return [[{ id: 11, empresa_id: 1, telefone: '5585991380459', jid: 'x@s.whatsapp.net' }]];
+    if (/SELECT slug FROM empresas WHERE id/i.test(sql)) return [[{ slug: 'plataforma' }]];
     if (/UPDATE empresas SET boas_vindas_em = NOW\(\) WHERE id = \? AND boas_vindas_em IS NULL/i.test(sql)) return [{ affectedRows: jaEnviada ? 0 : 1 }];
     if (/UPDATE empresas SET boas_vindas_em/i.test(sql)) return [{ affectedRows: 1 }];
   });
@@ -43,7 +47,11 @@ function criarServico({ telefone = '(85) 99138-0459', conectada = true, jaEnviad
     extras: {
       'src/controllers/whatsappController.js': {
         instanciaConectada: async () => conectada,
-        enviarMensagemEstrita: async (tel, texto, emp) => { if (enviar) await enviar(); enviadas.push({ tel, texto, emp }); },
+        formatarNumeroComNonoDigito: (n) => String(n),
+        enviarMensagemEstrita: async () => {},
+      },
+      'src/services/whatsappAtendimento.js': {
+        enviarTexto: async (emp, adminId, conversa, texto, opcoes) => { if (enviar) await enviar(); enviadas.push({ emp, adminId, conversa, texto, opcoes }); return { id: 1 }; },
       },
       'src/utils/schemaCache.js': { temColuna: async () => temColuna, limparCache() {} },
     },
@@ -56,7 +64,10 @@ test('boas-vindas: envia uma vez, renderiza variaveis e registra historico', asy
   const r = await svc.enviarBoasVindas(21);
   assert.equal(r.ok, true);
   assert.equal(enviadas.length, 1);
-  assert.equal(enviadas[0].tel, '5585991380459');
+  assert.equal(enviadas[0].emp, 1); // sai pelo chat da empresa da plataforma
+  assert.equal(enviadas[0].conversa.id, 11); // conversa criada na caixa da plataforma
+  assert.equal(enviadas[0].opcoes.automatica, true);
+  assert.ok(db.calls.some((c) => /INSERT INTO whatsapp_conversas/i.test(c.sql)));
   assert.ok(enviadas[0].texto.includes('Francisco'));
   assert.ok(enviadas[0].texto.includes('Popular'));
   assert.ok(!enviadas[0].texto.includes('{{'));
@@ -92,12 +103,17 @@ test('envio manual: valida telefone/instancia e grava historico sem o numero com
   await assert.rejects(() => t.svc.enviarManual(21, 'oi', 7), (e) => e.status === 400);
   t = criarServico({ conectada: false });
   await assert.rejects(() => t.svc.enviarManual(21, 'oi', 7), (e) => e.status === 409);
-  t = criarServico();
-  await t.svc.enviarManual(21, 'Oi {{nome}}, seu plano {{plano}}', 7);
+  t = criarServico({ conversaExistente: true });
+  const man = await t.svc.enviarManual(21, 'Oi {{nome}}, seu plano {{plano}}', 7);
+  assert.equal(man.conversa_id, 9); // reaproveita a conversa que ja existe
   assert.equal(t.enviadas[0].texto, 'Oi Francisco, seu plano Popular');
+  assert.equal(t.enviadas[0].adminId, 7);
+  assert.equal(t.enviadas[0].opcoes.automatica, false);
+  assert.ok(!t.db.calls.some((c) => /INSERT INTO whatsapp_conversas/i.test(c.sql)));
   const h = t.db.calls.find((c) => /INSERT INTO empresa_historico/i.test(c.sql));
   assert.ok(h.params.includes('whatsapp_enviado'));
   assert.ok(!h.params.join(' ').includes('5585991380459'));
+  assert.equal((await t.svc.abrirConversaDaEmpresa(21)).plataformaSlug, 'plataforma');
   t = criarServico({ enviar: async () => { throw new Error('x'); } });
   await assert.rejects(() => t.svc.enviarManual(21, 'oi', 7), (e) => e.status === 502);
 });

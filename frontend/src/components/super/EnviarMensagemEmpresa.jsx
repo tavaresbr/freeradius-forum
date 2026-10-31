@@ -34,7 +34,7 @@ export default function EnviarMensagemEmpresa({ empresa, req, onFechar, onEnviad
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <form onSubmit={enviar} className="bg-[#1a1d27] border border-gray-800 rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-white mb-1">Enviar mensagem pelo WhatsApp</h2>
-        <p className="text-gray-500 text-sm mb-4">Sai pelo número da plataforma. Para {empresa.nome}.</p>
+        <p className="text-gray-500 text-sm mb-4">Sai pelo chat do WhatsApp da plataforma e fica na conversa de {empresa.nome}, onde a resposta também aparece.</p>
         {erro && <p className="text-red-400 text-sm mb-3 bg-red-900/20 p-2 rounded">{erro}</p>}
         <div className="flex flex-wrap gap-2 mb-3">
           {MODELOS.map((m) => (

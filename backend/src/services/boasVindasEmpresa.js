@@ -1,8 +1,10 @@
 // Mensagens automaticas da PLATAFORMA para as empresas-clientes (boas-vindas ao cadastrar e lembrete de
-// ativacao), enviadas pela instancia WhatsApp da empresa da plataforma (SITE_EMPRESA_ID).
+// ativacao), enviadas pelo CHAT do sistema (aba WhatsApp > Conversas) da empresa da plataforma (SITE_EMPRESA_ID):
+// a mensagem fica na conversa e a resposta da empresa-cliente volta para a mesma conversa.
 // Nunca lanca para quem chamou: devolve { ok, motivo }. Config em plataforma_configs (chave 'boas_vindas').
 const db = require("../../db");
-const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
+const { instanciaConectada, formatarNumeroComNonoDigito } = require("../controllers/whatsappController");
+const atendimento = require("./whatsappAtendimento");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("./whatsappNotify");
 const { temColuna } = require("../utils/schemaCache");
 const { mesclarConfig, montarVars, linkPainelDaEmpresa } = require("../utils/boasVindas");
@@ -50,15 +52,48 @@ async function carregarEmpresa(empresaId) {
 
 const variaveis = (emp) => montarVars({ empresa: emp, plano: emp.plano, trialAte: emp.trialAte, venceEm: emp.venceEm, linkPainel: linkPainelDaEmpresa(emp.slug) });
 
-// Envia e registra log; lanca se o envio falhar.
-async function enviar(emp, tel, texto, contexto) {
+// Conversa da empresa-cliente na caixa de entrada da plataforma (acha pelo telefone, senao cria; mesmo criterio de
+// "Nova conversa" do chat). Lanca { status } quando o telefone nao serve.
+async function abrirConversa(emp) {
+  const tel = normalizarTelefone(emp.telefone);
+  if (!tel) throw Object.assign(new Error("Esta empresa não tem um telefone válido cadastrado."), { status: 400 });
+  const plat = plataformaId();
+  let [[conversa]] = await db.query(
+    "SELECT * FROM whatsapp_conversas WHERE empresa_id = ? AND telefone IS NOT NULL AND RIGHT(telefone, 10) = ? ORDER BY id LIMIT 1",
+    [plat, tel.slice(-10)]
+  );
+  if (!conversa) {
+    const jid = `${formatarNumeroComNonoDigito(tel)}@s.whatsapp.net`;
+    const [ins] = await db.query(
+      `INSERT INTO whatsapp_conversas (empresa_id, jid, telefone, nome, ultima_msg_em)
+       VALUES (?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [plat, jid, tel, String(emp.nome || "").slice(0, 150) || null]
+    );
+    [[conversa]] = await db.query("SELECT * FROM whatsapp_conversas WHERE id = ? AND empresa_id = ?", [ins.insertId, plat]);
+  }
+  return conversa;
+}
+
+// Envia pelo chat e registra log; lanca se o envio falhar. Devolve a conversa.
+async function enviar(emp, tel, texto, contexto, { adminId = null, automatica = false } = {}) {
+  const conversa = await abrirConversa(emp);
   try {
-    await enviarMensagemEstrita(tel, texto, plataformaId());
+    await atendimento.enviarTexto(plataformaId(), adminId, conversa, texto, { automatica });
     await gravarLog({ empresa_id: plataformaId(), telefone: tel, mensagem: texto, contexto_tipo: contexto, referencia_id: emp.id, status: "ok" });
   } catch (err) {
     await gravarLog({ empresa_id: plataformaId(), telefone: tel, mensagem: texto, contexto_tipo: contexto, referencia_id: emp.id, status: "erro", erro_msg: err.message });
     throw err;
   }
+  return conversa;
+}
+
+// Abre (ou cria) a conversa da empresa no chat da plataforma: o painel navega ate ela.
+async function abrirConversaDaEmpresa(empresaId) {
+  const emp = await carregarEmpresa(empresaId);
+  if (!emp) throw Object.assign(new Error("Empresa não encontrada"), { status: 404 });
+  const conversa = await abrirConversa(emp);
+  const [[p]] = await db.query("SELECT slug FROM empresas WHERE id = ?", [plataformaId()]);
+  return { id: conversa.id, plataformaId: plataformaId(), plataformaSlug: p ? p.slug : null };
 }
 
 // Boas-vindas. opts.forcar = reenvio manual (ignora "desligada" e "ja enviada").
@@ -82,7 +117,7 @@ async function enviarBoasVindas(empresaId, opts = {}) {
       reservou = true;
     }
     try {
-      await enviar(emp, tel, renderTemplate(cfg.mensagem, variaveis(emp)), "boas_vindas_empresa");
+      await enviar(emp, tel, renderTemplate(cfg.mensagem, variaveis(emp)), "boas_vindas_empresa", { adminId: opts.forcar ? opts.adminId : null, automatica: !opts.forcar });
     } catch (err) {
       if (reservou) await db.query("UPDATE empresas SET boas_vindas_em = NULL WHERE id = ?", [empresaId]).catch(() => {});
       return { ok: false, motivo: "erro_envio", erro: err.message };
@@ -113,7 +148,7 @@ async function enviarLembreteAtivacao(empresaId) {
     if (Number(ja.n) > 0) return { ok: false, motivo: "ja_enviado" };
     await registrarHistorico(empresaId, null, "lembrete_ativacao", "Lembrete de ativação enviado");
     try {
-      await enviar(emp, tel, renderTemplate(cfg.lembrete_ativacao.mensagem, variaveis(emp)), "lembrete_ativacao_empresa");
+      await enviar(emp, tel, renderTemplate(cfg.lembrete_ativacao.mensagem, variaveis(emp)), "lembrete_ativacao_empresa", { automatica: true });
     } catch (err) {
       await db.query("DELETE FROM empresa_historico WHERE empresa_id = ? AND acao = 'lembrete_ativacao'", [empresaId]).catch(() => {});
       return { ok: false, motivo: "erro_envio", erro: err.message };
@@ -135,13 +170,14 @@ async function enviarManual(empresaId, texto, adminId) {
     throw Object.assign(new Error("O WhatsApp da plataforma não está conectado. Conecte em Integrações ou use o botão Abrir WhatsApp."), { status: 409 });
   }
   const final = renderTemplate(texto, variaveis(emp));
+  let conversa;
   try {
-    await enviar(emp, tel, final, "plataforma_empresa");
-  } catch {
-    throw Object.assign(new Error("Não foi possível enviar a mensagem agora."), { status: 502 });
+    conversa = await enviar(emp, tel, final, "plataforma_empresa", { adminId });
+  } catch (err) {
+    throw Object.assign(new Error("Não foi possível enviar a mensagem agora."), { status: err.status || 502 });
   }
   await registrarHistorico(empresaId, adminId, "whatsapp_enviado", curto(final));
-  return { ok: true };
+  return { ok: true, conversa_id: conversa.id };
 }
 
-module.exports = { obterConfig, salvarConfig, enviarBoasVindas, enviarLembreteAtivacao, enviarManual, carregarEmpresa, variaveis, plataformaId };
+module.exports = { obterConfig, salvarConfig, enviarBoasVindas, enviarLembreteAtivacao, enviarManual, abrirConversaDaEmpresa, carregarEmpresa, variaveis, plataformaId };
