@@ -72,4 +72,29 @@ async function criarPlanosPadrao(executor, empresaId, mikrotikId = null) {
   }
 }
 
-module.exports = { criarPortaisPadrao, criarPlanosPadrao, PLANOS_PADRAO };
+// Plano gratis que TODO equipamento novo ja recebe (alem de LGPD/Lead, que o 1o equipamento assume).
+// Nao e' LGPD nem Lead: os portais dessas duas pontas resolvem o plano pelo NOME e nao sao afetados.
+const PLANO_EQUIPAMENTO_PADRAO = { nome: "Plano 60 minutos", duracao_minutos: 60 };
+
+/**
+ * Cria o "Plano 60 minutos" gratis (60 min, 20M/10M) vinculado a UM equipamento, se ele ainda nao
+ * tiver um plano com esse nome. Idempotente.
+ *
+ * @param {Object} executor - pool `db` ou uma connection
+ * @param {number} empresaId
+ * @param {number} mikrotikId
+ * @param {string} [nomeEquipamento]
+ */
+async function criarPlanoPadraoEquipamento(executor, empresaId, mikrotikId, nomeEquipamento = "") {
+  const p = PLANO_EQUIPAMENTO_PADRAO;
+  const descricao = nomeEquipamento ? `${p.nome} - ${nomeEquipamento}` : p.nome;
+  await executor.execute(
+    `INSERT INTO planos (empresa_id, nome, descricao, valor, duracao_minutos,
+                         velocidade_down, velocidade_up, mikrotik_id, shared_users, ativo)
+     SELECT ?, ?, ?, 0, ?, ?, ?, ?, 1, 1 FROM DUAL
+     WHERE NOT EXISTS (SELECT 1 FROM planos WHERE empresa_id = ? AND mikrotik_id = ? AND LOWER(nome) = LOWER(?))`,
+    [empresaId, p.nome, descricao, p.duracao_minutos, VELOCIDADE_DOWN, VELOCIDADE_UP, mikrotikId, empresaId, mikrotikId, p.nome]
+  );
+}
+
+module.exports = { criarPortaisPadrao, criarPlanosPadrao, criarPlanoPadraoEquipamento, PLANOS_PADRAO, PLANO_EQUIPAMENTO_PADRAO };
