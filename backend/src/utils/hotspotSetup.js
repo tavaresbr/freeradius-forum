@@ -115,7 +115,7 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
     const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     let houveTimeout = false;
     if (!bridges.some((b) => b.name === nome)) {
-      const r = await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"]);
+      const r = await write("/interface/bridge/add", [`=name=${nome}`, "=comment=hotspot"], 30000);
       if (r === "timeout") {
         // Ate 3 leituras (print vazio por expirar nao prova que a bridge nao existe); se continuar
         // ausente, repete o add 1x ("ja existe" nao e erro).
@@ -131,22 +131,26 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
     }
     for (const porta of portas) {
       if (portasBridge.some((b) => b.interface === porta && b.bridge === nome)) continue;
-      const r = await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`]);
+      // O switch do RB951 leva alguns segundos para reconfigurar cada porta; 30 s evita empilhar adds.
+      const r = await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`], 30000);
       if (r === "timeout") houveTimeout = true;
     }
 
-    // Roteador lento: o print pode expirar e voltar vazio (falso negativo). Confere ate 3 vezes, com
-    // espera entre elas, e re-adiciona so o que ainda falta ("ja existe" nao e erro).
+    // Roteador lento: cada porta que entra na bridge faz o switch do RB951 se reconfigurar e a API
+    // responde as leituras so depois (caso real RB08/RB09: as 5 portas JA estavam na bridge quando o
+    // assistente desistiu). Entao a conferencia e paciente: ate 8 leituras (8 s cada, espera entre elas)
+    // e so re-adiciona o que falta nas leituras 4 e 7, para nao empilhar comandos num roteador ocupado.
     if (houveTimeout) await esperar(esperarMs);
     let faltando = portas;
-    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    for (let tentativa = 1; tentativa <= 8; tentativa++) {
       const depois = await print("/interface/bridge/port/print", 8000);
       faltando = portas.filter((p) => !depois.some((b) => b.interface === p && b.bridge === nome));
       if (!faltando.length) break;
-      if (tentativa < 3) {
-        await esperar(esperarMs);
-        for (const porta of faltando) await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`]);
-        await esperar(esperarMs);
+      if (tentativa < 8) {
+        await esperar(esperarMs * 2);
+        if (tentativa === 4 || tentativa === 7) {
+          for (const porta of faltando) await write("/interface/bridge/port/add", [`=bridge=${nome}`, `=interface=${porta}`], 30000);
+        }
       }
     }
     if (faltando.length) return falha(`Sem confirmacao de que ${faltando.join(", ")} entrou na bridge ${nome}. Confira no roteador: /interface bridge port print (se as portas estiverem la, rode o assistente de novo).`);
