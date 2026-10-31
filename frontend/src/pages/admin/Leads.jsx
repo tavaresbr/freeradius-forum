@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
 import { useAuth } from "../../contexts/AuthContext";
 import { mascaraCPF, validarCPF } from "../../utils/cpfUtils";
 import { mascaraData, mascaraTelefone, dataNascimentoValida } from "../../utils/dataUtils";
@@ -86,7 +86,7 @@ function Campo({ label, children, className = "" }) {
   );
 }
 
-export default function Leads() {
+export default function Leads({ embutido = false }) {
   const { user } = useAuth();
   const { empresaSlug } = useParams();
   const [leads, setLeads] = useState([]);
@@ -408,7 +408,7 @@ export default function Leads() {
   const doc = (l) => (l.cpf ? mascaraCPF(l.cpf) : l.cnpj || "-");
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -871,6 +871,6 @@ export default function Leads() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </Moldura>
   );
 }
