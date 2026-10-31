@@ -86,6 +86,9 @@ exports.registrarEmpresa = async (req, res) => {
 
     await conn.commit();
 
+    // Boas-vindas por WhatsApp (pela instancia da plataforma): segundo plano, nunca atrasa nem derruba o cadastro.
+    try { require("../services/boasVindasEmpresa").enviarBoasVindas(empresaId).catch(() => {}); } catch { /* opcional */ }
+
     // Gerar token
     const token = jwt.sign(
       {

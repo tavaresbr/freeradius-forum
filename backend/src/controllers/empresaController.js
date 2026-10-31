@@ -126,6 +126,9 @@ exports.criarEmpresa = async (req, res) => {
     await criarPlanosPadrao(db, empresaId);
     await criarTrial(db, empresaId, plano_id);
 
+    // Boas-vindas por WhatsApp (pela instancia da plataforma): segundo plano, nunca atrasa nem derruba o cadastro.
+    try { require("../services/boasVindasEmpresa").enviarBoasVindas(empresaId).catch(() => {}); } catch { /* opcional */ }
+
     res.status(201).json({ id: empresaId, nome, slug, email });
   } catch (err) {
     console.error("Erro ao criar empresa:", err);

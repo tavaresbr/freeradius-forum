@@ -740,6 +740,12 @@ cron.schedule('*/5 * * * *', () => {
   manutencoes().catch(err => console.error('[CRON] Erro manutencoes:', err.message));
 });
 
+// Boas-vindas (e lembrete de ativacao) por WhatsApp a empresas novas, pela instancia da plataforma
+const boasVindasJob = require('./src/jobs/boasVindas');
+cron.schedule('*/10 * * * *', () => {
+  boasVindasJob().catch(err => console.error('[CRON] Erro boasVindas:', err.message));
+});
+
 // --- Tela de emergencia (SEM auth) ---
 app.get('/emergency', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/views/emergency.html'));

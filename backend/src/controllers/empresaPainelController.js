@@ -5,6 +5,8 @@ const { aplicarAssinatura } = require("./assinaturaController");
 const { tabelaInexistente } = require("../utils/assinatura");
 const { limparCacheSessaoAdmin } = require("../utils/sessaoAdmin");
 const { montarAlertas } = require("../utils/alertasPlataforma");
+const boasVindas = require("../services/boasVindasEmpresa");
+const { validarTextoManual } = require("../utils/boasVindas");
 const { clienteDesde, validarMotivo, validarDias, validarNota, idValido, detalhe } = require("../utils/empresaPainel");
 
 const linhas = async (sql, params = []) => (await db.query(sql, params))[0];
@@ -119,6 +121,7 @@ exports.resumo = async (req, res) => {
         id, nome: emp.nome, slug: emp.slug, ativo: !!emp.ativo, criado_em: emp.criado_em,
         tipo_pessoa: emp.tipo_pessoa || (emp.cnpj ? "PJ" : null), cnpj: emp.cnpj || null, cpf: emp.cpf || null,
         email: emp.email || null, telefone: emp.telefone || null,
+        boas_vindas_em: emp.boas_vindas_em || null,
       },
       cliente_ha: cliente.texto,
       dias_de_cliente: cliente.dias,
@@ -303,6 +306,40 @@ exports.historico = async (req, res) => {
         WHERE h.empresa_id = ? ORDER BY h.id DESC LIMIT 100`, [emp.id]));
   } catch (err) {
     if (tabelaInexistente(err)) return res.status(503).json(SEM_TABELA);
+    resposta(res, err);
+  }
+};
+
+// Mensagem avulsa pela instancia WhatsApp da plataforma (variaveis {{nome}} {{empresa}} {{plano}} {{vence_em}}).
+exports.enviarWhatsapp = async (req, res) => {
+  try {
+    const emp = await empresaDoParametro(req, res);
+    if (!emp) return;
+    const { erro, texto } = validarTextoManual(req.body && req.body.texto);
+    if (erro) return res.status(400).json({ message: erro });
+    await boasVindas.enviarManual(emp.id, texto, req.user && req.user.id);
+    res.json({ message: "Mensagem enviada pelo WhatsApp." });
+  } catch (err) {
+    resposta(res, err);
+  }
+};
+
+const MOTIVOS_BV = {
+  telefone_invalido: [400, "Esta empresa não tem um telefone válido cadastrado."],
+  whatsapp_desconectado: [409, "O WhatsApp da plataforma não está conectado."],
+  sem_migration: [503, "Rode a migration 073 no servidor (node migrations/073_empresa_boas_vindas.js)."],
+  empresa_da_plataforma: [400, "Esta é a empresa da plataforma."],
+};
+
+exports.reenviarBoasVindas = async (req, res) => {
+  try {
+    const emp = await empresaDoParametro(req, res);
+    if (!emp) return;
+    const r = await boasVindas.enviarBoasVindas(emp.id, { forcar: true, adminId: req.user && req.user.id });
+    if (r.ok) return res.json({ message: "Boas-vindas enviada." });
+    const [status, message] = MOTIVOS_BV[r.motivo] || [502, "Não foi possível enviar agora."];
+    res.status(status).json({ message });
+  } catch (err) {
     resposta(res, err);
   }
 };
