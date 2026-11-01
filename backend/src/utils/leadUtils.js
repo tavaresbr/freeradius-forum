@@ -527,11 +527,18 @@ async function resolverCamposPortal(p = {}) {
 async function equipamentoDoCliente(empresaId, mikrotikIdReq, plano) {
   try {
     const id = Number(mikrotikIdReq);
-    if (!plano || !empresaId || !Number.isInteger(id) || id <= 0) return plano;
+    if (!plano || !empresaId || !Number.isInteger(id) || id <= 0) {
+      console.warn(`[equipamentoDoCliente] sem equipamento valido no pedido (mikrotik_id=${JSON.stringify(mikrotikIdReq)}, empresa=${empresaId}); mantendo o do plano (${plano && plano.mikrotik_id})`);
+      return plano;
+    }
     const [[eq]] = await db.execute("SELECT id, end_hotspot FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, empresaId]);
-    if (!eq) return plano;
+    if (!eq) {
+      console.warn(`[equipamentoDoCliente] equipamento ${id} nao existe na empresa ${empresaId}; mantendo o do plano (${plano.mikrotik_id})`);
+      return plano;
+    }
     return { ...plano, mikrotik_id: eq.id, end_hotspot: eq.end_hotspot || plano.end_hotspot };
   } catch (e) {
+    console.warn("[equipamentoDoCliente] falhou, mantendo o equipamento do plano:", e.message);
     return plano;
   }
 }
