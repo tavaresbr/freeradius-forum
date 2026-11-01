@@ -192,13 +192,22 @@ exports.criarModelosPadrao = async (req, res) => {
   try {
     const comCategoria = await temColuna("whatsapp_respostas_rapidas", "categoria");
     let criados = 0;
+    let recategorizados = 0;
     for (const m of modelos.MODELOS_PADRAO) {
-      const [ins] = comCategoria
-        ? await db.query("INSERT IGNORE INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto, categoria) VALUES (?, ?, ?, ?, ?)", [req.empresa_id, m.atalho, m.titulo, m.texto, m.categoria])
-        : await db.query("INSERT IGNORE INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto) VALUES (?, ?, ?, ?)", [req.empresa_id, m.atalho, m.titulo, m.texto]);
-      criados += ins.affectedRows || 0;
+      if (comCategoria) {
+        // Modelo que ja existe so muda de categoria se ainda estiver em "geral" (nunca mexe em texto nem em categoria escolhida).
+        const [ins] = await db.query(
+          "INSERT INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto, categoria) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE categoria = IF(categoria = 'geral', VALUES(categoria), categoria)",
+          [req.empresa_id, m.atalho, m.titulo, m.texto, m.categoria]
+        );
+        if (ins.affectedRows === 1) criados += 1;
+        else if (ins.affectedRows === 2) recategorizados += 1;
+      } else {
+        const [ins] = await db.query("INSERT IGNORE INTO whatsapp_respostas_rapidas (empresa_id, atalho, titulo, texto) VALUES (?, ?, ?, ?)", [req.empresa_id, m.atalho, m.titulo, m.texto]);
+        criados += ins.affectedRows || 0;
+      }
     }
-    res.json({ success: true, criados });
+    res.json({ success: true, criados, recategorizados });
   } catch (err) {
     erro500(res, err, "Erro ao criar os modelos padrão");
   }

@@ -71,7 +71,7 @@ export default function Modelos({ headers }) {
         <div className="flex gap-2 flex-wrap">
           <button type="submit" disabled={busy || !form.atalho.trim() || !form.titulo.trim() || !form.texto.trim()} className={btnPrimario}>{form.id ? "Salvar" : "Adicionar"}</button>
           {form.id && <button type="button" className={btnSecundario} onClick={() => { setForm(VAZIO); setMsg(null); }}>Cancelar</button>}
-          <button type="button" disabled={busy} className={btnSecundario} onClick={() => chamar("/api/atendimento/respostas-rapidas/padrao", "POST", null, (d) => (d.criados ? `${d.criados} modelo(s) padrão criado(s).` : "Os modelos padrão já existem."))}>Criar modelos padrão</button>
+          <button type="button" disabled={busy} className={btnSecundario} onClick={() => chamar("/api/atendimento/respostas-rapidas/padrao", "POST", null, (d) => ((d.criados || d.recategorizados) ? `${d.criados || 0} modelo(s) criado(s)` + (d.recategorizados ? `, ${d.recategorizados} movido(s) para a categoria certa.` : ".") : "Os modelos padrão já existem."))}>Criar modelos padrão</button>
         </div>
       </form>
 

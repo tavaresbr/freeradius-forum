@@ -71,8 +71,8 @@ test('modelos: listar devolve categorias; criar grava categoria validada; padrao
   const db = criarDb(async (sql) => {
     if (/INFORMATION_SCHEMA/.test(sql)) return [[{ n: 1 }]];
     if (/FROM whatsapp_respostas_rapidas/.test(sql) && /^SELECT/.test(sql)) return [[{ id: 1, atalho: 'ola', titulo: 'Ola', texto: 'x', categoria: 'geral' }]];
+    if (/(INSERT IGNORE )?INTO whatsapp_respostas_rapidas/.test(sql) && /IGNORE|DUPLICATE/.test(sql)) return [{ affectedRows: 1 }];
     if (/INSERT INTO whatsapp_respostas_rapidas/.test(sql)) return [{ insertId: 4 }];
-    if (/INSERT IGNORE INTO whatsapp_respostas_rapidas/.test(sql)) return [{ affectedRows: 1 }];
   });
   const ctrl = carregar('src/controllers/atendimentoExtrasController.js', { db });
   let res = criarRes();
@@ -90,5 +90,5 @@ test('modelos: listar devolve categorias; criar grava categoria validada; padrao
   res = criarRes();
   await ctrl.criarModelosPadrao(criarReq({ empresa_id: 7 }), res);
   assert.strictEqual(res.body.criados, mm.MODELOS_PADRAO.length);
-  assert.ok(db.calls.filter((c) => /INSERT IGNORE/.test(c.sql)).every((c) => c.params[0] === 7));
+  assert.ok(db.calls.filter((c) => /IGNORE|DUPLICATE/.test(c.sql)).every((c) => c.params[0] === 7));
 });
