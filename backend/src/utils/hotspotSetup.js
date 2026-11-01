@@ -497,13 +497,20 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
     try {
       const nets = await safePrint("/ip/dhcp-server/network/print");
       const netExists = nets && nets.find(n => n.address === network);
+      // O cliente ainda nao logado precisa usar o PROPRIO roteador como DNS: o hotspot intercepta o
+      // DNS/HTTP dele. Com um DNS externo (8.8.8.8) o dominio nao resolve, o redirect ao portal nunca
+      // dispara e o portal so abre digitando o IP (caso real RB09). O roteador resolve por
+      // `/ip dns allow-remote-requests=yes`, garantido abaixo.
       if (!netExists) {
         await safeWrite("/ip/dhcp-server/network/add", [
           `=address=${network}`,
           `=gateway=${gateway}`,
-          `=dns-server=8.8.8.8`,
+          `=dns-server=${gateway}`,
         ]);
+      } else if (netExists["dns-server"] !== gateway && netExists[".id"]) {
+        await safeWrite("/ip/dhcp-server/network/set", [`=.id=${netExists[".id"]}`, `=dns-server=${gateway}`]);
       }
+      try { await safeWrite("/ip/dns/set", ["=allow-remote-requests=yes"]); } catch (e) { /* ja habilitado ou sem permissao */ }
 
       const dhcps = await safePrint("/ip/dhcp-server/print");
       const dhcpExists = dhcps && dhcps.find(d => d.interface === ifName);

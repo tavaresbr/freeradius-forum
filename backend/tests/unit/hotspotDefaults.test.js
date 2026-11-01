@@ -625,3 +625,20 @@ test('bridge: adds de bridge e de porta usam timeout de escrita de 30 s', async 
   assert.ok(fonte.includes('"=comment=hotspot"], 30000)'));
   assert.ok(fonte.includes('`=interface=${porta}`], 30000)'));
 });
+
+test('DHCP do hotspot entrega o gateway como DNS (cliente nao logado usa o proprio roteador)', () => {
+  const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  const bloco = fonte.slice(fonte.indexOf('// === 3. DHCP Server + Network ==='), fonte.indexOf('// === 3b.'));
+  assert.ok(bloco.includes('`=dns-server=${gateway}`'));
+  assert.ok(!bloco.includes('=dns-server=8.8.8.8'));
+  assert.ok(bloco.includes('"/ip/dhcp-server/network/set"'), 'rede existente com outro DNS deve ser atualizada');
+  assert.ok(bloco.includes('=allow-remote-requests=yes'));
+});
+
+test('/scan devolve a bridge de cada porta e a tela nao pre-preenche o DNS Name de exemplo', () => {
+  const rota = fs.readFileSync(path.join(__dirname, '../../src/routes/mikrotikRoutes.js'), 'utf8');
+  assert.ok(rota.includes('bridge_nome: bridgeDe.get(i.name) || null'));
+  const tela = fs.readFileSync(path.join(__dirname, '../../../frontend/src/pages/admin/Mikrotiks.jsx'), 'utf8');
+  assert.ok(tela.includes('const DNS_NAME_PADRAO = ""'));
+  assert.ok(tela.includes('i.bridge_nome === "bridge-hotspot"'));
+});

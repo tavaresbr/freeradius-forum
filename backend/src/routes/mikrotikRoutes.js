@@ -548,9 +548,10 @@ router.post("/:id/scan", somenteMikrotik, async (req, res) => {
         .map(r => ((r["gateway-status"] || "").match(/via\s+(\S+)/) || [])[1] || r.gateway),
     ].filter(Boolean));
     const bridgeIfs = new Set(bridgePorts.map(b => b.interface));
+    const bridgeDe = new Map(bridgePorts.map(b => [b.interface, b.bridge]));
     result.interfaces = interfaces.map(i => ({
       name: i.name, type: i.type, disabled: i.disabled,
-      wan: wanIfs.has(i.name), bridge: bridgeIfs.has(i.name), tunel: ehInterfaceTunel(i.name, i.type),
+      wan: wanIfs.has(i.name), bridge: bridgeIfs.has(i.name), bridge_nome: bridgeDe.get(i.name) || null, tunel: ehInterfaceTunel(i.name, i.type),
     }));
 
     const addresses = await timedQuery("/ip/address/print");

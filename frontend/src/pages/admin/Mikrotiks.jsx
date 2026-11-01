@@ -118,7 +118,7 @@ export default function Mikrotiks() {
   };
 
   // Wizard states
-  const DNS_NAME_PADRAO = "hotspot.minharede.com";
+  const DNS_NAME_PADRAO = ""; // vazio = o hotspot usa o IP (um nome de exemplo quebrava o portal)
   const PRESETS_REDE = [
     { id: "p24", rotulo: "Pequena — /24 (~250 clientes)", localAddress: "10.5.50.1/24", poolRange: "10.5.50.2-10.5.50.254" },
     { id: "p23", rotulo: "Média — /23 (~500 clientes)", localAddress: "10.5.50.1/23", poolRange: "10.5.50.2-10.5.51.254" },
@@ -785,12 +785,13 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                       onChange={(e) => {
                         const ligar = e.target.checked;
                         const livres = (scanData.interfaces || []).filter(i =>
-                          /^(ether|wlan|wifi)/i.test(i.name) && !i.wan && !i.bridge &&
+                          /^(ether|wlan|wifi)/i.test(i.name) && !i.wan && (!i.bridge || i.bridge_nome === "bridge-hotspot") &&
                           !(scanData.addresses || []).some(a => a.interface === i.name));
                         setWizardConfig({
                           ...wizardConfig,
                           criarBridge: ligar,
-                          portasBridge: ligar ? livres.filter(i => /^(wlan|wifi)/i.test(i.name)).map(i => i.name) : [],
+                          // radios e portas que ja estao na bridge-hotspot vem marcados (reexecutar sem zerar a bridge)
+                          portasBridge: ligar ? livres.filter(i => /^(wlan|wifi)/i.test(i.name) || i.bridge_nome === "bridge-hotspot").map(i => i.name) : [],
                         });
                       }}
                     />
@@ -803,7 +804,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   <div className="space-y-1">
                     <label className="block text-xs text-gray-500">Portas/rádios da bridge</label>
                     {(scanData.interfaces || []).filter(i => /^(ether|wlan|wifi)/i.test(i.name)).map(i => {
-                      const motivo = i.wan ? "WAN" : i.bridge ? "já é porta de bridge" : (scanData.addresses || []).some(a => a.interface === i.name) ? "tem IP" : "";
+                      const motivo = i.wan ? "WAN" : (i.bridge && i.bridge_nome !== "bridge-hotspot") ? `já é porta da bridge ${i.bridge_nome || "outra"}` : (scanData.addresses || []).some(a => a.interface === i.name) ? "tem IP" : "";
                       return (
                         <label key={i.name} className={`flex items-center gap-2 text-sm ${motivo ? "text-gray-600" : "text-gray-300 cursor-pointer"}`}>
                           <input
@@ -982,7 +983,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                     value={wizardConfig.dnsName}
                     onChange={(e) => setWizardConfig({ ...wizardConfig, dnsName: e.target.value })}
-                    placeholder="hotspot.minharede.com"
+                    placeholder="Deixe vazio para usar o IP do hotspot"
                   />
                 </div>
 
