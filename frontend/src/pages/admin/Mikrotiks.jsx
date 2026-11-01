@@ -22,6 +22,7 @@ export default function Mikrotiks() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [hotspotLog, setHotspotLog] = useState([]);
   const [enviandoHotspot, setEnviandoHotspot] = useState(null);
+  const [wifi, setWifi] = useState(null); // { id, nome, carregando, radios, msg, erro, ssid, marcados, salvando, resultado }
   const [diag, setDiag] = useState(null); // { id, nome, carregando, dados, erro, corrigindo, msg }
   const [enviandoLogin, setEnviandoLogin] = useState(null);
   const [enviandoStatus, setEnviandoStatus] = useState(null);
@@ -234,6 +235,44 @@ export default function Mikrotiks() {
       setEnviandoHotspot(null);
     }
   };
+
+const abrirWifi = async (m) => {
+  setWifi({ id: m.id, nome: m.nome, carregando: true, radios: [], msg: "", erro: "", ssid: "", marcados: [], salvando: false, resultado: null });
+  try {
+    const res = await fetch(`/api/mikrotiks/${m.id}/wifi`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Falha ao ler o Wi-Fi");
+    setWifi(w => w && w.id === m.id ? {
+      ...w, carregando: false, radios: data.radios || [], msg: data.message || "",
+      erro: data.ok === false ? (data.message || "Não consegui ler o Wi-Fi") : "",
+      ssid: (data.radios && data.radios[0] && data.radios[0].ssid) || "",
+      marcados: (data.radios || []).map(r => r.nome),
+    } : w);
+  } catch (e) {
+    setWifi(w => w && w.id === m.id ? { ...w, carregando: false, erro: e.message } : w);
+  }
+};
+
+const salvarWifi = async () => {
+  if (!wifi || wifi.salvando) return;
+  const nome = wifi.ssid.trim();
+  if (!nome) { setWifi(w => ({ ...w, erro: "Informe o nome do Wi-Fi." })); return; }
+  if (wifi.marcados.length === 0) { setWifi(w => ({ ...w, erro: "Escolha ao menos um rádio." })); return; }
+  if (!window.confirm(`Trocar o nome do Wi-Fi para "${nome}"?\n\nOs aparelhos conectados caem e precisam escolher a rede nova.`)) return;
+  setWifi(w => ({ ...w, salvando: true, erro: "", resultado: null }));
+  try {
+    const res = await fetch(`/api/mikrotiks/${wifi.id}/wifi`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ssid: nome, radios: wifi.marcados }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && !data.radios) throw new Error(data.message || "Falha ao alterar o Wi-Fi");
+    setWifi(w => ({ ...w, salvando: false, resultado: data }));
+  } catch (e) {
+    setWifi(w => ({ ...w, salvando: false, erro: e.message }));
+  }
+};
 
 const diagnosticar = async (m) => {
   setDiag({ id: m.id, nome: m.nome, carregando: true, dados: null, erro: "", corrigindo: null, msg: "" });
@@ -460,6 +499,9 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               </button>
               <button onClick={() => diagnosticar(m)} title="Diagnosticar o hotspot (so leitura)" className="px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border border-amber-700/60 text-amber-400 hover:bg-amber-900/20">
                 Diagnosticar
+              </button>
+              <button onClick={() => abrirWifi(m)} title="Alterar o nome do Wi-Fi (SSID)" className="px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border border-sky-700/60 text-sky-400 hover:bg-sky-900/20">
+                Wi-Fi
               </button>
               <button onClick={() => enviarLogin(m.id)} title="Enviar login.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
                 {enviandoLogin === m.id ? "Enviando..." : "Login"}
@@ -1057,6 +1099,60 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Nome do Wi-Fi (SSID) */}
+      {wifi && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-white">Nome do Wi-Fi{wifi.nome ? ` — ${wifi.nome}` : ""}</h3>
+              <button onClick={() => setWifi(null)} className="text-gray-400 hover:text-white cursor-pointer">×</button>
+            </div>
+            {wifi.carregando && <p className="text-sm text-gray-400 animate-pulse">Lendo o roteador...</p>}
+            {wifi.erro && <p className="text-sm text-red-400 mb-2">{wifi.erro}</p>}
+            {!wifi.carregando && wifi.radios.length === 0 && wifi.msg && !wifi.erro && <p className="text-sm text-yellow-400 mb-2 break-words">{wifi.msg}</p>}
+            {wifi.radios.length > 0 && (
+              <>
+                <div className="space-y-2 mb-3">
+                  {wifi.radios.map(r => (
+                    <label key={r.nome} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                      <input type="checkbox" checked={wifi.marcados.includes(r.nome)}
+                        onChange={(e) => setWifi(w => ({ ...w, marcados: e.target.checked ? [...w.marcados, r.nome] : w.marcados.filter(n => n !== r.nome) }))} />
+                      <span className="font-medium text-white">{r.nome}</span>
+                      <span className="text-gray-400 break-all">atual: "{r.ssid}"</span>
+                      {!r.ligado && <span className="text-xs text-yellow-400">(desligado)</span>}
+                    </label>
+                  ))}
+                </div>
+                <label className="block text-xs text-gray-500 mb-1">Novo nome do Wi-Fi</label>
+                <input
+                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={wifi.ssid} maxLength={32}
+                  onChange={(e) => setWifi(w => ({ ...w, ssid: e.target.value }))}
+                  placeholder="Nome que o cliente vê ao procurar a rede"
+                />
+                <p className="text-xs text-gray-500 mt-1">{wifi.ssid.length}/32. Só o nome muda; senha, modo e segurança ficam como estão. Os aparelhos conectados caem e precisam escolher a rede nova.</p>
+              </>
+            )}
+            {wifi.resultado && (
+              <div className="mt-3 space-y-1">
+                {(wifi.resultado.radios || []).map(r => (
+                  <p key={r.nome} className={`text-xs break-words ${r.status === "ok" ? "text-green-400" : r.status === "erro" ? "text-red-400" : "text-yellow-400"}`}>{r.nome}: {r.message}</p>
+                ))}
+                {(!wifi.resultado.radios || wifi.resultado.radios.length === 0) && wifi.resultado.message && <p className="text-xs text-yellow-400">{wifi.resultado.message}</p>}
+              </div>
+            )}
+            <div className="flex justify-between mt-4">
+              <button onClick={() => setWifi(null)} className="border border-gray-700 text-gray-300 px-4 py-2 rounded text-sm hover:bg-[#252b3b] cursor-pointer">Fechar</button>
+              {wifi.radios.length > 0 && (
+                <button onClick={salvarWifi} disabled={wifi.salvando} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 cursor-pointer disabled:opacity-50">
+                  {wifi.salvando ? "Alterando..." : "Alterar nome"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

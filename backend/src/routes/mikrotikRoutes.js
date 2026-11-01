@@ -725,6 +725,55 @@ router.post("/:id/diagnostico-hotspot", somenteMikrotik, async (req, res) => {
   }
 });
 
+// Nome do Wi-Fi (SSID) de um equipamento ja configurado: le os radios e troca so o nome.
+const wifiEmAndamento = new Set();
+const withWifi = async (req, res, fn) => {
+  const { id } = req.params;
+  let conn;
+  try {
+    const [[mikrotik]] = await db.execute("SELECT * FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
+    if (!mikrotik) return res.status(404).json({ message: "Mikrotik não encontrado" });
+    if (wifiEmAndamento.has(mikrotik.id)) return res.status(409).json({ message: "Já existe uma operação de Wi-Fi em andamento para este equipamento." });
+    wifiEmAndamento.add(mikrotik.id);
+    try {
+      conn = await abrirConexaoDiagnostico(mikrotik);
+      const ler = (path) => Promise.race([
+        conn.write(path).then((r) => ({ ok: true, itens: Array.isArray(r) ? r : [] })).catch(() => ({ ok: false, itens: [] })),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false, itens: [] }), 8000)),
+      ]);
+      const escrever = (path, args) => Promise.race([
+        conn.write(path, args),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("sem resposta do roteador")), 30000)),
+      ]);
+      return await fn({ ler, escrever });
+    } finally {
+      wifiEmAndamento.delete(mikrotik.id);
+      if (conn) { try { await conn.close(); } catch (e) {} }
+    }
+  } catch (err) {
+    const { descreverErro } = require("../utils/mikrotikClient");
+    console.error("Erro no Wi-Fi do equipamento:", err.message);
+    res.status(500).json({ message: "Não foi possível acessar o Wi-Fi: " + descreverErro(err) });
+  }
+};
+
+router.post("/:id/wifi", somenteMikrotik, (req, res) => withWifi(req, res, async ({ ler }) => {
+  const { lerWifi } = require("../utils/hotspotSetup");
+  const r = await lerWifi({ ler });
+  res.json({ success: r.ok, ...r });
+}));
+
+router.put("/:id/wifi", somenteMikrotik, (req, res) => withWifi(req, res, async ({ ler, escrever }) => {
+  const { renomearWifi, validarSsid } = require("../utils/hotspotSetup");
+  const body = req.body || {};
+  const v = validarSsid(body.ssid);
+  if (!v.ok) return res.status(400).json({ message: v.message });
+  const radios = Array.isArray(body.radios) ? body.radios.filter((r) => typeof r === "string" && /^[A-Za-z0-9._-]{1,32}$/.test(r)) : [];
+  if (radios.length === 0 || radios.length > 8) return res.status(400).json({ message: "Escolha de 1 a 8 radios." });
+  const r = await renomearWifi({ radios: [...new Set(radios)], ssid: v.nome, ler, escrever });
+  res.status(r.status === "erro" && !r.radios.length ? 409 : 200).json({ success: r.status !== "erro", ...r });
+}));
+
 // Correcoes seguras e idempotentes sugeridas pelo diagnostico (cada uma com confirmacao no front).
 router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
   const { id } = req.params;
