@@ -22,6 +22,7 @@ export default function Mikrotiks() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [hotspotLog, setHotspotLog] = useState([]);
   const [enviandoHotspot, setEnviandoHotspot] = useState(null);
+  const [diag, setDiag] = useState(null); // { id, nome, carregando, dados, erro, corrigindo, msg }
   const [enviandoLogin, setEnviandoLogin] = useState(null);
   const [enviandoStatus, setEnviandoStatus] = useState(null);
   const [mikrotikInfo, setMikrotikInfo] = useState(null);
@@ -185,6 +186,11 @@ export default function Mikrotiks() {
         }),
       });
 
+      if (!res.ok) {
+        const falha = await res.json().catch(() => ({}));
+        setHotspotLog([`[erro] ${falha.message || "Não foi possível iniciar o assistente."}`]);
+        return;
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -208,9 +214,11 @@ export default function Mikrotiks() {
               setHotspotLog(prev => [...prev, `[erro] ${event.message}`]);
             } else if (event.type === "done") {
               finalizou = true;
-              if (event.success) {
-                setHotspotLog(prev => [...prev, "--- Configuracao finalizada com sucesso! ---"]);
-              }
+              setHotspotLog(prev => {
+                if (!event.success) return [...prev, "--- O assistente terminou com ERRO. NÃO considere o hotspot pronto: veja as linhas [erro] acima. ---"];
+                if (prev.some(l => l.startsWith("[aviso]"))) return [...prev, "--- Terminou com AVISOS: confira as linhas [aviso] acima e use 'Diagnosticar' na linha do equipamento. ---"];
+                return [...prev, "--- Configuracao finalizada com sucesso! ---"];
+              });
               carregarMikrotiks();
             }
           } catch (e) { /* parse error, ignora */ }
@@ -225,6 +233,37 @@ export default function Mikrotiks() {
       setEnviandoHotspot(null);
     }
   };
+
+const diagnosticar = async (m) => {
+  setDiag({ id: m.id, nome: m.nome, carregando: true, dados: null, erro: "", corrigindo: null, msg: "" });
+  try {
+    const res = await fetch(`/api/mikrotiks/${m.id}/diagnostico-hotspot`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Falha ao diagnosticar");
+    setDiag(d => d && d.id === m.id ? { ...d, carregando: false, dados: data } : d);
+  } catch (e) {
+    setDiag(d => d && d.id === m.id ? { ...d, carregando: false, erro: e.message } : d);
+  }
+};
+
+const corrigirDiag = async (acao, texto) => {
+  if (!diag || !window.confirm(`${texto}?\n\nIsso altera o roteador agora.`)) return;
+  setDiag(d => ({ ...d, corrigindo: acao, msg: "" }));
+  try {
+    const res = await fetch(`/api/mikrotiks/${diag.id}/corrigir-hotspot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ acao }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Falha ao corrigir");
+    setDiag(d => ({ ...d, corrigindo: null, msg: data.message }));
+    carregarMikrotiks();
+    diagnosticar({ id: diag.id, nome: diag.nome });
+  } catch (e) {
+    setDiag(d => ({ ...d, corrigindo: null, erro: e.message }));
+  }
+};
 
 const carregarTrilhas = async () => {
   try {
@@ -417,6 +456,9 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
             <>
               <button onClick={() => abrirWizard(m.id)} title="Enviar Hotspot" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoHotspot === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-blue-600 text-white hover:bg-blue-500'}`} disabled={enviandoHotspot === m.id}>
                 {enviandoHotspot === m.id ? "Enviando..." : "Hotspot"}
+              </button>
+              <button onClick={() => diagnosticar(m)} title="Diagnosticar o hotspot (so leitura)" className="px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border border-amber-700/60 text-amber-400 hover:bg-amber-900/20">
+                Diagnosticar
               </button>
               <button onClick={() => enviarLogin(m.id)} title="Enviar login.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
                 {enviandoLogin === m.id ? "Enviando..." : "Login"}
@@ -1014,6 +1056,55 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostico do hotspot */}
+      {diag && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-white">Diagnóstico do hotspot{diag.nome ? ` — ${diag.nome}` : ""}</h3>
+              <button onClick={() => setDiag(null)} className="text-gray-400 hover:text-white cursor-pointer">×</button>
+            </div>
+            {diag.carregando && <p className="text-sm text-gray-400 animate-pulse">Lendo o roteador (pode levar até 1 minuto em roteador lento)...</p>}
+            {diag.erro && <p className="text-sm text-red-400 mb-2">{diag.erro}</p>}
+            {diag.msg && <p className="text-sm text-green-400 mb-2">{diag.msg}</p>}
+            {diag.dados && (
+              <>
+                <p className="text-xs text-gray-400 mb-3">
+                  {diag.dados.resumo.erro} erro(s), {diag.dados.resumo.aviso} aviso(s), {diag.dados.resumo.ok} ok. Só leitura: nada foi alterado.
+                </p>
+                <div className="space-y-2">
+                  {diag.dados.checks.map(c => (
+                    <div key={c.id + c.titulo} className={`rounded-lg border p-3 text-sm ${c.status === "erro" ? "border-red-800/60 bg-red-900/10" : c.status === "aviso" ? "border-yellow-800/60 bg-yellow-900/10" : "border-green-900/50 bg-green-900/5"}`}>
+                      <div className="flex items-start gap-2">
+                        <span className={c.status === "erro" ? "text-red-400" : c.status === "aviso" ? "text-yellow-400" : "text-green-400"}>{c.status === "erro" ? "✗" : c.status === "aviso" ? "!" : "✓"}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white font-medium">{c.titulo}</p>
+                          {c.detalhe && <p className="text-xs text-gray-400 break-words">{c.detalhe}</p>}
+                          {c.correcao && typeof c.correcao === "string" && <p className="text-xs text-gray-500 mt-1">Como corrigir: {c.correcao}</p>}
+                          {c.correcao && typeof c.correcao === "object" && (
+                            <button
+                              disabled={!!diag.corrigindo}
+                              onClick={() => corrigirDiag(c.correcao.acao, c.correcao.texto)}
+                              className="mt-2 px-3 py-1 rounded text-xs bg-amber-600 text-white hover:bg-amber-500 cursor-pointer disabled:opacity-50"
+                            >
+                              {diag.corrigindo === c.correcao.acao ? "Corrigindo..." : c.correcao.texto}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="flex justify-between mt-4">
+              <button onClick={() => diagnosticar({ id: diag.id, nome: diag.nome })} disabled={diag.carregando} className="px-3 py-2 rounded text-sm border border-gray-700 text-gray-300 hover:bg-[#252b3b] cursor-pointer disabled:opacity-50">Diagnosticar de novo</button>
+              <button onClick={() => setDiag(null)} className="px-4 py-2 rounded text-sm bg-blue-600 text-white hover:bg-blue-500 cursor-pointer">Fechar</button>
+            </div>
           </div>
         </div>
       )}

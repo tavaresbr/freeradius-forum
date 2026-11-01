@@ -579,9 +579,17 @@ router.post("/:id/scan", somenteMikrotik, async (req, res) => {
 });
 
 // Enviar configuração completa de Hotspot para o Mikrotik (SSE - streaming de steps)
+// Uma execucao do assistente por equipamento: duas ao mesmo tempo (aba reaberta, clique duplo) enchem a
+// API do roteador lento e geram falsos timeouts/duplicatas. A execucao continua mesmo se o navegador cair.
+const hotspotEmExecucao = new Set();
 router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
   const { id } = req.params;
   const config = req.body;
+  const chaveExecucao = `${req.empresa_id}:${id}`;
+  if (hotspotEmExecucao.has(chaveExecucao)) {
+    return res.status(409).json({ message: "O assistente já está rodando neste equipamento. Aguarde terminar." });
+  }
+  hotspotEmExecucao.add(chaveExecucao);
 
   // Configurar SSE
   res.writeHead(200, {
@@ -610,6 +618,7 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
     );
     if (!mikrotik) {
       clearInterval(heartbeat);
+      hotspotEmExecucao.delete(chaveExecucao);
       sendEvent({ type: "error", message: "Mikrotik não encontrado" });
       res.end();
       return;
@@ -646,10 +655,14 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
     const localAddr = config.localAddress || "10.5.50.1/24";
     const gatewayIp = localAddr.split("/")[0];
     const endHotspot = (config.dnsName && config.dnsName.trim()) || gatewayIp;
-    await db.execute(
-      "UPDATE mikrotiks SET end_hotspot = ? WHERE id = ? AND empresa_id = ?",
-      [endHotspot, id, req.empresa_id]
-    );
+    // So grava se o assistente terminou sem erro: antes gravava sempre e a trilha de ativacao ficava
+    // verde com o roteador vazio (caso RB08).
+    if (result.success) {
+      await db.execute(
+        "UPDATE mikrotiks SET end_hotspot = ? WHERE id = ? AND empresa_id = ?",
+        [endHotspot, id, req.empresa_id]
+      );
+    }
 
     // Evento final
     sendEvent({
@@ -662,8 +675,109 @@ router.post("/:id/enviar-hotspot", somenteMikrotik, async (req, res) => {
     sendEvent({ type: "error", message: "Erro interno: " + err.message });
   }
 
+  hotspotEmExecucao.delete(chaveExecucao);
   clearInterval(heartbeat);
   res.end();
+});
+
+// Diagnostico do hotspot em um clique (so leitura): ver utils/diagnosticoHotspot.js
+const abrirConexaoDiagnostico = async (mikrotik) => {
+  const { RouterOSAPI } = require("node-routeros");
+  const conn = new RouterOSAPI({
+    host: mikrotik.ip, user: mikrotik.usuario, password: mikrotik.senha,
+    port: mikrotik.porta || 8728, keepalive: false, timeout: 15,
+  });
+  conn.on("error", () => {});
+  await conn.connect();
+  return conn;
+};
+const diagnosticoEmAndamento = new Set();
+router.post("/:id/diagnostico-hotspot", somenteMikrotik, async (req, res) => {
+  const { id } = req.params;
+  let conn;
+  try {
+    const [[mikrotik]] = await db.execute("SELECT * FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
+    if (!mikrotik) return res.status(404).json({ message: "Mikrotik não encontrado" });
+    if (diagnosticoEmAndamento.has(mikrotik.id)) return res.status(409).json({ message: "Já existe um diagnóstico em andamento para este equipamento." });
+    diagnosticoEmAndamento.add(mikrotik.id);
+    try {
+      conn = await abrirConexaoDiagnostico(mikrotik);
+      // Leitura que distingue lista vazia (ok, []) de leitura que expirou (ok:false): nunca vira "nao existe".
+      const ler = (path, args = []) => Promise.race([
+        conn.write(path, args).then((r) => ({ ok: true, itens: Array.isArray(r) ? r : [] })).catch(() => ({ ok: false, itens: [] })),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false, itens: [] }), 8000)),
+      ]);
+      const { portalHostDaEmpresa } = require("../utils/dominioPortal");
+      const portalHost = (await portalHostDaEmpresa(req.empresa_id).catch(() => null)) || process.env.SYSTEM_DOMAIN || "";
+      const dns = require("dns").promises;
+      const resolve = async (host) => { try { await dns.lookup(host); return true; } catch (e) { return false; } };
+      const { diagnosticarHotspot } = require("../utils/diagnosticoHotspot");
+      const r = await diagnosticarHotspot({ ler, mikrotik, portalHost, resolve });
+      return res.json({ success: true, ...r });
+    } finally {
+      diagnosticoEmAndamento.delete(mikrotik.id);
+      if (conn) { try { await conn.close(); } catch (e) {} }
+    }
+  } catch (err) {
+    const { descreverErro } = require("../utils/mikrotikClient");
+    console.error("Erro no diagnostico do hotspot:", err.message);
+    res.status(500).json({ message: "Não foi possível diagnosticar: " + descreverErro(err) });
+  }
+});
+
+// Correcoes seguras e idempotentes sugeridas pelo diagnostico (cada uma com confirmacao no front).
+router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
+  const { id } = req.params;
+  const acao = String(req.body && req.body.acao || "");
+  if (!["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot"].includes(acao)) return res.status(400).json({ message: "Ação inválida" });
+  let conn;
+  try {
+    const [[mikrotik]] = await db.execute("SELECT * FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
+    if (!mikrotik) return res.status(404).json({ message: "Mikrotik não encontrado" });
+    conn = await abrirConexaoDiagnostico(mikrotik);
+    const lista = async (path) => { try { const r = await conn.write(path); return Array.isArray(r) ? r : []; } catch (e) { return []; } };
+    const hs = (await lista("/ip/hotspot/print")).find((h) => h.name === "hotspot1");
+    const ifName = hs && hs.interface;
+    const ip = ifName ? (await lista("/ip/address/print")).find((a) => a.interface === ifName) : null;
+    const gateway = ip ? String(ip.address).split("/")[0] : "";
+    const { calcularRede } = require("../utils/redeHotspot");
+    const rede = ip ? calcularRede(ip.address) : null;
+    let mensagem = "";
+
+    if (acao === "dns_remoto") {
+      await conn.write("/ip/dns/set", ["=allow-remote-requests=yes"]);
+      mensagem = "DNS do roteador habilitado para os clientes.";
+    } else if (!gateway) {
+      return res.status(409).json({ message: "Não encontrei o IP do hotspot no roteador. Rode o assistente 'Hotspot'." });
+    } else if (acao === "dns_dhcp") {
+      const nets = await lista("/ip/dhcp-server/network/print");
+      const rn = nets.find((n) => rede && rede.ok && n.address === rede.network) || nets.find((n) => n.gateway === gateway);
+      if (rn) await conn.write("/ip/dhcp-server/network/set", [`=.id=${rn[".id"]}`, `=dns-server=${gateway}`]);
+      else await conn.write("/ip/dhcp-server/network/add", [`=address=${rede && rede.ok ? rede.network : ip.network + "/24"}`, `=gateway=${gateway}`, `=dns-server=${gateway}`]);
+      mensagem = `O DHCP agora entrega ${gateway} como DNS. Peça para os aparelhos esquecerem a rede e conectarem de novo.`;
+    } else if (acao === "dns_name") {
+      const profs = await lista("/ip/hotspot/profile/print");
+      const prof = profs.find((p) => p.name === (hs && hs.profile)) || profs.find((p) => p.name === "hsprof-hotspot");
+      if (!prof) return res.status(409).json({ message: "Perfil do hotspot não encontrado." });
+      await conn.write("/ip/hotspot/profile/set", [`=.id=${prof[".id"]}`, "=dns-name="]);
+      await db.execute("UPDATE mikrotiks SET end_hotspot = ? WHERE id = ? AND empresa_id = ?", [gateway, id, req.empresa_id]);
+      mensagem = `dns-name removido; o hotspot usa ${gateway} e o cadastro foi atualizado.`;
+    } else if (acao === "end_hotspot") {
+      const profs = await lista("/ip/hotspot/profile/print");
+      const prof = profs.find((p) => p.name === (hs && hs.profile)) || profs.find((p) => p.name === "hsprof-hotspot");
+      const dnsName = prof && String(prof["dns-name"] || "").trim();
+      const valor = dnsName || gateway;
+      await db.execute("UPDATE mikrotiks SET end_hotspot = ? WHERE id = ? AND empresa_id = ?", [valor, id, req.empresa_id]);
+      mensagem = `Destino do login final gravado: ${valor}.`;
+    }
+    res.json({ success: true, message: mensagem });
+  } catch (err) {
+    const { descreverErro } = require("../utils/mikrotikClient");
+    console.error("Erro ao corrigir hotspot:", err.message);
+    res.status(500).json({ message: "Não foi possível corrigir: " + descreverErro(err) });
+  } finally {
+    if (conn) { try { await conn.close(); } catch (e) {} }
+  }
 });
 
 // Enviar apenas login.html para o Mikrotik (sem reconfigurar hotspot)
