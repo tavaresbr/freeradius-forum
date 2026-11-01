@@ -1,5 +1,6 @@
 const { RouterOSAPI } = require("node-routeros");
 require("./routerosPatch"); // !empty do RouterOS 7 (ver utils/routerosPatch.js)
+const { lerDoRoteador, paraORoteador } = require("./textoRouterOS"); // a lib fala win1252; o RouterOS guarda UTF-8
 const { calcularRede, validarPool, redesSobrepoem } = require("./redeHotspot");
 const { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require("../constants/hotspotDefaults");
 
@@ -42,7 +43,7 @@ async function desligarRequireMessageAuth(escrever, id) {
  */
 async function configurarWifiAP({ ifName, ssid, print, write }) {
   const nome = String(ssid || "").trim();
-  if (!nome || nome.length > 32 || /[\x00-\x1f]/.test(nome)) {
+  if (!validarSsid(nome).ok) {
     return { status: "aviso", message: "Nome do Wi-Fi (SSID) invalido (1 a 32 caracteres); Wi-Fi nao alterado." };
   }
   try {
@@ -52,10 +53,10 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
       return { status: "aviso", message: `Este roteador nao usa o pacote wireless legado (ou ${ifName} nao e Wi-Fi). Configure o SSID manualmente em /interface wifi.` };
     }
     await write("/interface/wireless/set", [
-      `=numbers=${ifName}`, "=mode=ap-bridge", `=ssid=${nome}`, "=security-profile=default", "=disabled=no",
+      `=numbers=${ifName}`, "=mode=ap-bridge", `=ssid=${paraORoteador(nome)}`, "=security-profile=default", "=disabled=no",
     ]);
     const depois = (await print("/interface/wireless/print")).find((w) => w.name === ifName);
-    if (depois && depois.mode === "ap-bridge" && depois.ssid === nome) {
+    if (depois && depois.mode === "ap-bridge" && lerDoRoteador(depois.ssid) === nome) {
       return { status: "ok", message: `Wi-Fi ${ifName}: modo AP, SSID "${nome}"` };
     }
     return { status: "aviso", message: `Sem confirmacao do Wi-Fi. Confira: /interface wireless set ${ifName} mode=ap-bridge ssid="${nome}" disabled=no` };
@@ -76,7 +77,7 @@ function validarSsid(ssid) {
   const nome = String(ssid == null ? "" : ssid).trim();
   if (!nome) return { ok: false, message: "Informe o nome do Wi-Fi." };
   if (Buffer.byteLength(nome, "utf8") > SSID_MAX) return { ok: false, message: `O nome do Wi-Fi pode ter no maximo ${SSID_MAX} bytes (acentos e emojis ocupam mais de 1).` };
-  if (/[\x00-\x1f\x7f"\\]/.test(nome)) return { ok: false, message: "O nome do Wi-Fi nao pode ter aspas, barra invertida nem caracteres de controle." };
+  if (/[\x00-\x1f\x7f-\x9f"\\]/.test(nome)) return { ok: false, message: "O nome do Wi-Fi nao pode ter aspas, barra invertida nem caracteres de controle." };
   return { ok: true, nome };
 }
 
@@ -84,7 +85,7 @@ async function lerWifi({ ler }) {
   const r = await ler("/interface/wireless/print");
   if (!r.ok) return { ok: false, legado: null, radios: [], message: "Nao consegui ler o Wi-Fi do roteador (demorou). Tente de novo." };
   const radios = r.itens.filter((w) => w && w.name).map((w) => ({
-    nome: w.name, ssid: w.ssid || "", ligado: !(w.disabled === true || w.disabled === "true" || w.disabled === "yes"),
+    nome: w.name, ssid: lerDoRoteador(w.ssid || ""), ligado: !(w.disabled === true || w.disabled === "true" || w.disabled === "yes"),
     rodando: w.running === true || w.running === "true" || w.running === "yes",
   }));
   if (radios.length === 0) {
@@ -112,7 +113,7 @@ async function renomearWifi({ radios, ssid, ler, escrever }) {
     const resultado = [];
     for (const nome of radios) {
       try {
-        await escrever("/interface/wireless/set", [`=numbers=${nome}`, `=ssid=${v.nome}`]);
+        await escrever("/interface/wireless/set", [`=numbers=${nome}`, `=ssid=${paraORoteador(v.nome)}`]);
         resultado.push({ nome, status: "pendente", message: "" });
       } catch (e) {
         resultado.push({ nome, status: "erro", message: `Falha ao gravar: ${e.message || "sem detalhe"}` });
