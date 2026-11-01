@@ -745,10 +745,9 @@ router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
     let mensagem = "";
 
     if (acao === "reset_html") {
-      const profs = await lista("/ip/hotspot/profile/print");
-      const prof = profs.find((p) => p.name === (hs && hs.profile)) || profs.find((p) => p.name === "hsprof-hotspot");
-      const dir = (prof && String(prof["html-directory"] || "").trim()) || "hotspot";
-      await conn.write("/ip/hotspot/reset-html", dir === "hotspot" ? [] : [`=html-directory=${dir}`]);
+      if (!hs) return res.status(409).json({ message: "Servidor hotspot1 não encontrado no roteador. Rode o assistente 'Hotspot'." });
+      // reset-html exige o servidor do hotspot em "numbers" (o numero/nome do servidor, nao a pasta)
+      await conn.write("/ip/hotspot/reset-html", [`=numbers=${hs.name}`]);
       mensagem = "Paginas padrao do hotspot restauradas. O login.html e o error.html voltaram ao padrao do MikroTik: clique em 'Login' (ou 'Enviar hotspot') na linha do equipamento para regrava-los.";
     } else if (acao === "dns_remoto") {
       await conn.write("/ip/dns/set", ["=allow-remote-requests=yes"]);

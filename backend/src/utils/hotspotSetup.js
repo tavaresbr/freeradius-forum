@@ -777,8 +777,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
           return r ? r.map(f => f.name) : null;
         },
         resetar: async (dir) => {
-          const args = dir === "hotspot" ? [] : [`=html-directory=${dir}`];
-          const r = await safeWrite("/ip/hotspot/reset-html", args, 20000);
+          // reset-html exige o servidor do hotspot em "numbers" (sem ele: "incorrect usage, a comma-separated list is expected")
+          const r = await safeWrite("/ip/hotspot/reset-html", ["=numbers=hotspot1"], 20000);
           if (r === "timeout") await esperar(3000);
         },
       });
@@ -939,11 +939,11 @@ async function garantirPaginasPadrao({ htmlDir, listar, resetar, tentativas = 3,
     if (antes === true) return { status: "ok", message: `Paginas padrao do hotspot presentes em ${htmlDir}`, resetou: false };
     if (antes === null) return { status: "aviso", message: `Nao consegui ler a pasta ${htmlDir} para conferir o redirect.html`, resetou: false };
     try { await resetar(htmlDir); } catch (e) {
-      return { status: "erro", message: `Faltam as paginas padrao (${alvo}) e o reset-html falhou: ${e.message || "sem detalhe"}. No roteador rode: /ip hotspot reset-html`, resetou: false };
+      return { status: "erro", message: `Faltam as paginas padrao (${alvo}) e o reset-html falhou: ${e.message || "sem detalhe"}. No roteador rode: /ip hotspot reset-html hotspot1`, resetou: false };
     }
     const depois = await existe();
     if (depois === true) return { status: "ok", message: `Paginas padrao do hotspot restauradas em ${htmlDir} (reset-html)`, resetou: true };
-    return { status: "erro", message: `${alvo} continua ausente depois do reset-html: o portal so abrira digitando o IP. No roteador rode: /ip hotspot reset-html`, resetou: true };
+    return { status: "erro", message: `${alvo} continua ausente depois do reset-html: o portal so abrira digitando o IP. No roteador rode: /ip hotspot reset-html hotspot1`, resetou: true };
   } catch (e) {
     return { status: "aviso", message: `Falha ao conferir as paginas padrao: ${e.message}`, resetou: false };
   }
@@ -988,7 +988,7 @@ async function verificarConfiguracaoHotspot({ print, ifName, poolName, htmlDir, 
     if (!radius.find(r => r.service && String(r.service).includes("hotspot"))) faltando.push("cliente RADIUS do hotspot nao existe");
     if (htmlDir) {
       const arquivos = await ler("/file/print");
-      if (arquivos.length > 0 && !arquivos.find(f => f.name === `${htmlDir}/redirect.html`)) faltando.push(`${htmlDir}/redirect.html nao existe (sem ele o portal so abre digitando o IP; rode /ip hotspot reset-html)`);
+      if (arquivos.length > 0 && !arquivos.find(f => f.name === `${htmlDir}/redirect.html`)) faltando.push(`${htmlDir}/redirect.html nao existe (sem ele o portal so abre digitando o IP; rode /ip hotspot reset-html hotspot1)`);
     }
   } catch (e) {
     faltando.push(`verificacao interrompida: ${e.message}`);
