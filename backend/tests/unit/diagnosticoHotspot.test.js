@@ -21,7 +21,7 @@ const roteadorOk = () => ({
   '/ip/hotspot/walled-garden/print': [{ 'dst-host': '*painel.apextelecom.com.br*', action: 'allow' }],
   '/radius/print': [{ address: '10.8.0.1', service: 'hotspot' }],
   '/ip/pool/print': [{ name: 'hs-pool', ranges: '10.5.50.2-10.5.50.254' }],
-  '/file/print': [{ name: 'hotspot/login.html', size: '1761' }, { name: 'hotspot/error.html', size: '1379' }],
+  '/file/print': [{ name: 'hotspot/redirect.html', size: '600' }, { name: 'hotspot/login.html', size: '1761' }, { name: 'hotspot/error.html', size: '1379' }],
   '/ip/hotspot/host/print': [{}, {}],
   '/ip/hotspot/active/print': [],
 });
@@ -95,9 +95,18 @@ test('walled garden sem o dominio do portal e bridge sem portas sao erros; DNS r
 test('rotas: diagnostico e so leitura, correcao valida a acao, assistente tem trava e so grava end_hotspot com sucesso', () => {
   const rota = fs.readFileSync(path.join(__dirname, '../../src/routes/mikrotikRoutes.js'), 'utf8');
   assert.ok(rota.includes('"/:id/diagnostico-hotspot"'));
-  assert.ok(rota.includes('["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot"].includes(acao)'));
+  assert.ok(rota.includes('["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot", "reset_html"].includes(acao)'));
   assert.ok(rota.includes('hotspotEmExecucao.has(chaveExecucao)'));
   assert.ok(rota.includes('if (result.success) {'));
   const util = fs.readFileSync(path.join(__dirname, '../../src/utils/diagnosticoHotspot.js'), 'utf8');
   assert.ok(!/conn\.write\([^)]*\/(set|add|remove)/.test(util), 'o diagnostico nao pode escrever no roteador');
+});
+
+test('caso RB09: sem redirect.html vira erro com correcao reset_html', async () => {
+  const t = roteadorOk();
+  t['/file/print'] = t['/file/print'].filter((f) => f.name !== 'hotspot/redirect.html');
+  const r = await diagnosticarHotspot({ ...base, ler: lerDe(t) });
+  const c = por(r, 'redirect_html')[0];
+  assert.strictEqual(c.status, 'erro');
+  assert.strictEqual(c.correcao.acao, 'reset_html');
 });

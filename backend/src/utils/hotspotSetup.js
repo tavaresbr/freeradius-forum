@@ -764,6 +764,29 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       addStep("masquerade", "aviso", e.message);
     }
 
+    // === 8z. Paginas padrao do hotspot (redirect.html): ANTES de baixar login/error, pois o reset-html as sobrescreve ===
+    try {
+      const htmlDirPadrao = await resolveHotspotHtmlDir(conn);
+      const pg = await garantirPaginasPadrao({
+        htmlDir: htmlDirPadrao,
+        listar: async () => {
+          const r = await Promise.race([
+            conn.write("/file/print", ["=.proplist=name"]).then(x => Array.isArray(x) ? x : null).catch(() => null),
+            new Promise(resolve => setTimeout(() => resolve(null), 8000)),
+          ]);
+          return r ? r.map(f => f.name) : null;
+        },
+        resetar: async (dir) => {
+          const args = dir === "hotspot" ? [] : [`=html-directory=${dir}`];
+          const r = await safeWrite("/ip/hotspot/reset-html", args, 20000);
+          if (r === "timeout") await esperar(3000);
+        },
+      });
+      addStep("paginas_padrao", pg.status, pg.message);
+    } catch (e) {
+      addStep("paginas_padrao", "aviso", `Paginas padrao nao conferidas: ${e.message}`);
+    }
+
     // === 9. Login Page (download via /tool/fetch) ===
     try {
       const empresaId = empresa.id || mikrotik.empresa_id || '';
@@ -869,7 +892,7 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
 
     // === 10. Conferencia final: o que foi criado esta mesmo no roteador? ===
     {
-      const v = await verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName });
+      const v = await verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName, htmlDir: await resolveHotspotHtmlDir(conn) });
       if (v.ok) {
         addStep("verificacao", "ok", "Conferido no roteador: hotspot, pool, profile com RADIUS e cliente RADIUS presentes");
       } else {
@@ -893,13 +916,47 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
 }
 
 /**
+ * Garante as paginas padrao do hotspot (redirect.html). Sem elas o hotspot responde 404 a qualquer
+ * site HTTP e o portal so abre digitando o IP. `listar()` devolve a lista de nomes de arquivo ou
+ * null se a leitura expirou (nunca confundir "nao li" com "nao existe"); `resetar(dir)` roda o
+ * reset-html. Nunca lanca. Devolve { status: 'ok'|'aviso'|'erro', message, resetou }.
+ */
+async function garantirPaginasPadrao({ htmlDir, listar, resetar, tentativas = 3, esperarMs = 2000 }) {
+  const dorme = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const { PAGINAS_PADRAO_HOTSPOT } = require("../constants/hotspotDefaults");
+  const alvo = `${htmlDir}/${PAGINAS_PADRAO_HOTSPOT.obrigatoria}`;
+  const existe = async () => {
+    for (let i = 0; i < tentativas; i++) {
+      if (i > 0) await dorme(esperarMs);
+      let nomes = null;
+      try { nomes = await listar(); } catch (e) { nomes = null; }
+      if (Array.isArray(nomes) && nomes.length > 0) return nomes.includes(alvo);
+    }
+    return null; // nao consegui ler
+  };
+  try {
+    const antes = await existe();
+    if (antes === true) return { status: "ok", message: `Paginas padrao do hotspot presentes em ${htmlDir}`, resetou: false };
+    if (antes === null) return { status: "aviso", message: `Nao consegui ler a pasta ${htmlDir} para conferir o redirect.html`, resetou: false };
+    try { await resetar(htmlDir); } catch (e) {
+      return { status: "erro", message: `Faltam as paginas padrao (${alvo}) e o reset-html falhou: ${e.message || "sem detalhe"}. No roteador rode: /ip hotspot reset-html`, resetou: false };
+    }
+    const depois = await existe();
+    if (depois === true) return { status: "ok", message: `Paginas padrao do hotspot restauradas em ${htmlDir} (reset-html)`, resetou: true };
+    return { status: "erro", message: `${alvo} continua ausente depois do reset-html: o portal so abrira digitando o IP. No roteador rode: /ip hotspot reset-html`, resetou: true };
+  } catch (e) {
+    return { status: "aviso", message: `Falha ao conferir as paginas padrao: ${e.message}`, resetou: false };
+  }
+}
+
+/**
  * Conferencia final do assistente: le do roteador se o hotspot realmente existe.
  * Sem isso o assistente dizia "concluida" mesmo quando as escritas nao pegaram (API lenta,
  * reset/reboot do roteador). `print(path)` e' o safePrint (devolve [] se expirar), entao cada
  * leitura e' repetida algumas vezes antes de dar o item como ausente. Nunca lanca.
  * Devolve { ok, faltando: [textos] }.
  */
-async function verificarConfiguracaoHotspot({ print, ifName, poolName, tentativas = 3, esperarMs = 2000 }) {
+async function verificarConfiguracaoHotspot({ print, ifName, poolName, htmlDir, tentativas = 3, esperarMs = 2000 }) {
   const dorme = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   const verdadeiro = (v) => v === true || v === "true" || v === "yes";
   const ler = async (path) => {
@@ -929,6 +986,10 @@ async function verificarConfiguracaoHotspot({ print, ifName, poolName, tentativa
     else if (!verdadeiro(prof["use-radius"])) faltando.push("profile hsprof-hotspot sem use-radius");
     const radius = await ler("/radius/print");
     if (!radius.find(r => r.service && String(r.service).includes("hotspot"))) faltando.push("cliente RADIUS do hotspot nao existe");
+    if (htmlDir) {
+      const arquivos = await ler("/file/print");
+      if (arquivos.length > 0 && !arquivos.find(f => f.name === `${htmlDir}/redirect.html`)) faltando.push(`${htmlDir}/redirect.html nao existe (sem ele o portal so abre digitando o IP; rode /ip hotspot reset-html)`);
+    }
   } catch (e) {
     faltando.push(`verificacao interrompida: ${e.message}`);
   }
@@ -1037,4 +1098,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { garantirPaginasPadrao, ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
