@@ -516,4 +516,24 @@ async function resolverCamposPortal(p = {}) {
   return normalizarCampos(cfg?.campos);
 }
 
-module.exports = { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, dispositivoJaUsouAcesso, acessoEhGratis, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
+/**
+ * Os planos gratis LGPD/Lead da empresa ficam presos a UM equipamento (o 1o cadastrado). O login final,
+ * o NAS e o gateway_info NAO podem sair dele: o cliente conecta em qualquer equipamento da empresa.
+ * Devolve uma copia do plano com `mikrotik_id`/`end_hotspot` do equipamento de onde o cliente veio
+ * (`mikrotik_id` do portal, validado contra a empresa); sem equipamento valido mantem o do plano.
+ * Duracao e velocidade continuam as do plano. Caso real (RB09): o plano LGPD apontava para o RB03
+ * (end_hotspot hotspot.minharede.com) e o cliente do RB09 era mandado a um nome que nao resolve.
+ */
+async function equipamentoDoCliente(empresaId, mikrotikIdReq, plano) {
+  try {
+    const id = Number(mikrotikIdReq);
+    if (!plano || !empresaId || !Number.isInteger(id) || id <= 0) return plano;
+    const [[eq]] = await db.execute("SELECT id, end_hotspot FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, empresaId]);
+    if (!eq) return plano;
+    return { ...plano, mikrotik_id: eq.id, end_hotspot: eq.end_hotspot || plano.end_hotspot };
+  } catch (e) {
+    return plano;
+  }
+}
+
+module.exports = { equipamentoDoCliente, verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, cpfConfirmado, dispositivoJaUsouAcesso, acessoEhGratis, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverConfigPortal, resolverCamposPortal, TEXTO_LGPD_DEFAULT };
