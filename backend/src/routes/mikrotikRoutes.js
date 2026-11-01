@@ -778,7 +778,7 @@ router.put("/:id/wifi", somenteMikrotik, (req, res) => withWifi(req, res, async 
 router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
   const { id } = req.params;
   const acao = String(req.body && req.body.acao || "");
-  if (!["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot", "reset_html"].includes(acao)) return res.status(400).json({ message: "Ação inválida" });
+  if (!["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot", "reset_html", "enviar_status"].includes(acao)) return res.status(400).json({ message: "Ação inválida" });
   let conn;
   try {
     const [[mikrotik]] = await db.execute("SELECT * FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
@@ -793,11 +793,21 @@ router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
     const rede = ip ? calcularRede(ip.address) : null;
     let mensagem = "";
 
-    if (acao === "reset_html") {
+    if (acao === "enviar_status") {
+      const dominio = req.headers.host?.replace(/:\d+$/, "") || process.env.SYSTEM_DOMAIN;
+      const dst = `${await resolveHotspotHtmlDir(conn)}/status.html`;
+      const buscar = (url, modo) => Promise.race([
+        conn.write("/tool/fetch", [`=url=${url}`, `=dst-path=${dst}`, `=mode=${modo}`, ...(modo === "https" ? ["=check-certificate=no"] : [])]).then(() => true, () => false),
+        new Promise((resolve) => setTimeout(() => resolve(false), 20000)),
+      ]);
+      const enviado = (await buscar(`https://${dominio}/api/hotspot-status/${mikrotik.id}`, "https")) || (await buscar(`http://${dominio}/api/hotspot-status/${mikrotik.id}`, "http"));
+      if (!enviado) return res.status(409).json({ message: `Não consegui enviar ${dst}. Use o botão 'Status' da linha do equipamento ou baixe de https://${dominio}/api/hotspot-status/${mikrotik.id}` });
+      mensagem = `status.html enviado em ${dst}.`;
+    } else if (acao === "reset_html") {
       if (!hs) return res.status(409).json({ message: "Servidor hotspot1 não encontrado no roteador. Rode o assistente 'Hotspot'." });
       // reset-html exige o servidor do hotspot em "numbers" (o numero/nome do servidor, nao a pasta)
       await conn.write("/ip/hotspot/reset-html", [`=numbers=${hs.name}`]);
-      mensagem = "Paginas padrao do hotspot restauradas. O login.html e o error.html voltaram ao padrao do MikroTik: clique em 'Login' (ou 'Enviar hotspot') na linha do equipamento para regrava-los.";
+      mensagem = "Paginas padrao do hotspot restauradas. O login.html, o error.html e o status.html voltaram ao padrao do MikroTik: clique em 'Login' (ou 'Enviar hotspot') na linha do equipamento para regrava-los.";
     } else if (acao === "dns_remoto") {
       await conn.write("/ip/dns/set", ["=allow-remote-requests=yes"]);
       mensagem = "DNS do roteador habilitado para os clientes.";
