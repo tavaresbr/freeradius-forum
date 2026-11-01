@@ -5,7 +5,7 @@ const ROTULOS = {
   "cliente.excluir": "Excluiu cliente", "cliente.excluir_massa": "Excluiu clientes em massa", "cliente.editar_massa": "Editou clientes em massa",
   "cliente.exportar": "Exportou a base de clientes", "plano.criar": "Criou plano", "plano.editar": "Editou plano", "plano.excluir": "Excluiu plano",
   "usuario.criar": "Criou usuário", "usuario.editar": "Editou usuário", "usuario.excluir": "Excluiu usuário",
-  "equipamento.criar": "Cadastrou equipamento", "equipamento.editar": "Editou equipamento", "equipamento.excluir": "Excluiu equipamento", "equipamento.wifi": "Alterou o nome do Wi-Fi",
+  "equipamento.criar": "Cadastrou equipamento", "equipamento.editar": "Editou equipamento", "equipamento.excluir": "Excluiu equipamento", "equipamento.wifi": "Alterou o nome do Wi-Fi", "vpn.renomear": "Renomeou peer da VPN",
   "portal.excluir": "Excluiu portal", "config.salvar": "Alterou configuração", "limpeza.executar": "Executou limpeza de dados",
   "voucher.massa": "Ação em massa em vouchers", "promocao.iniciar": "Iniciou promoção por WhatsApp",
 };

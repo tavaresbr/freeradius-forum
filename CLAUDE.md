@@ -1072,6 +1072,7 @@ GET    /api/wireguard/status              # Status do WireGuard
 POST   /api/wireguard/clients             # Criar novo peer
 DELETE /api/wireguard/clients/:id          # Remover peer
 GET    /api/wireguard/clients/:id/config   # Download config do peer
+PUT    /api/wireguard/clients/:id          # Renomear identificacao do peer (so empresa_vpn_peers.nome; 409 se repetido; roteador ja configurado nao muda)
 ```
 
 ---
