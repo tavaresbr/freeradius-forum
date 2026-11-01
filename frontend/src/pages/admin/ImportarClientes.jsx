@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
 
 const API = "";
 const inputCls = "w-full px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-blue-800 text-sm";
@@ -406,7 +406,7 @@ function Exportar({ token }) {
   );
 }
 
-export default function ImportarClientes() {
+export default function ImportarClientes({ embutido = false }) {
   const { empresaSlug } = useParams();
   const [origem, setOrigem] = useState("planilha");
   const [campos, setCampos] = useState([]);
@@ -420,14 +420,14 @@ export default function ImportarClientes() {
   }, [token]);
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-6 max-w-4xl">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">Importar e exportar contatos</h1>
             <p className="text-gray-400 text-sm mt-1">Traga cadastros de outro sistema (SGP), de uma planilha, do WhatsApp, do Google, do Outlook ou do iCloud, ou exporte seus clientes como contatos</p>
           </div>
-          <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>
+          {!embutido && <Link to={`/admin/${empresaSlug}/leads`} className={btnSecondary}>Voltar para Clientes</Link>}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -452,6 +452,6 @@ export default function ImportarClientes() {
           : origem === "exportar" ? <Exportar token={token} />
           : <Sgp empresaSlug={empresaSlug} />}
       </div>
-    </AdminLayout>
+    </Moldura>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import AdminLayout from "../../components/admin/AdminLayout";
+import Moldura from "../../components/admin/Moldura";
 
-export default function LgpdCadastros() {
+export default function LgpdCadastros({ embutido = false }) {
   const [registros, setRegistros] = useState([]);
   const [filteredRegistros, setFilteredRegistros] = useState([]);
   const [erro, setErro] = useState("");
@@ -143,7 +143,7 @@ export default function LgpdCadastros() {
   };
 
   return (
-    <AdminLayout>
+    <Moldura embutido={embutido}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -415,6 +415,6 @@ export default function LgpdCadastros() {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </Moldura>
   );
 }

@@ -9,6 +9,9 @@ import PromocoesWhatsapp from "./PromocoesWhatsapp";
 import AvisoOperacional from "./AvisoOperacional";
 import AtendimentoRelatorios from "./AtendimentoRelatorios";
 import Contatos from "../../components/admin/atendimento/Contatos";
+import Leads from "./Leads";
+import LgpdCadastros from "./LgpdCadastros";
+import ImportarClientes from "./ImportarClientes";
 import Regua from "../../components/admin/atendimento/Regua";
 import Modelos from "../../components/admin/atendimento/Modelos";
 import NaoPerturbe from "../../components/admin/atendimento/NaoPerturbe";
@@ -29,6 +32,25 @@ const ABAS = [
   { id: "manutencoes", titulo: "Manutenções", modulo: "configuracoes" },
   { id: "alertas", titulo: "Alertas técnicos", modulo: "configuracoes" },
 ];
+
+function ContatosAbas({ headers }) {
+  const [sub, setSub] = useState("todos");
+  const subs = [["todos", "Todos os contatos"], ["clientes", "Clientes / Leads"], ["lgpd", "Cadastro LGPD"], ["importar", "Importar clientes"]];
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 flex-wrap">
+        {subs.map(([id, titulo]) => (
+          <button key={id} onClick={() => setSub(id)} aria-pressed={sub === id}
+            className={`px-3 py-1 rounded-full text-xs cursor-pointer border ${sub === id ? "bg-blue-600 border-blue-600 text-white" : "border-gray-700 text-gray-300 hover:bg-[#252b3b]"}`}>{titulo}</button>
+        ))}
+      </div>
+      {sub === "todos" && <Contatos headers={headers} />}
+      {sub === "clientes" && <Leads embutido />}
+      {sub === "lgpd" && <LgpdCadastros embutido />}
+      {sub === "importar" && <ImportarClientes embutido />}
+    </div>
+  );
+}
 
 function Campanhas() {
   const [searchParams] = useSearchParams();
@@ -136,7 +158,7 @@ export default function WhatsAppHub() {
         </div>
         <div role="tabpanel">
           {atual.id === "conversas" && <Atendimento embutido pedido={pedido} onPedidoTratado={() => setPedido(null)} />}
-          {atual.id === "contatos" && <Contatos headers={headers} />}
+          {atual.id === "contatos" && <ContatosAbas headers={headers} />}
           {atual.id === "regua" && <Regua headers={headers} />}
           {atual.id === "campanhas" && <Campanhas />}
           {atual.id === "indicacoes" && <Indicacoes headers={headers} />}

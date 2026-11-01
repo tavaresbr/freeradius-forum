@@ -53,20 +53,20 @@ exports.listarContatos = async (req, res) => {
     }
     const [rows] = await db.query(
       `SELECT t.* FROM (
-         SELECT 'conversa' AS origem, c.id AS conversa_id, c.lead_id, c.nome, c.telefone,
-                c.ultima_msg_em AS atividade, c.nao_lidas, c.status AS status_conversa,
+         SELECT 'conversa' COLLATE utf8mb4_unicode_ci AS origem, c.id AS conversa_id, c.lead_id, c.nome COLLATE utf8mb4_unicode_ci AS nome, c.telefone COLLATE utf8mb4_unicode_ci AS telefone,
+                c.ultima_msg_em AS atividade, c.nao_lidas, c.status COLLATE utf8mb4_unicode_ci AS status_conversa,
                 COALESCE(l.whatsapp_optout, 0) AS optout
            FROM whatsapp_conversas c
            LEFT JOIN leads l ON l.id = c.lead_id AND l.empresa_id = c.empresa_id
           WHERE c.empresa_id = ?
          UNION ALL
-         SELECT 'lead' AS origem, NULL AS conversa_id, l.id AS lead_id, l.nome, l.telefone,
+         SELECT 'lead' COLLATE utf8mb4_unicode_ci AS origem, NULL AS conversa_id, l.id AS lead_id, l.nome COLLATE utf8mb4_unicode_ci AS nome, l.telefone COLLATE utf8mb4_unicode_ci AS telefone,
                 l.criado_em AS atividade, 0 AS nao_lidas, NULL AS status_conversa,
                 COALESCE(l.whatsapp_optout, 0) AS optout
            FROM leads l
           WHERE l.empresa_id = ? AND l.telefone IS NOT NULL AND l.telefone <> ''
             AND NOT EXISTS (SELECT 1 FROM whatsapp_conversas c2 WHERE c2.empresa_id = l.empresa_id
-                              AND c2.telefone IS NOT NULL AND RIGHT(c2.telefone, 10) = ${expr})
+                              AND c2.telefone IS NOT NULL AND RIGHT(c2.telefone, 10) COLLATE utf8mb4_unicode_ci = ${expr} COLLATE utf8mb4_unicode_ci)
        ) t
        ${filtros.length ? `WHERE ${filtros.join(" AND ")}` : ""}
        ORDER BY t.atividade DESC, t.lead_id DESC, t.conversa_id DESC LIMIT ? OFFSET ?`,
