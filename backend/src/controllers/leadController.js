@@ -1,7 +1,7 @@
 const { urlHttpSegura } = require("../utils/entradaSegura");
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
+const { equipamentoDoCliente, verificarLeadExistente, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, usernamePertenceAoLead, bloqueiaReliberacao, MSG_ACESSO_ATIVO, bloqueiaPagamentoAlheio, MSG_PAGAMENTO_ALHEIO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, cpfConfirmado } = require("../utils/leadUtils");
 const { notificarLiberacao } = require("../services/whatsappNotify");
 const { montarGatewayInfo } = require("../gateways/gatewayLiberacao");
 const { resolverApDoContexto } = require("../utils/apInfo");
@@ -150,11 +150,14 @@ exports.leadLogin = async (req, res) => {
     }
 
     planoQuery += ` LIMIT 1`;
-    const [[plano]] = await db.query(planoQuery, planoParams);
+    const [[planoBase]] = await db.query(planoQuery, planoParams);
 
-    if (!plano) {
+    if (!planoBase) {
       return res.status(404).json({ message: "Plano Lead não configurado. Crie um plano com nome 'Lead'." });
     }
+
+    // Login final/NAS no equipamento de ONDE o cliente veio, nao no que o plano gratis guarda
+    const plano = await equipamentoDoCliente(empresaId, mikrotik_id, planoBase);
 
     // Snapshot do termo exibido no portal (prova LGPD de qual texto foi aceito)
     const termoLgpd = await resolverTextoLgpd({ mikrotikId: mikrotik_id, empresaId, tipoPortal: "lead" });

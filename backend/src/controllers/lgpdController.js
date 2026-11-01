@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { gerarSenhaRadius } = require("../utils/radiusPassword");
-const { verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
+const { equipamentoDoCliente, verificarLeadExistente, buscarCadastroPorCpf, gravarDataNascimento, mesmoDispositivo, verificarSaldoRadius, conferirDataNascimento, podeReceberCredenciais, bloqueiaReliberacao, MSG_ACESSO_ATIVO, atualizarLeadExistente, gravarEquipamentoLead, resolverTextoLgpd, resolverCamposPortal } = require("../utils/leadUtils");
 const { validarCampos } = require("../utils/camposPortal");
 const { validarCPF } = require("../utils/cpf");
 const { normalizarDataNascimento } = require("../utils/dataNascimento");
@@ -56,11 +56,14 @@ exports.lgpdLogin = async (req, res) => {
     }
 
     planoQuery += ` LIMIT 1`;
-    const [[plano]] = await db.query(planoQuery, planoParams);
+    const [[planoBase]] = await db.query(planoQuery, planoParams);
 
-    if (!plano) {
+    if (!planoBase) {
       return res.status(404).json({ message: "Plano LGPD não configurado" });
     }
+
+    // Login final/NAS no equipamento de ONDE o cliente veio, nao no que o plano gratis guarda
+    const plano = await equipamentoDoCliente(empresaId, mikrotik_id, planoBase);
 
     // Reconexao por CPF: se ja existe, NAO bloqueia. Atualiza o lead (novo aceite
     // LGPD com timestamp valido) e, se ainda ha saldo, devolve credenciais pra

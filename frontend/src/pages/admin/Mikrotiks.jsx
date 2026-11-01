@@ -119,7 +119,8 @@ export default function Mikrotiks() {
   };
 
   // Wizard states
-  const DNS_NAME_PADRAO = "hotspot.minharede.com";
+  // Vazio = o hotspot usa o IP do gateway. Um nome de exemplo que nao resolve na internet derrubava o login final (caso RB09).
+  const DNS_NAME_PADRAO = "";
   const PRESETS_REDE = [
     { id: "p24", rotulo: "Pequena — /24 (~250 clientes)", localAddress: "10.5.50.1/24", poolRange: "10.5.50.2-10.5.50.254" },
     { id: "p23", rotulo: "Média — /23 (~500 clientes)", localAddress: "10.5.50.1/23", poolRange: "10.5.50.2-10.5.51.254" },
@@ -1024,7 +1025,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                     value={wizardConfig.dnsName}
                     onChange={(e) => setWizardConfig({ ...wizardConfig, dnsName: e.target.value })}
-                    placeholder="hotspot.minharede.com"
+                    placeholder="Deixe vazio para usar o IP do hotspot"
                   />
                 </div>
 
