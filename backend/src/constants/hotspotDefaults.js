@@ -83,4 +83,9 @@ const LOG_CONEXOES = {
   limite: "100,200:packet",
 };
 
-module.exports = { HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES };
+// Paginas padrao do hotspot do MikroTik. Hotspot criado pela API NAO as gera (so o wizard interativo):
+// sem redirect.html o hotspot responde "404 Not Found" a qualquer site HTTP e o portal so abre
+// digitando o IP (caso RB09). O reset-html as recria; login.html/error.html sao nossos e regravados depois.
+const PAGINAS_PADRAO_HOTSPOT = { obrigatoria: "redirect.html", outras: ["rlogin.html", "alogin.html", "logout.html", "flogout.html"] };
+
+module.exports = { PAGINAS_PADRAO_HOTSPOT, HOTSPOT_PADROES, DNS_SEGURO, BRIDGE_HOTSPOT, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES };

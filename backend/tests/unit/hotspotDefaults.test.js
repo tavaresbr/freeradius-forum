@@ -573,7 +573,7 @@ test('verificacao final: print que expira na 1a leitura e responde na 2a nao ger
 
 test('verificacao final: assistente chama a conferencia antes de concluir', () => {
   const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
-  assert.ok(fonte.includes('verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName })'));
+  assert.ok(fonte.includes('verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName, htmlDir: await resolveHotspotHtmlDir(conn) })'));
   assert.ok(fonte.indexOf('addStep("verificacao"') < fonte.indexOf('Configuracao concluida!'));
 });
 
@@ -624,4 +624,58 @@ test('bridge: adds de bridge e de porta usam timeout de escrita de 30 s', async 
   const fonte = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
   assert.ok(fonte.includes('"=comment=hotspot"], 30000)'));
   assert.ok(fonte.includes('`=interface=${porta}`], 30000)'));
+});
+
+// --- paginas padrao (redirect.html): caso RB09, hotspot criado pela API sem as paginas padrao ---
+test('garantirPaginasPadrao: com redirect.html nao chama reset-html', async () => {
+  const { garantirPaginasPadrao } = require('../../src/utils/hotspotSetup');
+  let resets = 0;
+  const r = await garantirPaginasPadrao({ htmlDir: 'hotspot', listar: async () => ['hotspot/redirect.html', 'hotspot/login.html'], resetar: async () => { resets++; }, esperarMs: 0 });
+  assert.strictEqual(r.status, 'ok');
+  assert.strictEqual(resets, 0);
+});
+
+test('garantirPaginasPadrao: sem redirect.html roda reset-html e confere depois', async () => {
+  const { garantirPaginasPadrao } = require('../../src/utils/hotspotSetup');
+  let arquivos = ['hotspot/login.html', 'hotspot/error.html', 'hotspot/status.html'];
+  const dirs = [];
+  const r = await garantirPaginasPadrao({ htmlDir: 'hotspot', listar: async () => arquivos, resetar: async (d) => { dirs.push(d); arquivos = [...arquivos, 'hotspot/redirect.html']; }, esperarMs: 0 });
+  assert.strictEqual(r.status, 'ok');
+  assert.strictEqual(r.resetou, true);
+  assert.deepStrictEqual(dirs, ['hotspot']);
+});
+
+test('garantirPaginasPadrao: reset que nao cria o arquivo vira erro; leitura que expira vira aviso (nao reseta)', async () => {
+  const { garantirPaginasPadrao } = require('../../src/utils/hotspotSetup');
+  const sem = await garantirPaginasPadrao({ htmlDir: 'hotspot', listar: async () => ['hotspot/login.html'], resetar: async () => {}, esperarMs: 0 });
+  assert.strictEqual(sem.status, 'erro');
+  let resets = 0;
+  const nulo = await garantirPaginasPadrao({ htmlDir: 'hotspot', listar: async () => null, resetar: async () => { resets++; }, esperarMs: 0 });
+  assert.strictEqual(nulo.status, 'aviso');
+  assert.strictEqual(resets, 0);
+  const falha = await garantirPaginasPadrao({ htmlDir: 'hotspot', listar: async () => ['hotspot/login.html'], resetar: async () => { throw new Error('boom'); }, esperarMs: 0 });
+  assert.strictEqual(falha.status, 'erro');
+});
+
+test('verificarConfiguracaoHotspot: exige redirect.html quando recebe o htmlDir', async () => {
+  const { verificarConfiguracaoHotspot } = require('../../src/utils/hotspotSetup');
+  const tabela = (arquivos) => async (p) => ({
+    '/ip/hotspot/print': [{ name: 'hotspot1', interface: 'bridge-hotspot' }],
+    '/ip/pool/print': [{ name: 'hs-pool' }],
+    '/ip/hotspot/profile/print': [{ name: 'hsprof-hotspot', 'use-radius': 'true' }],
+    '/radius/print': [{ service: 'hotspot' }],
+    '/file/print': arquivos,
+  })[p] || [];
+  const base = { ifName: 'bridge-hotspot', poolName: 'hs-pool', htmlDir: 'hotspot', tentativas: 1, esperarMs: 0 };
+  const falta = await verificarConfiguracaoHotspot({ ...base, print: tabela([{ name: 'hotspot/login.html' }]) });
+  assert.strictEqual(falta.ok, false);
+  assert.ok(falta.faltando.some((x) => x.includes('redirect.html')));
+  const ok = await verificarConfiguracaoHotspot({ ...base, print: tabela([{ name: 'hotspot/redirect.html' }]) });
+  assert.strictEqual(ok.ok, true);
+});
+
+test('assistente: passo paginas_padrao roda ANTES do download do login.html', () => {
+  const fonte = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(fonte.indexOf('"paginas_padrao"') > 0);
+  assert.ok(fonte.indexOf('"paginas_padrao"') < fonte.indexOf('=== 9. Login Page'));
 });

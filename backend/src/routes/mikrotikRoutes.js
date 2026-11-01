@@ -729,7 +729,7 @@ router.post("/:id/diagnostico-hotspot", somenteMikrotik, async (req, res) => {
 router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
   const { id } = req.params;
   const acao = String(req.body && req.body.acao || "");
-  if (!["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot"].includes(acao)) return res.status(400).json({ message: "Ação inválida" });
+  if (!["dns_dhcp", "dns_remoto", "dns_name", "end_hotspot", "reset_html"].includes(acao)) return res.status(400).json({ message: "Ação inválida" });
   let conn;
   try {
     const [[mikrotik]] = await db.execute("SELECT * FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
@@ -744,7 +744,13 @@ router.post("/:id/corrigir-hotspot", somenteMikrotik, async (req, res) => {
     const rede = ip ? calcularRede(ip.address) : null;
     let mensagem = "";
 
-    if (acao === "dns_remoto") {
+    if (acao === "reset_html") {
+      const profs = await lista("/ip/hotspot/profile/print");
+      const prof = profs.find((p) => p.name === (hs && hs.profile)) || profs.find((p) => p.name === "hsprof-hotspot");
+      const dir = (prof && String(prof["html-directory"] || "").trim()) || "hotspot";
+      await conn.write("/ip/hotspot/reset-html", dir === "hotspot" ? [] : [`=html-directory=${dir}`]);
+      mensagem = "Paginas padrao do hotspot restauradas. O login.html e o error.html voltaram ao padrao do MikroTik: clique em 'Login' (ou 'Enviar hotspot') na linha do equipamento para regrava-los.";
+    } else if (acao === "dns_remoto") {
       await conn.write("/ip/dns/set", ["=allow-remote-requests=yes"]);
       mensagem = "DNS do roteador habilitado para os clientes.";
     } else if (!gateway) {
