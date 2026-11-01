@@ -123,12 +123,12 @@ export default function Planos() {
   const handleCopiar = (plano) => {
   setForm({
     nome: plano.nome + " (cópia)",
-    descricao: plano.descricao,
+    descricao: plano.descricao || "",
     valor: (plano.valor / 100).toFixed(2).replace(".", ","),
     duracao: plano.duracao_minutos,
     velocidade_download: plano.velocidade_down,
     velocidade_upload: plano.velocidade_up,
-    mikrotik_id: plano.mikrotik_id,
+    mikrotik_id: plano.mikrotik_id ?? "",
     address_pool: plano.address_pool || "default-dhcp",
     shared_users: plano.shared_users || 10,
     ativo: plano.ativo,
@@ -232,11 +232,12 @@ export default function Planos() {
                       {p.ativo ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td className="p-2 flex gap-2">
-                    <button onClick={() => handleEditar(p)} className="border border-gray-700 text-gray-300 p-1 rounded hover:bg-[#252b3b] cursor-pointer" title="Editar">✎</button>
-                    <button onClick={() => handleRemover(p.id)} className="bg-red-500 text-white p-1 rounded" title="Remover">×</button>
-                    <button onClick={() => handleCopiar(p)} className="bg-blue-500 text-white p-1 rounded" title="Copiar" > </button>
-                    
+                  <td className="p-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => handleEditar(p)} className="border border-gray-700 text-gray-300 px-2 py-1 text-xs rounded hover:bg-[#252b3b] cursor-pointer whitespace-nowrap" title="Editar plano">✎ Editar</button>
+                      <button type="button" onClick={() => handleCopiar(p)} className="bg-blue-500 text-white px-2 py-1 text-xs rounded hover:bg-blue-600 cursor-pointer whitespace-nowrap" title="Duplicar plano">⧉ Copiar</button>
+                      <button type="button" onClick={() => handleRemover(p.id)} className="bg-red-500 text-white px-2 py-1 text-xs rounded hover:bg-red-600 cursor-pointer whitespace-nowrap" title="Remover plano">× Remover</button>
+                    </div>
                   </td>
                 </tr>
               ))}
