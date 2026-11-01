@@ -679,3 +679,11 @@ test('assistente: passo paginas_padrao roda ANTES do download do login.html', ()
   assert.ok(fonte.indexOf('"paginas_padrao"') > 0);
   assert.ok(fonte.indexOf('"paginas_padrao"') < fonte.indexOf('=== 9. Login Page'));
 });
+
+test('reset-html: sempre com numbers=<servidor> (sem argumento o RouterOS recusa)', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const setup = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  const rota = fs.readFileSync(path.join(__dirname, '../../src/routes/mikrotikRoutes.js'), 'utf8');
+  assert.ok(setup.includes('"/ip/hotspot/reset-html", ["=numbers=hotspot1"]'));
+  assert.ok(rota.includes('"/ip/hotspot/reset-html", [`=numbers=${hs.name}`]'));
+});
