@@ -484,6 +484,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
       onTestar={() => testarConexao(m.id)}
       onHotspot={() => abrirWizard(m.id)}
       onEditar={() => editar(m)}
+      onDiagnosticar={() => diagnosticar(m)}
     />
   );
 
@@ -503,10 +504,10 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               <button onClick={() => abrirWifi(m)} title="Alterar o nome do Wi-Fi (SSID)" className="px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border border-sky-700/60 text-sky-400 hover:bg-sky-900/20">
                 Wi-Fi
               </button>
-              <button onClick={() => enviarLogin(m.id)} title="Enviar login.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
+              <button onClick={() => enviarLogin(m.id)} title="Reenviar o login.html (o assistente Hotspot já envia; use só para regravar)" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoLogin === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-green-700 text-white hover:bg-green-600'}`} disabled={enviandoLogin === m.id}>
                 {enviandoLogin === m.id ? "Enviando..." : "Login"}
               </button>
-              <button onClick={() => enviarStatus(m.id)} title="Enviar status.html" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoStatus === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-teal-700 text-white hover:bg-teal-600'}`} disabled={enviandoStatus === m.id}>
+              <button onClick={() => enviarStatus(m.id)} title="Reenviar o status.html (o assistente Hotspot já envia; use só para regravar)" className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${enviandoStatus === m.id ? 'bg-yellow-600 text-white animate-pulse' : 'bg-teal-700 text-white hover:bg-teal-600'}`} disabled={enviandoStatus === m.id}>
                 {enviandoStatus === m.id ? "Enviando..." : "Status"}
               </button>
             </>

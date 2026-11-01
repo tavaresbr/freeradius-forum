@@ -966,6 +966,30 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
       addStep("error_page", "aviso", `error.html nao baixado: ${e.message}`);
     }
 
+    // === 9c. status.html: pagina de status do cliente logado (nao e' critico) ===
+    try {
+      const htmlDir = await resolveHotspotHtmlDir(conn);
+      const dstStatus = `${htmlDir}/status.html`;
+      const antesStatus = await lerArquivo(dstStatus);
+      let okStatus = false;
+      for (let tentativa = 0; tentativa < 2 && !okStatus; tentativa++) {
+        const r = await safeWrite("/tool/fetch", [
+          `=url=https://${systemDomain}/api/hotspot-status/${mikrotik.id}`,
+          `=dst-path=${dstStatus}`,
+          "=mode=https",
+          "=check-certificate=no",
+        ], FETCH_TIMEOUT);
+        if (r !== "timeout") { okStatus = true; break; }
+        await esperar(3000);
+        const depois = await lerArquivo(dstStatus);
+        if (depois && Number(depois.size) > 0 && (!antesStatus || depois["creation-time"] !== antesStatus["creation-time"])) okStatus = true;
+      }
+      addStep("status_page", okStatus ? "ok" : "aviso",
+        okStatus ? `status.html baixado em ${htmlDir}` : "status.html sem confirmacao (timeout); use o botao 'Status' da linha do equipamento");
+    } catch (e) {
+      addStep("status_page", "aviso", `status.html nao baixado: ${e.message}`);
+    }
+
     // === 10. Conferencia final: o que foi criado esta mesmo no roteador? ===
     {
       const v = await verificarConfiguracaoHotspot({ print: safePrint, ifName, poolName, htmlDir: await resolveHotspotHtmlDir(conn) });

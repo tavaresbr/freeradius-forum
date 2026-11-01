@@ -159,6 +159,9 @@ async function diagnosticarHotspot({ ler, mikrotik, portalHost = "", resolve = a
     const redirect = fR.itens.find((f) => f.name === `${dir}/redirect.html`);
     if (!redirect) add(erro("redirect_html", "Pagina de redirecionamento (redirect.html)", `${dir}/redirect.html nao existe: qualquer site HTTP responde "404 Not Found" e o portal so abre digitando o IP.`, { acao: "reset_html", texto: "Restaurar paginas padrao" }));
     else add(ok("redirect_html", "Pagina de redirecionamento (redirect.html)", `${dir}/redirect.html presente`));
+    const statusF = fR.itens.find((f) => f.name === `${dir}/status.html`);
+    if (!statusF) add(aviso("status_html", "Pagina de status (status.html)", `${dir}/status.html nao existe: o cliente logado ve a pagina padrao (ou nenhuma).`, { acao: "enviar_status", texto: "Enviar status.html" }));
+    else add(ok("status_html", "Pagina de status (status.html)", `${dir}/status.html presente (${statusF.size} bytes)`));
     if (!login) add(erro("arquivos", "Paginas do hotspot (login.html)", `${dir}/login.html nao existe: o hotspot mostra a pagina padrao do MikroTik.`, "Use o botao 'Login' da linha do equipamento."));
     else {
       let detalhe = `${dir}/login.html (${login.size} bytes)`;
