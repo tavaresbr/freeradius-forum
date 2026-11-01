@@ -65,6 +65,81 @@ async function configurarWifiAP({ ifName, ssid, print, write }) {
 }
 
 /**
+ * Troca SO o nome (SSID) dos radios Wi-Fi de um equipamento ja configurado.
+ * Diferente de `configurarWifiAP` (primeiro envio), NAO mexe em modo, perfil de seguranca nem em
+ * habilitar/desabilitar o radio. `ler(path)` devolve { ok, itens } (leitura que expira = ok:false:
+ * nunca vira "nao existe"); `escrever(path, args)` e' o write do roteador. Nunca lanca.
+ * Devolve { status: 'ok'|'aviso'|'erro', message, radios: [{ nome, status, message }] }.
+ */
+const SSID_MAX = 32;
+function validarSsid(ssid) {
+  const nome = String(ssid == null ? "" : ssid).trim();
+  if (!nome) return { ok: false, message: "Informe o nome do Wi-Fi." };
+  if (Buffer.byteLength(nome, "utf8") > SSID_MAX) return { ok: false, message: `O nome do Wi-Fi pode ter no maximo ${SSID_MAX} bytes (acentos e emojis ocupam mais de 1).` };
+  if (/[\x00-\x1f\x7f"\\]/.test(nome)) return { ok: false, message: "O nome do Wi-Fi nao pode ter aspas, barra invertida nem caracteres de controle." };
+  return { ok: true, nome };
+}
+
+async function lerWifi({ ler }) {
+  const r = await ler("/interface/wireless/print");
+  if (!r.ok) return { ok: false, legado: null, radios: [], message: "Nao consegui ler o Wi-Fi do roteador (demorou). Tente de novo." };
+  const radios = r.itens.filter((w) => w && w.name).map((w) => ({
+    nome: w.name, ssid: w.ssid || "", ligado: !(w.disabled === true || w.disabled === "true" || w.disabled === "yes"),
+    rodando: w.running === true || w.running === "true" || w.running === "yes",
+  }));
+  if (radios.length === 0) {
+    const novo = await ler("/interface/wifi/print");
+    if (novo.ok && novo.itens.length > 0) {
+      return { ok: true, legado: false, radios: [], message: "Este roteador usa o pacote Wi-Fi novo do RouterOS 7 (/interface wifi). Troque o nome em: /interface wifi configuration set [find] ssid=\"NOVO NOME\"" };
+    }
+    return { ok: true, legado: true, radios: [], message: "Nenhum radio Wi-Fi encontrado neste roteador." };
+  }
+  return { ok: true, legado: true, radios };
+}
+
+async function renomearWifi({ radios, ssid, ler, escrever }) {
+  const v = validarSsid(ssid);
+  if (!v.ok) return { status: "erro", message: v.message, radios: [] };
+  if (!Array.isArray(radios) || radios.length === 0) return { status: "erro", message: "Escolha ao menos um radio.", radios: [] };
+  try {
+    const atual = await lerWifi({ ler });
+    if (!atual.ok) return { status: "aviso", message: atual.message, radios: [] };
+    if (!atual.legado || atual.radios.length === 0) return { status: "aviso", message: atual.message, radios: [] };
+    const nomes = new Set(atual.radios.map((r) => r.nome));
+    const inexistente = radios.find((r) => !nomes.has(r));
+    if (inexistente) return { status: "erro", message: `O radio ${inexistente} nao existe neste roteador. Nada foi alterado.`, radios: [] };
+
+    const resultado = [];
+    for (const nome of radios) {
+      try {
+        await escrever("/interface/wireless/set", [`=numbers=${nome}`, `=ssid=${v.nome}`]);
+        resultado.push({ nome, status: "pendente", message: "" });
+      } catch (e) {
+        resultado.push({ nome, status: "erro", message: `Falha ao gravar: ${e.message || "sem detalhe"}` });
+      }
+    }
+    // Confere no roteador (a API do RB951 pode expirar ao gravar mesmo com o comando aplicado)
+    let depois = null;
+    for (let i = 0; i < 3 && !depois; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 2000));
+      const l = await lerWifi({ ler });
+      if (l.ok && l.legado && l.radios.length > 0) depois = l;
+    }
+    for (const r of resultado) {
+      if (r.status === "erro") continue;
+      const lido = depois && depois.radios.find((x) => x.nome === r.nome);
+      if (!depois) { r.status = "aviso"; r.message = "Gravado, mas nao consegui conferir. Confira em /interface wireless print."; }
+      else if (lido && lido.ssid === v.nome) { r.status = "ok"; r.message = `Nome alterado para "${v.nome}"`; }
+      else { r.status = "aviso"; r.message = `Sem confirmacao. Confira: /interface wireless set ${r.nome} ssid="${v.nome}"`; }
+    }
+    const status = resultado.some((r) => r.status === "erro") ? "erro" : resultado.some((r) => r.status === "aviso") ? "aviso" : "ok";
+    return { status, message: status === "ok" ? "Nome do Wi-Fi alterado." : "Alguns radios nao foram confirmados.", radios: resultado };
+  } catch (e) {
+    return { status: "erro", message: `Nao foi possivel alterar o Wi-Fi: ${e.message || "sem detalhe"}`, radios: [] };
+  }
+}
+
+/**
  * Prepara a bridge do hotspot: cria `BRIDGE_HOTSPOT.nome` se faltar e coloca nela as portas escolhidas.
  * Recusa porta inexistente, de tipo nao suportado, WAN, de outra bridge, com IP ou com DHCP server
  * proprio (entrar na bridge invalidaria o IP e pode derrubar o acesso). Idempotente. Nunca lanca:
@@ -1098,4 +1173,4 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { garantirPaginasPadrao, ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = { lerWifi, renomearWifi, validarSsid, garantirPaginasPadrao, ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
