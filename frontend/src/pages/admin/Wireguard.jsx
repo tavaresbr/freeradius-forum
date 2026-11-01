@@ -35,6 +35,7 @@ export default function Wireguard() {
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [scriptData, setScriptData] = useState("");
   const [scriptCopiado, setScriptCopiado] = useState(false);
+  const [renomear, setRenomear] = useState(null); // { id, nome, erro, salvando }
   const [serverSettings, setServerSettings] = useState({ wgPort: '51820', wgHost: '92.113.34.197' });
   const [editSettings, setEditSettings] = useState({ wgPort: '', wgHost: '' });
   const [savingSettings, setSavingSettings] = useState(false);
@@ -113,6 +114,26 @@ export default function Wireguard() {
       loadStatus();
     } catch (err) {
       alert("Erro ao deletar");
+    }
+  };
+
+  const salvarNome = async (e) => {
+    e.preventDefault();
+    const nome = (renomear?.nome || "").trim();
+    if (!nome) { setRenomear({ ...renomear, erro: "Informe o nome." }); return; }
+    setRenomear({ ...renomear, salvando: true, erro: "" });
+    try {
+      const res = await fetch(`/api/wireguard/clients/${renomear.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: nome })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Erro ao renomear");
+      setRenomear(null);
+      loadStatus();
+    } catch (err) {
+      setRenomear((r) => ({ ...r, salvando: false, erro: err.message || "Erro ao renomear" }));
     }
   };
 
@@ -318,6 +339,9 @@ export default function Wireguard() {
                         <span className="text-green-400">↓ {formatBytes(client.transferRx)}</span> &nbsp; <span className="text-blue-400">↑ {formatBytes(client.transferTx)}</span>
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-3">
+                        <button onClick={() => setRenomear({ id: client.id, nome: client.name, erro: "", salvando: false })} className="text-gray-300 hover:text-white" title="Renomear identificação">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 13l6.768-6.768a2 2 0 112.828 2.828L11.828 15.83a4 4 0 01-1.414.943L6 18l1.227-4.414A4 4 0 018.17 12.17L9 13z"></path></svg>
+                        </button>
                         <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300" title="Ver Script Mikrotik">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                         </button>
@@ -358,7 +382,10 @@ export default function Wireguard() {
                       <span className="text-green-400">↓ {formatBytes(client.transferRx)}</span> &nbsp; <span className="text-blue-400">↑ {formatBytes(client.transferTx)}</span>
                     </span>
                     <div className="flex gap-4">
-                      <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300 p-1" title="Ver Script Mikrotik">
+                      <button onClick={() => setRenomear({ id: client.id, nome: client.name, erro: "", salvando: false })} className="text-gray-300 hover:text-white p-1" title="Renomear identificação">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 13l6.768-6.768a2 2 0 112.828 2.828L11.828 15.83a4 4 0 01-1.414.943L6 18l1.227-4.414A4 4 0 018.17 12.17L9 13z"></path></svg>
+                        </button>
+                        <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300 p-1" title="Ver Script Mikrotik">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                       </button>
                       <button onClick={() => handleDelete(client.id)} className="text-red-500 hover:text-red-400 p-1" title="Deletar">
@@ -375,6 +402,35 @@ export default function Wireguard() {
           </div>
         </div>
       </div>
+
+      {/* Renomear Modal */}
+      {renomear && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-[#1a1d27] border border-gray-700 rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold text-white mb-4">Renomear identificação</h3>
+            <form onSubmit={salvarNome} className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">Identificação (Nome do Mikrotik)</label>
+                <input
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                  maxLength={60}
+                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                  value={renomear.nome}
+                  onChange={(e) => setRenomear({ ...renomear, nome: e.target.value, erro: "" })}
+                />
+                <p className="text-xs text-gray-500 mt-1">{(renomear.nome || "").length}/60</p>
+              </div>
+              <p className="text-xs text-yellow-500/90">O roteador já configurado continua com o nome antigo; o novo nome vale ao gerar um novo script.</p>
+              {renomear.erro && <p className="text-sm text-red-400">{renomear.erro}</p>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setRenomear(null)} className="px-4 py-2 rounded text-gray-400 hover:text-white">Cancelar</button>
+                <button type="submit" disabled={renomear.salvando} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50">{renomear.salvando ? "Salvando..." : "Salvar"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showAddModal && (

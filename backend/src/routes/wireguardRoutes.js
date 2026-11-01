@@ -8,6 +8,7 @@ router.get('/settings', controller.getServerSettings);
 // Edita o docker-compose.yml GLOBAL do WireGuard e reinicia o container: so a plataforma (super_admin).
 router.put('/settings', authorize('super_admin'), controller.updateServerSettings);
 router.post('/clients', controller.createClient);
+router.put('/clients/:id', controller.renameClient);
 router.delete('/clients/:id', controller.deleteClient);
 router.get('/clients/:id/config', controller.getClientConfig);
 

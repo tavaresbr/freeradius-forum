@@ -4,6 +4,7 @@ const db = require("../../db");
 
 // [metodo, regex do caminho (sem query), acao, entidade]
 const REGRAS = [
+  ["PUT", /^\/api\/wireguard\/clients\/([0-9A-Za-z-]+)$/, "vpn.renomear", "vpn"],
   ["PUT", /^\/api\/mikrotiks\/(\d+)\/wifi$/, "equipamento.wifi", "equipamento"],
   ["DELETE", /^\/api\/leads\/massa$/, "cliente.excluir_massa", "cliente"],
   ["PUT", /^\/api\/leads\/massa$/, "cliente.editar_massa", "cliente"],

@@ -198,6 +198,41 @@ exports.createClient = async (req, res) => {
   }
 };
 
+// Renomeia a identificacao do peer. O nome mostrado vem de empresa_vpn_peers.nome (o nome
+// tecnico do wg-easy nunca aparece), entao e' so um UPDATE local escopado pela empresa.
+exports.renameClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bruto = req.body && req.body.name;
+    const nome = typeof bruto === "string" ? bruto.trim() : "";
+    if (!nome || nome.length > 60) {
+      return res.status(400).json({ message: "Nome do peer inválido (1 a 60 caracteres)" });
+    }
+    const [[peer]] = await db.execute(
+      "SELECT id FROM empresa_vpn_peers WHERE wg_client_id = ? AND empresa_id = ?",
+      [id, req.empresa_id]
+    );
+    if (!peer) {
+      return res.status(403).json({ message: "Peer não pertence a esta empresa" });
+    }
+    const [[repetido]] = await db.execute(
+      "SELECT id FROM empresa_vpn_peers WHERE empresa_id = ? AND wg_client_id <> ? AND LOWER(nome) = LOWER(?) LIMIT 1",
+      [req.empresa_id, id, nome]
+    );
+    if (repetido) {
+      return res.status(409).json({ message: "Já existe um peer com esse nome" });
+    }
+    await db.execute(
+      "UPDATE empresa_vpn_peers SET nome = ? WHERE wg_client_id = ? AND empresa_id = ?",
+      [nome, id, req.empresa_id]
+    );
+    res.json({ success: true, name: nome });
+  } catch (err) {
+    console.error("Erro ao renomear peer:", err.message);
+    res.status(500).json({ message: "Erro ao renomear peer" });
+  }
+};
+
 exports.deleteClient = async (req, res) => {
   try {
     const { id } = req.params;
