@@ -21,7 +21,6 @@ export default function AdminLayout({ children }) {
   const [naoLidasWa, setNaoLidasWa] = useState(0);
   const totalWaRef = useRef(null); // total de mensagens nao lidas na ultima consulta (null = ainda nao consultou)
 
-  const toggleMenu = (key) => setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
 
   const slug = empresaSlug || user?.empresa_slug || 'default';
   const basePath = `/admin/${slug}`;
@@ -138,113 +137,6 @@ export default function AdminLayout({ children }) {
       )
     },
     {
-      key: "assinatura",
-      title: "Assinatura",
-      path: `${basePath}/assinatura`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-        </svg>
-      )
-    },
-    ...(donoPlataforma ? [{
-      key: "planos-saas",
-      title: "Planos SaaS",
-      path: `${basePath}/planos-saas`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
-        </svg>
-      )
-    }] : []),
-    ...(donoPlataforma ? [{
-      key: "identidade-plataforma",
-      title: "Identidade da plataforma",
-      path: `${basePath}/identidade-plataforma`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-      )
-    }] : []),
-    ...(donoPlataforma ? [{
-      key: "empresas",
-      title: "Empresas",
-      path: `${basePath}/empresas`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-        </svg>
-      )
-    }] : []),
-    {
-      key: "mikrotik_group",
-      title: "Equipamentos",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
-        </svg>
-      ),
-      children: [
-        { key: "mikrotiks", title: "Cadastro de equipamento", path: `${basePath}/mikrotiks` },
-        { key: "vpn", title: "VPN Wireguard", path: `${basePath}/vpn` },
-      ]
-    },
-    {
-      key: "portais",
-      title: "Portais",
-      path: `${basePath}/portais`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-        </svg>
-      )
-    },
-    {
-      key: "portais",
-      title: "Vouchers",
-      path: `${basePath}/vouchers`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
-        </svg>
-      )
-    },
-    {
-      key: "marketing_group",
-      title: "Marketing",
-      children: [
-        { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
-        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/atendimento/campanhas` },
-        { key: "configuracoes", title: "Cupons", path: `${basePath}/cupons` },
-      ],
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
-        </svg>
-      )
-    },
-    {
-      key: "planos",
-      title: "Planos",
-      path: `${basePath}/planos`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-        </svg>
-      )
-    },
-    {
-      key: "pagamentos",
-      title: "Pagamentos",
-      path: `${basePath}/pagamentos`,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h2m3 0h2m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-        </svg>
-      )
-    },
-    {
       key: "clientes_group",
       title: "Clientes",
       icon: (
@@ -253,35 +145,72 @@ export default function AdminLayout({ children }) {
         </svg>
       ),
       children: [
-        { key: "clientes", title: "Cadastro LGPD", path: `${basePath}/lgpd` },
         { key: "leads", title: "Clientes / Leads", path: `${basePath}/leads` },
+        { key: "clientes", title: "Cadastro LGPD", path: `${basePath}/lgpd` },
         { key: "leads", title: "Importar clientes", path: `${basePath}/importar-clientes` },
+        { key: "sessoes", title: "Sessões Ativas", path: `${basePath}/sessoes` },
+        { key: "sessoeslog", title: "Log de sessões", path: `${basePath}/sessoeslog` },
       ]
     },
     {
-      key: "radius_group",
-      title: "Radius",
+      key: "vendas_group",
+      title: "Vendas",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h2m3 0h2m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
       ),
       children: [
+        { key: "planos", title: "Planos", path: `${basePath}/planos` },
+        { key: "pagamentos", title: "Pagamentos", path: `${basePath}/pagamentos` },
+        { key: "portais", title: "Vouchers", path: `${basePath}/vouchers` },
+        { key: "configuracoes", title: "Cupons", path: `${basePath}/cupons` },
+      ]
+    },
+    {
+      key: "marketing_group",
+      title: "Marketing",
+      children: [
+        { key: "portais", title: "Campanhas", path: `${basePath}/campanhas` },
+        { key: "configuracoes", title: "Promoções WhatsApp", path: `${basePath}/atendimento/campanhas` },
+      ],
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+        </svg>
+      ),
+    },
+    {
+      key: "rede_group",
+      title: "Rede",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+        </svg>
+      ),
+      children: [
+        { key: "mikrotiks", title: "Equipamentos", path: `${basePath}/mikrotiks` },
+        { key: "portais", title: "Portais", path: `${basePath}/portais` },
+        { key: "vpn", title: "VPN Wireguard", path: `${basePath}/vpn` },
         { key: "radius", title: "Usuários Radius", path: `${basePath}/radius` },
-        { key: "sessoes", title: "Sessões Ativas", path: `${basePath}/sessoes` },
-        { key: "sessoeslog", title: "Log Radius", path: `${basePath}/sessoeslog` },
-        { key: "compliance", title: "Marco Civil", path: `${basePath}/compliance` },
       ]
     },
     ...(donoPlataforma ? [{
-      key: "logs",
-      title: "Logs do Sistema",
-      path: `${basePath}/logs`,
+      key: "plataforma_group",
+      title: "Plataforma",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
         </svg>
-      )
+      ),
+      children: [
+        { key: "empresas", title: "Empresas", path: `${basePath}/empresas` },
+        { key: "planos-saas", title: "Planos SaaS", path: `${basePath}/planos-saas` },
+        { key: "identidade-plataforma", title: "Identidade da plataforma", path: `${basePath}/identidade-plataforma` },
+        // Domínio próprio fica oculto das empresas por enquanto (função pausada): só o dono da plataforma vê.
+        { key: "configuracoes", title: "Domínio próprio", path: `${basePath}/dominio` },
+        { key: "logs", title: "Logs do Sistema", path: `${basePath}/logs` },
+      ]
     }] : []),
     {
       key: "configuracoes_group",
@@ -294,9 +223,9 @@ export default function AdminLayout({ children }) {
       ),
       children: [
         { key: "configuracoes", title: "Configurações", path: `${basePath}/configuracoes` },
+        { key: "assinatura", title: "Minha assinatura", path: `${basePath}/assinatura` },
         { key: "configuracoes", title: "Integrações", path: `${basePath}/integracoes` },
-        // Domínio próprio fica oculto das empresas por enquanto (função pausada): só o dono da plataforma vê.
-        ...(donoPlataforma ? [{ key: "configuracoes", title: "Domínio próprio", path: `${basePath}/dominio` }] : []),
+        { key: "compliance", title: "Marco Civil", path: `${basePath}/compliance` },
         { key: "configuracoes", title: "Auditoria", path: `${basePath}/auditoria` },
         { key: "usuarios", title: "Usuários", path: `${basePath}/usuarios` },
         ...(isSuperAdmin ? [{ key: "grupos-permissao", title: "Permissões", path: `${basePath}/grupos-permissao` }] : []),
@@ -342,7 +271,7 @@ export default function AdminLayout({ children }) {
     if (path === basePath) {
       return location.pathname === basePath;
     }
-    return location.pathname.startsWith(path);
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   return (
@@ -440,13 +369,14 @@ export default function AdminLayout({ children }) {
 
             {filteredMenuItems.map((item) => {
               if (item.children) {
-                const isOpen = openMenus[item.key] || false;
                 const isChildActive = item.children.some(child => isActive(child.path));
+                // abre sozinho quando a pagina atual esta dentro do grupo (ate o usuario fechar/abrir)
+                const isOpen = openMenus[item.key] ?? isChildActive;
 
                 return (
                   <div key={item.key} className="mb-1">
                     <button
-                      onClick={() => toggleMenu(item.key)}
+                      onClick={() => setOpenMenus(prev => ({ ...prev, [item.key]: !isOpen }))}
                       className={`
                         w-full flex items-center justify-between px-4 py-3 rounded-lg font-medium transition-all duration-200 cursor-pointer
                         ${isChildActive
@@ -516,18 +446,21 @@ export default function AdminLayout({ children }) {
               );
             })}
 
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-apex-100">
             {/* Logout Button */}
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200 mt-2 cursor-pointer"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200 cursor-pointer"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
               </svg>
               <span className="text-sm">Sair</span>
             </button>
-          </div>
-        </nav>
+        </div>
 
       </aside>
 
