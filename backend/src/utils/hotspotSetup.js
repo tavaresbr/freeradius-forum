@@ -244,6 +244,42 @@ async function prepararBridgeHotspot({ portas, print, write, nome = BRIDGE_HOTSP
 }
 
 /**
+ * Garante que o cliente do hotspot use o PROPRIO roteador como DNS (o hotspot so intercepta o
+ * DNS que passa por ele; com 8.8.8.8 direto o redirect ao portal nunca dispara) e que o roteador
+ * aceite consultas dos clientes. Nunca lanca: devolve { status: "ok" | "aviso", message }.
+ * Leitura vazia/expirada nunca vira escrita (so a rede ja lida e diferente do gateway e' alterada).
+ */
+async function garantirDnsDoHotspot({ gateway, network, print, write }) {
+  const avisos = [];
+  const feitos = [];
+  try {
+    const nets = await print("/ip/dhcp-server/network/print");
+    const rede = (nets || []).find((n) => n.address === network);
+    if (!rede) {
+      await write("/ip/dhcp-server/network/add", [`=address=${network}`, `=gateway=${gateway}`, `=dns-server=${gateway}`]);
+      feitos.push(`rede DHCP criada com DNS ${gateway}`);
+    } else if (String(rede["dns-server"] || "") !== gateway) {
+      await write("/ip/dhcp-server/network/set", [`=.id=${rede[".id"]}`, `=dns-server=${gateway}`]);
+      feitos.push(`DNS do DHCP trocado para ${gateway}`);
+    }
+  } catch (e) {
+    avisos.push(`DNS do DHCP nao conferido: ${e.message}`);
+  }
+  try {
+    const dns = ((await print("/ip/dns/print")) || [])[0];
+    if (!dns) avisos.push("nao consegui ler o DNS do roteador (allow-remote-requests nao conferido)");
+    else if (!["yes", "true"].includes(String(dns["allow-remote-requests"]))) {
+      await write("/ip/dns/set", ["=allow-remote-requests=yes"]);
+      feitos.push("DNS do roteador liberado para os clientes");
+    }
+  } catch (e) {
+    avisos.push(`DNS do roteador nao conferido: ${e.message}`);
+  }
+  if (avisos.length) return { status: "aviso", message: [...feitos, ...avisos].join("; ") };
+  return { status: "ok", message: feitos.length ? feitos.join("; ") : `Clientes usam ${gateway} como DNS` };
+}
+
+/**
  * Liga ou desliga o DNS seguro (filtro de conteudo adulto) do hotspot. Nunca lanca: devolve
  * { status: "ok" | "aviso", message }. `ligar` = true aplica; false so reverte se o roteador estiver
  * usando os servidores filtrados (nao desfaz DNS configurado a mao).
@@ -263,7 +299,7 @@ async function configurarDnsSeguro({ ligar, gateway, network, print, write }) {
       return { status: "ok", message: "DNS seguro ja estava desligado" };
     }
     await write("/ip/dns/set", [`=servers=${DNS_SEGURO.padrao}`, "=allow-remote-requests=yes"]);
-    if (rede) await write("/ip/dhcp-server/network/set", [`=.id=${rede[".id"]}`, "=dns-server=8.8.8.8"]);
+    if (rede) await write("/ip/dhcp-server/network/set", [`=.id=${rede[".id"]}`, `=dns-server=${gateway}`]);
     return { status: "ok", message: "DNS seguro desligado (DNS padrao restaurado)" };
   } catch (e) {
     return { status: "aviso", message: `DNS seguro nao alterado: ${e.message}` };
@@ -571,15 +607,8 @@ async function configurarHotspot(mikrotik, portal, systemDomain, config = {}, em
 
     // === 3. DHCP Server + Network ===
     try {
-      const nets = await safePrint("/ip/dhcp-server/network/print");
-      const netExists = nets && nets.find(n => n.address === network);
-      if (!netExists) {
-        await safeWrite("/ip/dhcp-server/network/add", [
-          `=address=${network}`,
-          `=gateway=${gateway}`,
-          `=dns-server=8.8.8.8`,
-        ]);
-      }
+      const dnsR = await garantirDnsDoHotspot({ gateway, network, print: safePrint, write: safeWrite });
+      addStep("dns_dhcp", dnsR.status, dnsR.message);
 
       const dhcps = await safePrint("/ip/dhcp-server/print");
       const dhcpExists = dhcps && dhcps.find(d => d.interface === ifName);
@@ -1198,4 +1227,5 @@ async function aplicarPadroesHotspot(mikrotik, criarConexao = (opcoes) => new Ro
   }
 }
 
-module.exports = { lerWifi, renomearWifi, validarSsid, garantirPaginasPadrao, ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
+module.exports = {
+  garantirDnsDoHotspot, lerWifi, renomearWifi, validarSsid, garantirPaginasPadrao, ehInterfaceTunel, configurarHotspot, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, configurarDnsSeguro, prepararBridgeHotspot, verificarConfiguracaoHotspot, sanitizarBridge, configurarWifiAP, ehInterfaceWifi, resolveHotspotHtmlDir, aplicarPadroesHotspot };
