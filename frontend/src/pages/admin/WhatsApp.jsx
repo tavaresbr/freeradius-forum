@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import NumerosWhatsapp from "../../components/admin/atendimento/NumerosWhatsapp";
 
 export default function WhatsApp() {
   const [status, setStatus] = useState(null);
@@ -402,6 +403,8 @@ export default function WhatsApp() {
       </div>
 
       {/* Enviar mensagem de teste */}
+      {status?.exists && <NumerosWhatsapp headers={headers} />}
+
       {/* Recebimento de mensagens (atendimento) */}
       <div className="bg-[#1a1d27] rounded-xl border border-gray-800 p-6 mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">

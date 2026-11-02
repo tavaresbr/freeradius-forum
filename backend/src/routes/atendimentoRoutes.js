@@ -20,6 +20,7 @@ const comArquivo = (req, res, next) => upload.single("arquivo")(req, res, (err) 
   res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "Arquivo muito grande (máximo 16 MB)" : "Arquivo inválido" });
 });
 
+router.get("/numeros", c.listarNumeros);
 router.get("/conversas", c.listarConversas);
 router.get("/conversas/:id/mensagens", c.listarMensagens);
 router.post("/conversas/:id/mensagens", atendimentoEnvioLimiter, c.enviarMensagem);

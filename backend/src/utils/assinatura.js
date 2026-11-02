@@ -74,7 +74,7 @@ async function obterStatus(empresaId) {
     [empresaId]
   );
   const vigentes = await adicionaisVigentes(empresaId);
-  const extras = { equipamentos: 0, admins: 0, portais: 0 };
+  const extras = { equipamentos: 0, admins: 0, portais: 0, whatsapp_numeros: 0 };
   for (const a of vigentes) {
     if (a.tipo in extras) extras[a.tipo] += (Number(a.incremento) || 0) * (Number(a.quantidade) || 0);
   }
@@ -96,6 +96,9 @@ async function obterStatus(empresaId) {
               max_admins: limiteEfetivo(row?.max_admins ?? null, extras.admins),
               max_portais: limiteEfetivo(row?.max_portais ?? null, extras.portais),
               plano_max_portais: row?.max_portais ?? null,
+              // Numeros de WhatsApp (migration 075): total contando o principal. Sem a coluna = ilimitado (nada bloqueia).
+              max_whatsapp_numeros: limiteEfetivo(row?.max_whatsapp_numeros ?? null, extras.whatsapp_numeros),
+              plano_max_whatsapp_numeros: row?.max_whatsapp_numeros ?? null,
               recursos, extras,
               plano_recursos: { whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao, dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio },
               adicionais: vigentes.map((a) => ({

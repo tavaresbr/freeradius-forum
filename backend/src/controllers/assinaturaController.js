@@ -17,11 +17,11 @@ async function getPlataformaMp() {
 const mascarar = (v) => (v ? `${String(v).slice(0, 8)}...` : "");
 
 // Adicionais que o sistema ja sabe aplicar (Fase 1): sobem o limite de equipamentos/admins.
-const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
-const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp", "campanhas", "exportacao", "dominio"];
+const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
+const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "dominio"];
 const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao", "dominio"]; // quantidade fixa 1; o plano pode ja incluir
 const MAX_QUANTIDADE = 20;
-const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins", portais: "plano_max_portais" };
+const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins", portais: "plano_max_portais", whatsapp_numeros: "plano_max_whatsapp_numeros" };
 
 /** Por que a empresa NAO pode comprar este adicional agora (null = pode). Funcao pura. */
 function motivoIndisponivel(adicional, st, ordemAtual, ordemMinimo, renovacao = false) {
@@ -311,7 +311,10 @@ exports.status = async (req, res) => {
     const [[eq]] = await db.execute("SELECT COUNT(*) AS n FROM mikrotiks WHERE empresa_id = ?", [req.empresa_id]);
     const [[po]] = await db.execute("SELECT COUNT(*) AS n FROM portais WHERE empresa_id = ?", [req.empresa_id]);
     const [[ad]] = await db.execute("SELECT COUNT(*) AS n FROM admins WHERE empresa_id = ?", [req.empresa_id]);
-    res.json({ ...st, uso: { equipamentos: eq.n, admins: ad.n, portais: po.n } });
+    // Numeros de WhatsApp em uso = o principal + os adicionais (tabela ausente = so o principal)
+    let wn = 1;
+    try { const [[x]] = await db.execute("SELECT COUNT(*) AS n FROM whatsapp_numeros WHERE empresa_id = ?", [req.empresa_id]); wn = 1 + x.n; } catch { /* migration 075 ausente */ }
+    res.json({ ...st, uso: { equipamentos: eq.n, admins: ad.n, portais: po.n, whatsapp_numeros: wn } });
   } catch (err) {
     console.error("Erro ao obter assinatura:", err.message);
     res.status(500).json({ message: "Erro ao obter assinatura" });
@@ -465,6 +468,20 @@ function dadosPlano(b) {
   ];
 }
 
+// Limite de numeros de WhatsApp do plano (migration 075), gravado a parte como os descontos: sem a coluna o plano ainda salva.
+const AVISO_075 = "Plano salvo, mas o limite de números de WhatsApp só funciona depois de rodar a migration 075 no servidor.";
+async function salvarMaxNumeros(id, b) {
+  if (!("max_whatsapp_numeros" in b)) return null;
+  const v = b.max_whatsapp_numeros === "" || b.max_whatsapp_numeros == null ? null : Math.max(1, parseInt(b.max_whatsapp_numeros, 10) || 1);
+  try {
+    await db.execute("UPDATE saas_planos SET max_whatsapp_numeros = ? WHERE id = ?", [v, id]);
+    return null;
+  } catch (err) {
+    if (!colunaAusente(err)) throw err;
+    return AVISO_075;
+  }
+}
+
 // Descontos de 3/6/12 meses (migration 069) gravados a parte: sem a coluna o plano ainda salva.
 const AVISO_069 = "Plano salvo, mas os descontos de 3/6/12 meses só funcionam depois de rodar a migration 069 no servidor.";
 async function salvarDescontos(id, b) {
@@ -549,7 +566,8 @@ exports.criarPlano = async (req, res) => {
     }
     const avDesc = await salvarDescontos(r.insertId, req.body || {});
     const avDest = await salvarDestaque(r.insertId, req.body || {});
-    aviso = aviso || avDesc || avDest || undefined;
+    const avNum = await salvarMaxNumeros(r.insertId, req.body || {});
+    aviso = aviso || avDesc || avDest || avNum || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.status(201).json({ id: r.insertId, aviso, aplicados });
@@ -580,7 +598,8 @@ exports.atualizarPlano = async (req, res) => {
     }
     const avDesc = await salvarDescontos(req.params.id, req.body || {});
     const avDest = await salvarDestaque(req.params.id, req.body || {});
-    aviso = aviso || avDesc || avDest || undefined;
+    const avNum = await salvarMaxNumeros(req.params.id, req.body || {});
+    aviso = aviso || avDesc || avDest || avNum || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.json({ message: "Plano atualizado", aviso, aplicados });
@@ -626,7 +645,7 @@ async function dadosAdicional(b) {
   if (!Number.isFinite(valor) || valor < 0) return { erro: "Valor inválido" };
   const ativo = b.ativo === false || b.ativo === 0 ? 0 : 1;
   if (ativo && !TIPOS_APLICAVEIS.includes(b.tipo)) {
-    return { erro: "Este tipo ainda não pode ser ativado: ainda não tem efeito no sistema (só equipamentos, administradores, portais, WhatsApp, campanhas e exportação)." };
+    return { erro: "Este tipo ainda não pode ser ativado: ainda não tem efeito no sistema (só equipamentos, administradores, portais, números de WhatsApp, WhatsApp, campanhas e exportação)." };
   }
   let planoMinimo = null;
   if (b.plano_minimo_id !== "" && b.plano_minimo_id != null) {

@@ -90,6 +90,9 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeEdit, setNomeEdit] = useState("");
   const [etiquetas, setEtiquetas] = useState([]);
+  const [numeros, setNumeros] = useState([]); // numeros de WhatsApp da empresa (so mostra seletor/etiqueta com mais de 1)
+  const [filtroNumero, setFiltroNumero] = useState("");
+  const nomeDoNumero = (id) => numeros.find((n) => n.id === Number(id || 0))?.nome || "Número removido";
   const [respostas, setRespostas] = useState([]);
   const [filtroEtiqueta, setFiltroEtiqueta] = useState("");
   const [filtroAtendente, setFiltroAtendente] = useState(""); // "" | eu | sem
@@ -129,6 +132,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
     if (busca.trim()) params.set("q", busca.trim());
     if (filtroEtiqueta) params.set("etiqueta", filtroEtiqueta);
     if (filtroAtendente) params.set("atendente", filtroAtendente);
+    if (filtroNumero) params.set("numero", filtroNumero);
     try {
       const res = await fetch(`/api/atendimento/conversas?${params}`, { headers });
       const data = await res.json().catch(() => ({}));
@@ -141,7 +145,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
       setCarregando(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, busca, filtroEtiqueta, filtroAtendente, token]);
+  }, [filtro, busca, filtroEtiqueta, filtroAtendente, filtroNumero, token]);
 
   const carregarMensagens = useCallback(async (id) => {
     if (!id) return;
@@ -203,6 +207,13 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
     } catch { /* segue sem etiquetas */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+  const carregarNumeros = useCallback(async () => {
+    try {
+      const res = await fetch("/api/atendimento/numeros", { headers });
+      if (res.ok) setNumeros((await res.json()).numeros || []);
+    } catch { /* segue so com o numero principal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
   const carregarRespostas = useCallback(async () => {
     try {
       const res = await fetch("/api/atendimento/respostas-rapidas", { headers });
@@ -219,7 +230,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  useEffect(() => { carregarEtiquetas(); carregarRespostas(); }, [carregarEtiquetas, carregarRespostas]);
+  useEffect(() => { carregarEtiquetas(); carregarRespostas(); carregarNumeros(); }, [carregarEtiquetas, carregarRespostas, carregarNumeros]);
   useEffect(() => {
     fetch("/api/atendimento/ia-status", { headers }).then((r) => (r.ok ? r.json() : null)).then((d) => setIaAtiva(!!d?.ativo)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -492,6 +503,12 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
           <aside className={`${selecionadaId ? "hidden md:flex" : "flex"} flex-col w-full md:w-80 md:shrink-0 border-r border-gray-800 min-w-0`}>
             <div className="p-3 space-y-2 border-b border-gray-800">
               <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar nome ou telefone" className={inputCls} />
+              {numeros.length > 1 && (
+                <select value={filtroNumero} onChange={(e) => setFiltroNumero(e.target.value)} className={inputCls} aria-label="Filtrar por número">
+                  <option value="">Todos os números</option>
+                  {numeros.map((n) => <option key={n.id} value={n.id}>{n.nome}</option>)}
+                </select>
+              )}
               {etiquetas.length > 0 && (
                 <select value={filtroEtiqueta} onChange={(e) => setFiltroEtiqueta(e.target.value)} className={inputCls} aria-label="Filtrar por etiqueta">
                   <option value="">Todas as etiquetas</option>
@@ -538,6 +555,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                       {c.etiquetas.map((et) => <span key={et.id} className="px-1.5 py-0.5 rounded text-[10px] text-white" style={{ background: et.cor }}>{et.nome}</span>)}
                     </div>
                   )}
+                  {numeros.length > 1 && <p className="text-[11px] text-blue-400 mt-0.5 truncate">📱 {nomeDoNumero(c.numero_id)}</p>}
                   {c.atendente_id && <p className="text-[11px] text-green-500 mt-0.5 truncate">👤 {c.atendente_id === eu ? "Você" : c.atendente_nome || "Atribuída"}</p>}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-gray-400 truncate">{c.ultima_msg_previa || ""}</span>
@@ -614,6 +632,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
 
                 {conversa && (
                   <div className="px-4 py-2 border-b border-gray-800 flex items-center gap-2 flex-wrap relative">
+                    {numeros.length > 1 && <span className="px-2 py-0.5 rounded text-xs bg-blue-900/40 text-blue-300 border border-blue-800/50" title="Número de WhatsApp desta conversa">📱 {nomeDoNumero(conversa.numero_id)}</span>}
                     {(conversa.etiquetas || []).map((et) => <span key={et.id} className="px-2 py-0.5 rounded text-xs text-white" style={{ background: et.cor }}>{et.nome}</span>)}
                     <button onClick={() => setMenuEtiquetas((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer">+ etiqueta</button>
                     {menuEtiquetas && (
@@ -765,7 +784,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
           {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
-          {modal === "nova" && <NovaConversa headers={headers} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
+          {modal === "nova" && <NovaConversa headers={headers} numeros={numeros} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}
         </div>
       </div>
     </Moldura>

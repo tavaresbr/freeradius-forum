@@ -376,21 +376,32 @@ exports.novaConversa = async (req, res) => {
     ).catch(() => [[]]);
     if (opt.length) return res.status(409).json({ error: "Este contato pediu para não receber mensagens (SAIR)." });
 
+    // Numero de WhatsApp pelo qual a conversa sai (0/ausente = principal). Numero adicional so existe com a migration 075.
+    const numeroId = parseInt(req.body?.numero_id, 10) > 0 ? parseInt(req.body.numero_id, 10) : 0;
+    const comNumero = await temColuna("whatsapp_conversas", "numero_id");
+    if (numeroId) {
+      if (!comNumero) return res.status(503).json({ error: "Vários números de WhatsApp ainda não estão disponíveis neste servidor. Rode a migration 075." });
+      if (!(await require("../utils/whatsappNumeros").obter(req.empresa_id, numeroId))) return res.status(400).json({ error: "Número de WhatsApp inválido." });
+    }
     let [[conversa]] = await db.query(
       `SELECT * FROM whatsapp_conversas WHERE empresa_id = ? AND telefone IS NOT NULL
-         AND RIGHT(telefone, 10) = ? ORDER BY id LIMIT 1`,
-      [req.empresa_id, fim]
+         AND RIGHT(telefone, 10) = ? ${comNumero ? "AND numero_id = ?" : ""} ORDER BY id LIMIT 1`,
+      comNumero ? [req.empresa_id, fim, numeroId] : [req.empresa_id, fim]
     );
     let criada = false;
     if (!conversa) {
       const jid = `${wpp.formatarNumeroComNonoDigito(telefone)}@s.whatsapp.net`;
       const lead = await leadDaConversa(req.empresa_id, { telefone });
       const nome = texto(req.body?.nome, 150) || lead?.nome || null;
-      const [ins] = await db.query(
-        `INSERT INTO whatsapp_conversas (empresa_id, jid, telefone, nome, lead_id, ultima_msg_em)
-         VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-        [req.empresa_id, jid, telefone, nome, lead?.id || null]
-      );
+      const [ins] = comNumero
+        ? await db.query(
+          `INSERT INTO whatsapp_conversas (empresa_id, numero_id, jid, telefone, nome, lead_id, ultima_msg_em)
+           VALUES (?, ?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+          [req.empresa_id, numeroId, jid, telefone, nome, lead?.id || null])
+        : await db.query(
+          `INSERT INTO whatsapp_conversas (empresa_id, jid, telefone, nome, lead_id, ultima_msg_em)
+           VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+          [req.empresa_id, jid, telefone, nome, lead?.id || null]);
       [[conversa]] = await db.query("SELECT * FROM whatsapp_conversas WHERE id = ? AND empresa_id = ?", [ins.insertId, req.empresa_id]);
       criada = true;
     }

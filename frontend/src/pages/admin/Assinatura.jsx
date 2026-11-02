@@ -194,6 +194,7 @@ export default function Assinatura() {
               <p className="text-gray-500">Uso</p>
               <p className="text-white mt-1">{st.uso?.equipamentos ?? 0}/{limite(st.max_equipamentos)} equipamentos{st.extras?.equipamentos > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_equipamentos)} do plano + {st.extras.equipamentos})</span>}</p>
               {st.max_portais !== undefined && <p className="text-white">{st.uso?.portais ?? 0}/{limite(st.max_portais)} portais{st.extras?.portais > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_portais)} do plano + {st.extras.portais})</span>}</p>}
+              {st.max_whatsapp_numeros !== undefined && <p className="text-white">{st.uso?.whatsapp_numeros ?? 1}/{limite(st.max_whatsapp_numeros)} números de WhatsApp{st.extras?.whatsapp_numeros > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_whatsapp_numeros)} do plano + {st.extras.whatsapp_numeros})</span>}</p>}
               <p className="text-white">{st.uso?.admins ?? 0}/{limite(st.max_admins)} administradores{st.extras?.admins > 0 && <span className="text-xs text-gray-400"> ({limite(st.plano_max_admins)} do plano + {st.extras.admins})</span>}</p>
             </div>
           </div>
@@ -286,6 +287,7 @@ export default function Assinatura() {
                   <li>✓ {qtd(p.max_equipamentos, "equipamento", "equipamentos")}</li>
                   <li>✓ {qtd(p.max_admins, "administrador", "administradores")}</li>
                   {p.max_portais !== undefined && <li>✓ {qtd(p.max_portais, "portal", "portais")}</li>}
+                  {p.max_whatsapp_numeros !== undefined && <li>✓ {qtd(p.max_whatsapp_numeros, "número de WhatsApp", "números de WhatsApp")}</li>}
                   {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
                     p[k] !== undefined && <li key={k} className={p[k] ? "" : "opacity-50"}>{p[k] ? "✓" : "—"} {r}</li>
                   ))}

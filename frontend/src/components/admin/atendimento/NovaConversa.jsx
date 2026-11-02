@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import Modal, { inputCls, btnPrimary, btnSecondary } from "./Modal";
 
-export default function NovaConversa({ headers, onFechar, onAbrir }) {
+export default function NovaConversa({ headers, onFechar, onAbrir, numeros = [] }) {
+  const [numeroId, setNumeroId] = useState(0);
   const [telefone, setTelefone] = useState("");
   const [nome, setNome] = useState("");
   const [texto, setTexto] = useState("");
@@ -13,7 +14,7 @@ export default function NovaConversa({ headers, onFechar, onAbrir }) {
     setBusy(true);
     setErro("");
     try {
-      const res = await fetch("/api/atendimento/conversas", { method: "POST", headers, body: JSON.stringify({ telefone, nome, texto }) });
+      const res = await fetch("/api/atendimento/conversas", { method: "POST", headers, body: JSON.stringify({ telefone, nome, texto, numero_id: numeroId }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(data.error || "Não foi possível iniciar a conversa"); return; }
       onAbrir(data.id);
@@ -27,6 +28,11 @@ export default function NovaConversa({ headers, onFechar, onAbrir }) {
   return (
     <Modal titulo="Nova conversa" onFechar={onFechar}>
       <form onSubmit={iniciar} className="space-y-3">
+        {numeros.length > 1 && (
+          <select value={numeroId} onChange={(e) => setNumeroId(Number(e.target.value))} className={inputCls} aria-label="Enviar pelo número">
+            {numeros.map((n) => <option key={n.id} value={n.id}>Enviar pelo número: {n.nome}</option>)}
+          </select>
+        )}
         <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="Telefone com DDD (ex.: 93 99999-0000)" inputMode="tel" className={inputCls} autoFocus />
         <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={150} placeholder="Nome (opcional)" className={inputCls} />
         <textarea value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={4000} rows={4} placeholder="Primeira mensagem (opcional)" className={`${inputCls} resize-none`} />
