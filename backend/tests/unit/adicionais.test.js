@@ -292,3 +292,58 @@ test('super admin: nao ativa tipo sem efeito, valida valor e plano minimo; remov
   assert.ok(chamadas.some((c) => /UPDATE saas_adicionais SET ativo = 0/.test(c.sql)));
   assert.ok(!chamadas.some((c) => /DELETE FROM saas_adicionais/.test(c.sql)));
 });
+
+// ---- Dominio proprio oculto das empresas (funcao pausada): so o dono da plataforma ve/compra ----
+const ADIC_DOMINIO = { id: 9, nome: 'Dominio proprio', tipo: 'dominio', valor: 49.9, plano_minimo_id: 2, plano_minimo_nome: 'Start', plano_minimo_ordem: 2 };
+
+test('dominio proprio: ocultarDominioDoPlano tira inclui_dominio e o item do exibir_site', () => {
+  const p = ctrl.ocultarDominioDoPlano({ id: 1, nome: 'Pro', inclui_dominio: 1, inclui_whatsapp: 1, exibir_site: JSON.stringify(['whatsapp', 'dominio', 'teste']) });
+  assert.ok(!('inclui_dominio' in p));
+  assert.deepStrictEqual(JSON.parse(p.exibir_site), ['whatsapp', 'teste']);
+  assert.strictEqual(p.inclui_whatsapp, 1);
+  // sem exibir_site (NULL) nada quebra
+  assert.ok(!('inclui_dominio' in ctrl.ocultarDominioDoPlano({ id: 2, inclui_dominio: 0, exibir_site: null })));
+});
+
+test('dominio proprio: planosPublicos nao devolve inclui_dominio', async () => {
+  respostas = [{ re: /FROM saas_planos WHERE ativo = 1/, out: [[{ id: 1, nome: 'Pro', valor: 10, inclui_dominio: 1, exibir_site: JSON.stringify(['dominio']) }]] }];
+  const res = resMock();
+  await ctrl.planosPublicos({}, res);
+  assert.ok(!('inclui_dominio' in res.body[0]));
+  assert.deepStrictEqual(JSON.parse(res.body[0].exibir_site), []);
+});
+
+test('dominio proprio: empresa comum nao ve o adicional na lista nem consegue comprar; o dono consegue', async () => {
+  ass.invalidar();
+  respostas = [
+    { re: /FROM saas_adicionais a LEFT JOIN saas_planos pm/, out: [[
+      { id: 1, nome: '+1 equipamento', descricao: null, tipo: 'equipamentos', incremento: 1, valor: '29.90', ciclo_dias: 30, plano_minimo_id: 2, plano_minimo_nome: 'Start', plano_minimo_ordem: 2 },
+      { id: 9, nome: 'Dominio proprio', descricao: null, tipo: 'dominio', incremento: 1, valor: '49.90', ciclo_dias: 30, plano_minimo_id: 2, plano_minimo_nome: 'Start', plano_minimo_ordem: 2 },
+    ]] },
+    { re: /SELECT ordem FROM saas_planos/, out: [[{ ordem: 2 }]] },
+    ...baseStatus(),
+    { re: /FROM assinatura_adicionais aa JOIN saas_adicionais a ON a.id = aa.adicional_id/, out: [[
+      { id: 8, adicional_id: 9, quantidade: 1, vence_em: emReal(5), nome: 'Dominio proprio', tipo: 'dominio', valor: '49.90' },
+    ]] },
+  ];
+  const res = resMock();
+  await ctrl.adicionaisEmpresa({ empresa_id: 1, user: { id: 5, role: 'owner' } }, res); // empresa comum
+  assert.deepStrictEqual(res.body.catalogo.map((a) => a.tipo), ['equipamentos']);
+  assert.strictEqual(res.body.minhas.length, 0);
+
+  // compra direta pela API: recusada para quem nao e dono, aceita para o dono
+  ass.invalidar();
+  respostas = [
+    { re: /FROM saas_adicionais a LEFT JOIN saas_planos pm/, out: [[ADIC_DOMINIO]] },
+    { re: /SELECT ordem FROM saas_planos/, out: [[{ ordem: 2 }]] },
+    ...baseStatus(),
+    { re: /FROM assinatura_adicionais aa/, out: [[]] },
+  ];
+  const negado = await ctrl.resolverItem({ adicional_id: 9, quantidade: 1 }, 1);
+  assert.strictEqual(negado.erro.status, 409);
+  assert.match(negado.erro.message, /não está disponível/);
+  ass.invalidar();
+  const dono = await ctrl.resolverItem({ adicional_id: 9, quantidade: 1 }, 1, { podeDominio: true });
+  // o dono passa pela trava de visibilidade (pode cair em outra regra, ex. recurso ja incluido, mas nunca nesta)
+  assert.ok(!dono.erro || !/não está disponível/.test(dono.erro.message));
+});

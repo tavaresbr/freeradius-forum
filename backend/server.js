@@ -207,7 +207,8 @@ app.use("/api/radius-logs", auth, tenant, exigeAssinatura, checkPermissao('sesso
 app.use("/api/admins", auth, tenant, exigeAssinatura, checkPermissao('usuarios'), adminUserRoutes);
 app.use("/api/wireguard", auth, tenant, exigeAssinatura, checkPermissao('vpn'), wireguardRoutes);
 app.use("/api/portais", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalRoutes);
-app.use("/api/dominio", auth, tenant, exigeAssinatura, checkPermissao('configuracoes'), exigeRecurso('dominio'), require("./src/routes/dominioRoutes"));
+// Dominio proprio fica OCULTO das empresas por enquanto: so o dono da plataforma usa (funcao pausada).
+app.use("/api/dominio", auth, tenant, exigeAssinatura, require('./src/middleware/exigeDonoPlataforma'), require("./src/routes/dominioRoutes"));
 app.use("/api/campanhas", auth, tenant, exigeAssinatura, checkPermissao('portais'), exigeRecurso('campanhas'), campanhasRoutes);
 app.use("/api/portal-templates", auth, tenant, exigeAssinatura, checkPermissao('portais'), portalTemplateRoutes);
 app.use("/api/leads", auth, tenant, exigeAssinatura, checkPermissao('leads'), leadRoutes);
