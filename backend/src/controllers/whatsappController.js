@@ -29,7 +29,15 @@ function formatarNumeroComNonoDigito(numero) {
 // o frontend exiba a tela de "criar instancia".
 // O DEFAULT_INSTANCE global so e usado quando NAO ha empresa_id no contexto
 // (ex: chamadas internas/scripts sem tenant).
-async function getEvolutionConfig(empresaId) {
+async function getEvolutionConfig(empresaId, numeroId = 0) {
+  // Numero adicional (migration 075): mesma Evolution/chave da empresa, instancia propria. Numero que nao e'
+  // da empresa ou foi removido NUNCA cai no principal (a mensagem sairia do WhatsApp errado).
+  if (empresaId && Number(numeroId) > 0) {
+    const numero = await require("../utils/whatsappNumeros").obter(empresaId, numeroId);
+    if (!numero) throw Object.assign(new Error("Numero de WhatsApp removido ou inexistente"), { code: "NUMERO_WHATSAPP_INVALIDO", status: 400 });
+    const base = await getEvolutionConfig(empresaId);
+    return { ...base, instanceName: numero.instance_name };
+  }
   if (empresaId) {
     const [[config]] = await db.query(
       "SELECT config_json FROM empresa_configs WHERE empresa_id = ? AND config_type = 'whatsapp'",
@@ -116,9 +124,9 @@ async function enviarMensagemEstrita(telefone, mensagem, empresaId) {
 }
 
 // A instancia da empresa existe e esta conectada (state "open")? Usado pelo worker de promocoes.
-async function instanciaConectada(empresaId) {
+async function instanciaConectada(empresaId, numeroId = 0) {
   try {
-    const evo = await getEvolutionConfig(empresaId);
+    const evo = await getEvolutionConfig(empresaId, numeroId);
     if (!evo.apiKey) return false;
     const r = await axios.get(
       `${evo.apiUrl}/instance/connectionState/${evo.instanceName}`,

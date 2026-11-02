@@ -58,6 +58,16 @@ async function anexarAtendentes(empresaId, conversas) {
   } catch (err) { /* sem nome: a tela mostra so "atribuida" */ }
 }
 
+// GET /api/atendimento/numeros  (numeros de WhatsApp da empresa, so id e nome; o principal e' o id 0)
+exports.listarNumeros = async (req, res) => {
+  try {
+    const extras = await require("../utils/whatsappNumeros").listar(req.empresa_id);
+    res.json({ numeros: [{ id: 0, nome: "Principal" }, ...extras.map((n) => ({ id: n.id, nome: n.nome }))] });
+  } catch (err) {
+    erro500(res, err, "Erro ao listar os números");
+  }
+};
+
 // GET /api/atendimento/conversas?status=aberta|resolvida|todas&nao_lidas=1&q=&pagina=1
 exports.listarConversas = async (req, res) => {
   try {
@@ -73,6 +83,8 @@ exports.listarConversas = async (req, res) => {
       where.push("id IN (SELECT conversa_id FROM whatsapp_conversa_etiquetas WHERE empresa_id = ? AND etiqueta_id = ?)");
       params.push(req.empresa_id, etiqueta);
     }
+    const temNumero = await temColuna("whatsapp_conversas", "numero_id");
+    if (temNumero && /^\d+$/.test(String(req.query.numero || ""))) { where.push("numero_id = ?"); params.push(parseInt(req.query.numero, 10)); }
     const temAtendente = await temColuna("whatsapp_conversas", "atendente_id");
     if (temAtendente) {
       const at = String(req.query.atendente || "");
@@ -93,7 +105,7 @@ exports.listarConversas = async (req, res) => {
       }
     }
     const [rows] = await db.query(
-      `SELECT id, jid, telefone, nome, lead_id, status, nao_lidas, ultima_msg_em, ultima_msg_previa${temAtendente ? ", atendente_id, atribuido_em" : ""}
+      `SELECT id, jid, telefone, nome, lead_id, status, nao_lidas, ultima_msg_em, ultima_msg_previa${temAtendente ? ", atendente_id, atribuido_em" : ""}${temNumero ? ", numero_id" : ""}
          FROM whatsapp_conversas WHERE ${where.join(" AND ")}
         ORDER BY ultima_msg_em DESC, id DESC LIMIT ? OFFSET ?`,
       [...params, limite + 1, (pagina - 1) * limite]
@@ -276,13 +288,19 @@ exports.receberWebhook = async (req, res) => {
   try {
     const dono = await svc.empresaPorWebhookToken(req.params.token);
     if (!dono) return res.status(404).json({ error: "Webhook desconhecido" });
-    // So aceita eventos da instancia da propria empresa (o corpo nunca define a empresa).
+    // So aceita eventos das instancias da propria empresa (o corpo nunca define a empresa): a principal ou um
+    // numero adicional dela (migration 075). Instancia de outra empresa/desconhecida e' ignorada.
     const instancia = req.body?.instance;
-    if (instancia && typeof instancia === "string" && instancia !== dono.instancia) return res.status(200).json({ ok: true, ignorado: true });
+    let numeroId = 0;
+    if (instancia && typeof instancia === "string" && instancia !== dono.instancia) {
+      const numero = await require("../utils/whatsappNumeros").porInstancia(dono.empresaId, instancia);
+      if (!numero) return res.status(200).json({ ok: true, ignorado: true });
+      numeroId = numero.id;
+    }
     res.status(200).json({ ok: true });
     svc.registrarEvento(dono.empresaId, req.body?.event);
     console.log(`[atendimento] webhook empresa=${dono.empresaId} evento=${String(req.body?.event || "").slice(0, 40)}`);
-    await svc.processarWebhook(dono.empresaId, req.body);
+    await svc.processarWebhook(dono.empresaId, req.body, numeroId);
   } catch (err) {
     console.error("[atendimento] webhook:", err.message);
     if (!res.headersSent) res.status(200).json({ ok: false });

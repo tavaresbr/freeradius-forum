@@ -111,15 +111,22 @@ async function leadPorTelefone(empresaId, telefone) {
   return rows[0] || null;
 }
 
-async function obterOuCriarConversa(empresaId, m) {
-  const [[existente]] = await db.query("SELECT id FROM whatsapp_conversas WHERE empresa_id = ? AND jid = ?", [empresaId, m.jid]);
+async function obterOuCriarConversa(empresaId, m, numeroId = 0) {
+  const comNumero = numeroId > 0 || await temColuna("whatsapp_conversas", "numero_id");
+  const [[existente]] = comNumero
+    ? await db.query("SELECT id FROM whatsapp_conversas WHERE empresa_id = ? AND numero_id = ? AND jid = ?", [empresaId, numeroId, m.jid])
+    : await db.query("SELECT id FROM whatsapp_conversas WHERE empresa_id = ? AND jid = ?", [empresaId, m.jid]);
   if (existente) return existente.id;
   const lead = m.telefone ? await leadPorTelefone(empresaId, m.telefone) : null;
-  const [r] = await db.query(
-    `INSERT INTO whatsapp_conversas (empresa_id, jid, telefone, nome, lead_id, ultima_msg_em)
-     VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-    [empresaId, m.jid, m.telefone, m.nome || lead?.nome || null, lead?.id || null, m.quando]
-  );
+  const [r] = comNumero
+    ? await db.query(
+      `INSERT INTO whatsapp_conversas (empresa_id, numero_id, jid, telefone, nome, lead_id, ultima_msg_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [empresaId, numeroId, m.jid, m.telefone, m.nome || lead?.nome || null, lead?.id || null, m.quando])
+    : await db.query(
+      `INSERT INTO whatsapp_conversas (empresa_id, jid, telefone, nome, lead_id, ultima_msg_em)
+       VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [empresaId, m.jid, m.telefone, m.nome || lead?.nome || null, lead?.id || null, m.quando]);
   return r.insertId;
 }
 
@@ -141,10 +148,10 @@ async function aplicarOptOut(empresaId, m) {
   }
 }
 
-async function registrarMensagem(empresaId, data) {
+async function registrarMensagem(empresaId, data, numeroId = 0) {
   const m = extrairMensagem(data);
   if (!m) return { ignorada: true };
-  const conversaId = await obterOuCriarConversa(empresaId, m);
+  const conversaId = await obterOuCriarConversa(empresaId, m, numeroId);
   const [ins] = await db.query(
     `INSERT IGNORE INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, criado_em, midia_mime, midia_nome)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -176,7 +183,8 @@ async function registrarMensagem(empresaId, data) {
     [m.quando, m.previa, m.fromMe ? 0 : 1, m.fromMe ? 0 : 1, m.nome, conversaId, empresaId]
   );
   await aplicarOptOut(empresaId, m);
-  if (!m.fromMe) {
+  // Fase 1 de varios numeros: chatbot e resposta automatica so atendem o numero PRINCIPAL.
+  if (!m.fromMe && !numeroId) {
     // Chatbot de menu e, se ele nao tratou a mensagem, resposta automatica (boas-vindas / fora do horario):
     // em segundo plano, nunca atrapalha o webhook.
     require("./whatsappChatbot").processar(empresaId, conversaId, m)
@@ -192,13 +200,28 @@ async function registrarMensagem(empresaId, data) {
   return { conversaId };
 }
 
+/** numero_id da conversa (0 = principal). Sem a coluna (migration 075) tudo e' o principal. */
+async function numeroDaConversa(empresaId, conversaId) {
+  if (!(await temColuna("whatsapp_conversas", "numero_id"))) return 0;
+  const [[c]] = await db.query("SELECT numero_id FROM whatsapp_conversas WHERE id = ? AND empresa_id = ?", [conversaId, empresaId]);
+  return c ? Number(c.numero_id) || 0 : 0;
+}
+
+async function numeroDaMensagem(empresaId, mensagemId) {
+  if (!(await temColuna("whatsapp_conversas", "numero_id"))) return 0;
+  const [[c]] = await db.query(
+    `SELECT c.numero_id FROM whatsapp_mensagens m JOIN whatsapp_conversas c ON c.id = m.conversa_id AND c.empresa_id = m.empresa_id
+      WHERE m.id = ? AND m.empresa_id = ?`, [mensagemId, empresaId]);
+  return c ? Number(c.numero_id) || 0 : 0;
+}
+
 /**
  * Baixa a midia de uma mensagem recebida pela Evolution (base64) e grava em disco.
  * @param {{id, wa_id, midia_mime}} msg linha de whatsapp_mensagens (da empresa)
  * @returns {Promise<string|null>} caminho relativo gravado
  */
 async function baixarMidia(empresaId, msg) {
-  const evo = await wpp.getEvolutionConfig(empresaId);
+  const evo = await wpp.getEvolutionConfig(empresaId, await numeroDaMensagem(empresaId, msg.id));
   if (!evo.apiKey) throw new Error("WhatsApp sem chave de API configurada");
   const r = await axios.post(
     `${evo.apiUrl}/chat/getBase64FromMediaMessage/${evo.instanceName}`,
@@ -233,11 +256,11 @@ async function atualizarStatus(empresaId, item) {
 }
 
 /** Processa o corpo do webhook da Evolution (empresa ja validada pelo token da URL). */
-async function processarWebhook(empresaId, corpo) {
+async function processarWebhook(empresaId, corpo, numeroId = 0) {
   const evento = normalizarEvento(corpo?.event);
   const itens = Array.isArray(corpo?.data) ? corpo.data : corpo?.data ? [corpo.data] : [];
   if (evento === "messages.upsert") {
-    for (const d of itens) await registrarMensagem(empresaId, d);
+    for (const d of itens) await registrarMensagem(empresaId, d, numeroId);
   } else if (evento === "messages.update") {
     for (const d of itens) await atualizarStatus(empresaId, d);
   }
@@ -288,8 +311,8 @@ const baseWebhook = () => {
 const ultimoEvento = new Map();
 const registrarEvento = (empresaId, evento) => ultimoEvento.set(empresaId, { quando: new Date(), evento: String(evento || "").slice(0, 60) });
 
-async function ativarWebhook(empresaId) {
-  const evo = await wpp.getEvolutionConfig(empresaId);
+async function ativarWebhook(empresaId, numeroId = 0) {
+  const evo = await wpp.getEvolutionConfig(empresaId, numeroId);
   if (!evo.apiKey) throw new Error("WhatsApp sem chave de API configurada");
   const token = await obterOuCriarWebhookToken(empresaId);
   const url = `${baseWebhook()}/api/whatsapp-webhook/${token}`;
@@ -301,8 +324,8 @@ async function ativarWebhook(empresaId) {
   return { ativo: true };
 }
 
-async function statusWebhook(empresaId) {
-  const evo = await wpp.getEvolutionConfig(empresaId);
+async function statusWebhook(empresaId, numeroId = 0) {
+  const evo = await wpp.getEvolutionConfig(empresaId, numeroId);
   const ev = ultimoEvento.get(empresaId);
   const base = { ativo: false, ultimo_evento_em: ev?.quando || null };
   if (!evo.apiKey) return base;
@@ -342,7 +365,14 @@ async function garantirWebhook(empresaId) {
  * `especial` = envio por outro endpoint da Evolution (sendLocation, sendContact); `texto` e' o que fica gravado.
  */
 async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null, citada = null, especial = null, automatica = false } = {}) {
-  const evo = await wpp.getEvolutionConfig(empresaId);
+  // Responde SEMPRE pelo numero da conversa (quem chamou pode ter carregado so alguns campos da conversa).
+  const numeroId = conversa.numero_id !== undefined ? Number(conversa.numero_id) || 0 : await numeroDaConversa(empresaId, conversa.id);
+  let evo;
+  try { evo = await wpp.getEvolutionConfig(empresaId, numeroId); }
+  catch (err) {
+    if (err.code === "NUMERO_WHATSAPP_INVALIDO") throw Object.assign(new Error("O número de WhatsApp desta conversa foi removido. Não dá para responder por ele."), { status: 400 });
+    throw err;
+  }
   if (!evo.apiKey) throw Object.assign(new Error("WhatsApp sem chave de API configurada"), { status: 400 });
   const temp = `tmp_${crypto.randomUUID()}`;
   const rel = midia ? await midiaUtil.salvarArquivo(empresaId, midia.buffer, midia.ext) : null;
@@ -413,5 +443,5 @@ const enviarTexto = (empresaId, adminId, conversa, texto, opcoes = {}) => enviar
 
 module.exports = {
   MAX_TEXTO, textoLocalizacao, extrairMensagem, resolverContato, normalizarEvento, processarWebhook, registrarMensagem, atualizarStatus,
-  obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, garantirWebhook, registrarEvento, baseWebhook, enviarTexto, enviarMensagem, baixarMidia,
+  numeroDaConversa, obterOuCriarWebhookToken, empresaPorWebhookToken, ativarWebhook, statusWebhook, garantirWebhook, registrarEvento, baseWebhook, enviarTexto, enviarMensagem, baixarMidia,
 };
