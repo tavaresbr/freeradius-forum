@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HOTSPOT_PADROES, ON_LOGOUT_HOTSPOT, scriptOnLogout, BLOCK_REDIRECT, LOG_CONEXOES } = require('../../src/constants/hotspotDefaults');
-const { aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, ehInterfaceTunel, verificarConfiguracaoHotspot } = require('../../src/utils/hotspotSetup');
+const { garantirDnsDoHotspot, aplicarPadroesHotspot, configurarWifiAP, ehInterfaceWifi, configurarDnsSeguro, prepararBridgeHotspot, sanitizarBridge, configurarOnLogout, configurarBlockRedirect, configurarLogConexoes, ehInterfaceTunel, verificarConfiguracaoHotspot } = require('../../src/utils/hotspotSetup');
 
 function conexaoFalsa({ radius = [{ '.id': '*1', service: 'hotspot' }], falha = {}, naoConecta = false } = {}) {
   const chamadas = [];
@@ -142,7 +142,7 @@ test('DNS seguro desligado: so reverte se o roteador usa o DNS filtrado', async 
   const a = await configurarDnsSeguro({ ligar: false, ...ARGS_DNS, ...filtrado });
   assert.strictEqual(a.status, 'ok');
   assert.deepStrictEqual(filtrado.escritas[0].a, ['=servers=8.8.8.8,1.1.1.1', '=allow-remote-requests=yes']);
-  assert.deepStrictEqual(filtrado.escritas[1].a, ['=.id=*5', '=dns-server=8.8.8.8']);
+  assert.deepStrictEqual(filtrado.escritas[1].a, ['=.id=*5', '=dns-server=10.5.50.1']);
 
   const manual = roteadorDns({ servers: '9.9.9.9' });
   const b = await configurarDnsSeguro({ ligar: false, ...ARGS_DNS, ...manual });
@@ -686,4 +686,51 @@ test('reset-html: sempre com numbers=<servidor> (sem argumento o RouterOS recusa
   const rota = fs.readFileSync(path.join(__dirname, '../../src/routes/mikrotikRoutes.js'), 'utf8');
   assert.ok(setup.includes('"/ip/hotspot/reset-html", ["=numbers=hotspot1"]'));
   assert.ok(rota.includes('"/ip/hotspot/reset-html", [`=numbers=${hs.name}`]'));
+});
+
+function roteadorDhcp({ dnsRede = '8.8.8.8', rede = true, allow = 'no', semDns = false } = {}) {
+  const escritas = [];
+  return {
+    escritas,
+    print: async (c) => {
+      if (c === '/ip/dns/print') return semDns ? [] : [{ 'allow-remote-requests': allow }];
+      if (c === '/ip/dhcp-server/network/print') return rede ? [{ '.id': '*5', address: '10.5.50.0/24', 'dns-server': dnsRede }] : [];
+      return [];
+    },
+    write: async (c, a) => { escritas.push({ c, a }); return []; },
+  };
+}
+
+test('DNS do hotspot: rede nova nasce com o gateway como DNS (nunca 8.8.8.8)', async () => {
+  const r = roteadorDhcp({ rede: false, allow: 'yes' });
+  const res = await garantirDnsDoHotspot({ ...ARGS_DNS, ...r });
+  assert.strictEqual(res.status, 'ok');
+  assert.deepStrictEqual(r.escritas, [{ c: '/ip/dhcp-server/network/add', a: ['=address=10.5.50.0/24', '=gateway=10.5.50.1', '=dns-server=10.5.50.1'] }]);
+});
+
+test('DNS do hotspot: rede existente com DNS externo e atualizada; allow-remote-requests so liga se estava desligado', async () => {
+  const r = roteadorDhcp({ dnsRede: '8.8.8.8', allow: 'no' });
+  const res = await garantirDnsDoHotspot({ ...ARGS_DNS, ...r });
+  assert.strictEqual(res.status, 'ok');
+  assert.deepStrictEqual(r.escritas.map((e) => e.c), ['/ip/dhcp-server/network/set', '/ip/dns/set']);
+  assert.deepStrictEqual(r.escritas[0].a, ['=.id=*5', '=dns-server=10.5.50.1']);
+  assert.deepStrictEqual(r.escritas[1].a, ['=allow-remote-requests=yes']);
+});
+
+test('DNS do hotspot: ja correto = nenhuma escrita; leitura do DNS do roteador vazia = aviso sem escrever', async () => {
+  const certo = roteadorDhcp({ dnsRede: '10.5.50.1', allow: 'yes' });
+  const a = await garantirDnsDoHotspot({ ...ARGS_DNS, ...certo });
+  assert.strictEqual(a.status, 'ok');
+  assert.strictEqual(certo.escritas.length, 0);
+  const semLeitura = roteadorDhcp({ dnsRede: '10.5.50.1', semDns: true });
+  const b = await garantirDnsDoHotspot({ ...ARGS_DNS, ...semLeitura });
+  assert.strictEqual(b.status, 'aviso');
+  assert.strictEqual(semLeitura.escritas.length, 0);
+});
+
+test('assistente usa garantirDnsDoHotspot e nao grava mais 8.8.8.8 como DNS do DHCP', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/utils/hotspotSetup.js'), 'utf8');
+  assert.ok(src.includes('garantirDnsDoHotspot({ gateway, network, print: safePrint, write: safeWrite })'));
+  assert.ok(!src.includes('`=dns-server=8.8.8.8`'));
+  assert.ok(!src.includes('"=dns-server=8.8.8.8"'));
 });
