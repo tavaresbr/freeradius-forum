@@ -45,6 +45,11 @@ exports.listarContatos = async (req, res) => {
       filtros.push("t.conversa_id IN (SELECT conversa_id FROM whatsapp_conversa_etiquetas WHERE empresa_id = ? AND etiqueta_id = ?)");
       fParams.push(req.empresa_id, etiqueta);
     }
+    const grupo = String(req.query.grupo || "");
+    if (/^[0-9A-Za-z._-]+@g\.us$/.test(grupo)) {
+      filtros.push("t.lead_id IN (SELECT lead_id FROM leads_origem_grupo WHERE empresa_id = ? AND grupo_jid = ?)");
+      fParams.push(req.empresa_id, grupo);
+    }
     const q = String(req.query.q || "").trim().slice(0, 60);
     if (q) {
       const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
