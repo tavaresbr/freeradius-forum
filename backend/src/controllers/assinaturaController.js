@@ -5,6 +5,21 @@ const db = require("../../db");
 const { validarAssinaturaWebhook } = require("../utils/mpSignature");
 const { obterStatus, invalidar, tabelaInexistente } = require("../utils/assinatura");
 const { mesesValidos, descontoDoPeriodo, valorDoPeriodo, normalizarDesconto } = require("../utils/periodoPlano");
+const { ehDonoPlataforma } = require("../utils/donoPlataforma");
+
+// Dominio proprio esta OCULTO das empresas (funcao pausada): so o dono da plataforma ve/compra.
+const TIPO_OCULTO = "dominio";
+async function podeVerDominio(req) {
+  try { return !!(req.user && (await ehDonoPlataforma(req.user.id, req.user.role))); } catch { return false; }
+}
+/** Plano publico sem a menção a dominio proprio (campo inclui_dominio e item "dominio" do exibir_site). */
+function ocultarDominioDoPlano(plano) {
+  const { inclui_dominio, ...resto } = plano || {}; // eslint-disable-line no-unused-vars
+  let itens = resto.exibir_site;
+  if (typeof itens === "string" && itens) { try { itens = JSON.parse(itens); } catch { itens = null; } }
+  if (Array.isArray(itens)) resto.exibir_site = JSON.stringify(itens.filter((k) => k !== TIPO_OCULTO));
+  return resto;
+}
 
 // ---------- helpers ----------
 
@@ -51,7 +66,7 @@ async function ordemDoPlano(planoId) {
  * (`renovar_adicional_id`). Valor SEMPRE calculado aqui, nunca vem do cliente.
  * @returns {{erro?: {status:number, message:string}, item?: Object}}
  */
-async function resolverItem(b, empresaId) {
+async function resolverItem(b, empresaId, { podeDominio = false } = {}) {
   const renovarId = parseInt(b.renovar_adicional_id, 10);
   const adicionalId = parseInt(b.adicional_id, 10);
   if (!renovarId && !adicionalId) {
@@ -81,6 +96,7 @@ async function resolverItem(b, empresaId) {
     [idAdicional]
   );
   if (!ad) return { erro: { status: 404, message: "Adicional não encontrado." } };
+  if (ad.tipo === TIPO_OCULTO && !podeDominio) return { erro: { status: 409, message: "Este adicional não está disponível no momento." } };
   if (TIPOS_LIGA_DESLIGA.includes(ad.tipo) && quantidade !== 1) return { erro: { status: 400, message: "Este recurso é contratado com quantidade 1." } };
   const st = await obterStatus(empresaId);
   const motivo = motivoIndisponivel(ad, st, await ordemDoPlano(st.plano_id), ad.plano_minimo_ordem == null ? null : Number(ad.plano_minimo_ordem), !!renovarId);
@@ -217,7 +233,7 @@ exports.pagarCartao = async (req, res) => {
 
   let cobrancaId = null;
   try {
-    const { erro, item } = await resolverItem(b, req.empresa_id);
+    const { erro, item } = await resolverItem(b, req.empresa_id, { podeDominio: await podeVerDominio(req) });
     if (erro) return res.status(erro.status).json({ message: erro.message });
 
     const cfg = await getPlataformaMp();
@@ -298,7 +314,7 @@ exports.planosPublicos = async (req, res) => {
     const [rows] = await db.execute(
       "SELECT * FROM saas_planos WHERE ativo = 1 ORDER BY ordem, id"
     );
-    res.json(rows);
+    res.json(rows.map(ocultarDominioDoPlano));
   } catch (err) {
     console.error("Erro ao listar planos SaaS:", err.message);
     res.status(500).json({ message: "Erro ao listar planos" });
@@ -332,7 +348,8 @@ exports.adicionaisEmpresa = async (req, res) => {
          FROM saas_adicionais a LEFT JOIN saas_planos pm ON pm.id = a.plano_minimo_id
         WHERE a.ativo = 1 ORDER BY a.ordem, a.id`
     );
-    const catalogo = cat.map((a) => {
+    const verDominio = await podeVerDominio(req);
+    const catalogo = cat.filter((a) => verDominio || a.tipo !== TIPO_OCULTO).map((a) => {
       const motivo = motivoIndisponivel(a, st, ordemAtual, a.plano_minimo_ordem == null ? null : Number(a.plano_minimo_ordem));
       return { id: a.id, nome: a.nome, descricao: a.descricao, tipo: a.tipo, incremento: a.incremento, valor: Number(a.valor),
                ciclo_dias: a.ciclo_dias, plano_minimo_nome: a.plano_minimo_nome || null, disponivel: !motivo, motivo };
@@ -346,7 +363,7 @@ exports.adicionaisEmpresa = async (req, res) => {
     const agora = Date.now();
     res.json({
       catalogo,
-      minhas: minhas.map((m) => ({ id: m.id, adicional_id: m.adicional_id, nome: m.nome, tipo: m.tipo, quantidade: m.quantidade,
+      minhas: minhas.filter((m) => verDominio || m.tipo !== TIPO_OCULTO).map((m) => ({ id: m.id, adicional_id: m.adicional_id, nome: m.nome, tipo: m.tipo, quantidade: m.quantidade,
         valor: Number(m.valor), vence_em: m.vence_em, vigente: new Date(m.vence_em).getTime() >= agora })),
     });
   } catch (err) {
@@ -358,7 +375,7 @@ exports.adicionaisEmpresa = async (req, res) => {
 
 exports.criarCobranca = async (req, res) => {
   try {
-    const { erro, item } = await resolverItem(req.body || {}, req.empresa_id);
+    const { erro, item } = await resolverItem(req.body || {}, req.empresa_id, { podeDominio: await podeVerDominio(req) });
     if (erro) return res.status(erro.status).json({ message: erro.message });
 
     const cfg = await getPlataformaMp();
@@ -767,3 +784,4 @@ exports.salvarPlataformaConfig = async (req, res) => {
 
 exports.motivoIndisponivel = motivoIndisponivel;
 exports.resolverItem = resolverItem;
+exports.ocultarDominioDoPlano = ocultarDominioDoPlano;

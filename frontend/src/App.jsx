@@ -141,7 +141,7 @@ function App() {
       <Route path="/admin/:empresaSlug/logs" element={<RotaDono><Logs /></RotaDono>} />
       <Route path="/admin/:empresaSlug/leads" element={<RotaPrivada><Leads /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/importar-clientes" element={<RotaPrivada><ImportarClientes /></RotaPrivada>} />
-      <Route path="/admin/:empresaSlug/dominio" element={<RotaPrivada><DominioProprio /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/dominio" element={<RotaDono><DominioProprio /></RotaDono>} />
       <Route path="/admin/:empresaSlug/integracoes" element={<RotaPrivada><Integracoes /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/integracoes/sgp" element={<RotaPrivada><IntegracaoSgp /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/integracoes/mercado-pago" element={<RotaPrivada><IntegracaoMercadoPago /></RotaPrivada>} />

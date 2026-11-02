@@ -108,7 +108,8 @@ test('hostPortal: em dominio proprio login/registro do painel dao 404; na plataf
 test('rotas /api/dominio exigem o recurso; hotspot-login e walled garden usam o dominio da empresa', () => {
   const fs = require('node:fs');
   const server = fs.readFileSync(require.resolve('../../server.js'), 'utf8');
-  assert.match(server, /exigeRecurso\('dominio'\), require\("\.\/src\/routes\/dominioRoutes"\)/);
+  // dominio proprio oculto das empresas por enquanto: so o dono da plataforma usa a API
+  assert.match(server, /app\.use\("\/api\/dominio", auth, tenant, exigeAssinatura, require\('\.\/src\/middleware\/exigeDonoPlataforma'\), require\("\.\/src\/routes\/dominioRoutes"\)\)/);
   assert.match(server, /portalHostDaEmpresa\(mikrotik\?\.empresa_id\)/);
   const setup = fs.readFileSync(require.resolve('../../src/utils/hotspotSetup.js'), 'utf8');
   assert.match(setup, /dominiosLiberados = \[\.\.\.new Set\(\[systemDomain, portalHost\]/);
