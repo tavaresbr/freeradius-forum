@@ -9,6 +9,7 @@ const np = require("../controllers/naoPerturbeController");
 const mt = require("../controllers/manutencoesController");
 const atec = require("../controllers/alertasTecnicosController");
 const indic = require("../controllers/indicacoesController");
+const grp = require("../controllers/atendimentoGruposController");
 const { sugestaoIaLimiter, atendimentoEnvioLimiter, novaConversaLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -62,6 +63,11 @@ router.post("/aviso-expiracao/teste", atendimentoEnvioLimiter, au.testarAviso);
 
 // Fase 3: notas, etiquetas, respostas rapidas, painel do cliente, nova conversa
 router.get("/contatos", contatos.listarContatos);
+router.get("/grupos/origens", grp.origens);
+router.get("/grupos", grp.listar);
+router.get("/grupos/:jid/previa", grp.previa);
+router.get("/grupos/:jid/membros/export", grp.exportar);
+router.post("/grupos/:jid/importar", novaConversaLimiter, grp.importar);
 router.post("/conversas", novaConversaLimiter, x.novaConversa);
 router.post("/conversas/:id/notas", x.criarNota);
 router.put("/conversas/:id/etiquetas", x.definirEtiquetasDaConversa);

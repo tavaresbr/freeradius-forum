@@ -17,6 +17,8 @@ export default function Contatos({ headers }) {
   const [pagina, setPagina] = useState(1);
   const [dados, setDados] = useState({ contatos: [], tem_mais: false });
   const [etiquetas, setEtiquetas] = useState([]);
+  const [grupo, setGrupo] = useState("");
+  const [grupos, setGrupos] = useState([]);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [modal, setModal] = useState(false);
@@ -24,6 +26,7 @@ export default function Contatos({ headers }) {
   useEffect(() => { const t = setTimeout(() => { setBusca(q); setPagina(1); }, 500); return () => clearTimeout(t); }, [q]);
 
   const carregarEtiquetas = useCallback(async () => {
+    try { const r = await fetch("/api/atendimento/grupos/origens", { headers }); if (r.ok) setGrupos((await r.json()).grupos || []); } catch { /* sem grupos */ }
     try { const r = await fetch("/api/atendimento/etiquetas", { headers }); if (r.ok) setEtiquetas((await r.json()).etiquetas || []); } catch { /* sem etiquetas */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -35,6 +38,7 @@ export default function Contatos({ headers }) {
     if (busca) p.set("q", busca);
     if (origem) p.set("origem", origem);
     if (etiqueta) p.set("etiqueta", etiqueta);
+    if (grupo) p.set("grupo", grupo);
     if (soOptout) p.set("optout", "1");
     try {
       const r = await fetch(`/api/atendimento/contatos?${p}`, { headers });
@@ -44,7 +48,7 @@ export default function Contatos({ headers }) {
     } catch { setErro("Erro de conexão"); }
     finally { setCarregando(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagina, busca, origem, etiqueta, soOptout]);
+  }, [pagina, busca, origem, etiqueta, grupo, soOptout]);
   useEffect(() => { carregar(); }, [carregar]);
 
   const conversar = async (c) => {
@@ -76,6 +80,12 @@ export default function Contatos({ headers }) {
           <option value="conversas">Com conversa</option>
           <option value="sem_conversa">Só cadastro (sem conversa)</option>
         </select>
+        {grupos.length > 0 && (
+          <select value={grupo} onChange={(e) => { setGrupo(e.target.value); setPagina(1); }} className={inputCls} aria-label="Origem: grupo">
+            <option value="">Origem: todos</option>
+            {grupos.map((g) => <option key={g.jid} value={g.jid}>Grupo: {g.nome} ({g.total})</option>)}
+          </select>
+        )}
         {etiquetas.length > 0 && (
           <select value={etiqueta} onChange={(e) => { setEtiqueta(e.target.value); setPagina(1); }} className={inputCls} aria-label="Etiqueta">
             <option value="">Todas as etiquetas</option>
