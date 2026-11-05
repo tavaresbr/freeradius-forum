@@ -66,15 +66,14 @@ async function salvarContextoPortal(portalCtx, { mikrotikId, empresaId }) {
     if (!macKey || !mikrotikId) return;
 
     // Intelbras: a volta da campanha chega sem os dados do AP (redirect_uri/user_hash) e
-    // NAO pode sobrescrever o contexto completo do 1o redirect (o login final ficaria sem ele).
-    if (portalCtx.vendor === "intelbras" && contextoIncompleto(portalCtx)) {
-      await db.query(
-        `INSERT INTO portal_contexts (mikrotik_id, empresa_id, mac, vendor, contexto)
-         VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE atualizado_em = atualizado_em`,
-        [mikrotikId, empresaId || null, macKey, "intelbras", JSON.stringify(portalCtx)]
-      );
-      return;
+    // NAO pode apagar o contexto completo do 1o redirect. Contexto incompleto nao serve ao
+    // login final, entao simplesmente nao e gravado.
+    if (portalCtx.vendor === "intelbras") {
+      if (contextoIncompleto(portalCtx)) {
+        console.log(`[portal_ctx] intelbras incompleto ignorado mikrotik=${mikrotikId} mac=${macKey}`);
+        return;
+      }
+      console.log(`[portal_ctx] intelbras completo salvo mikrotik=${mikrotikId} mac=${macKey}`);
     }
 
     await db.query(
