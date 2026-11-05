@@ -35,13 +35,19 @@ export default function SuporteModal({ onFechar }) {
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input type="checkbox" checked={cfg.ativo} onChange={(e) => setCfg({ ...cfg, ativo: e.target.checked })} /> Mostrar o balão no painel das empresas
             </label>
+            <label className="block text-sm text-gray-300">Ao clicar no balão
+              <select value={cfg.modo} onChange={(e) => setCfg({ ...cfg, modo: e.target.value })} className={`${campo} mt-1`}>
+                <option value="chat">Abrir um chat dentro do sistema (cai em WhatsApp &gt; Conversas)</option>
+                <option value="whatsapp">Abrir o WhatsApp externo da equipe</option>
+              </select>
+            </label>
             <label className="block text-sm text-gray-300">WhatsApp do suporte (DDD + número)
               <input value={cfg.telefone} onChange={(e) => setCfg({ ...cfg, telefone: e.target.value })} placeholder={conectado ? `Vazio = o conectado no chat (${conectado})` : "Vazio = o conectado no chat"} className={`${campo} mt-1`} />
             </label>
             <label className="block text-sm text-gray-300">Saudação
               <textarea rows={3} maxLength={300} value={cfg.mensagem} onChange={(e) => setCfg({ ...cfg, mensagem: e.target.value })} className={`${campo} mt-1`} />
             </label>
-            {!cfg.telefone && !conectado && <p className="text-xs text-yellow-500">Nenhum número disponível: conecte o WhatsApp da plataforma ou informe um número, senão o balão não aparece.</p>}
+            {cfg.modo === "whatsapp" && !cfg.telefone && !conectado && <p className="text-xs text-yellow-500">Nenhum número disponível: conecte o WhatsApp da plataforma ou informe um número, senão o balão não aparece.</p>}
           </>
         )}
         {msg && <p role="alert" className={`text-sm ${msg.tipo === "ok" ? "text-green-400" : "text-red-400"}`}>{msg.texto}</p>}
