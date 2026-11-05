@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import useTabelasMobile from "../../hooks/useTabelasMobile";
 import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import SuporteBalao from "./SuporteBalao";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
 import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
@@ -524,6 +525,7 @@ export default function AdminLayout({ children }) {
           {recursoBloqueado ? <RecursoBloqueado titulo={recursoBloqueado} basePath={basePath} /> : children}
         </main>
       </div>
+      <SuporteBalao empresaNome={user?.empresa_nome || slug} />
     </div>
   );
 }

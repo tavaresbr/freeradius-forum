@@ -122,6 +122,8 @@ app.use('/uploads/campanhas',
 // --- Rate limiting nos endpoints publicos sensiveis (antes dos mounts) ---
 app.use('/api/admin/login', loginLimiter, loginPorContaLimiter)         // login admin (routes/admin.js)
 app.use('/api/auth/login', loginLimiter, loginPorContaLimiter)          // login admin (authRoutes)
+app.use('/api/suporte', publicApiLimiter)
+app.get('/api/suporte', require('./src/controllers/suporteController').publico)   // balao de suporte (so dados de exibicao)
 app.use('/api/auth/temp', publicApiLimiter)       // acesso temporario
 app.use('/api/login-portal/auth', publicApiLimiter)   // login portal wifi (muitos clientes por IP do estabelecimento)
 app.use('/api/site', sitePedidoLimiter)         // pedido de contratacao do site
