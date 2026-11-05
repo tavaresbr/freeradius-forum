@@ -32,7 +32,27 @@ export function redirecionarHotspot(gateway, username, password, delayMs = 0, ga
     // --- Grandstream: GET no login_url do gateway GWN (External RADIUS) ---
     // O RADIUS ja foi provisionado no backend; aqui o navegador so faz o
     // "login final" no proprio gateway, que valida no nosso FreeRADIUS.
-    if (tipo === "grandstream" || tipo === "intelbras") {
+    // --- Intelbras Zeus OS: o navegador volta ao redirect_uri do AP com usuario/senha ---
+    // (spec Captive Portal Externo v2.0). O AP valida no nosso FreeRADIUS e depois
+    // redireciona ao `continue`. POST de form: a senha nao fica na URL/historico.
+    if (tipo === "intelbras") {
+      if (gatewayInfo?.ok === false) {
+        console.error("Liberacao no gateway falhou:", gatewayInfo?.erro);
+      }
+      const login = gatewayInfo?.intelbras;
+      if (login?.url && /^https?:\/\//i.test(login.url) && username) {
+        submeterFormBrowserauth(
+          { url: login.url, fields: { continue: login.continue, user_hash: login.user_hash } },
+          username,
+          password || username
+        );
+      } else {
+        window.location.href = urlSegura(gatewayInfo?.redirect_url, "http://neverssl.com");
+      }
+      return;
+    }
+
+    if (tipo === "grandstream") {
       if (gatewayInfo?.ok === false) {
         console.error("Liberacao no gateway falhou:", gatewayInfo?.erro);
       }

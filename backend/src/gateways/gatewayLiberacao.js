@@ -36,6 +36,7 @@
 const db = require("../../db");
 const { getDriver } = require("./index");
 const { urlHttpSegura, hostPermitidoGateway } = require("../utils/entradaSegura");
+const { montarLoginIntelbras } = require("./intelbrasLogin");
 
 const CONTEXTO_TTL_HORAS = 48;
 
@@ -241,22 +242,45 @@ async function montarGatewayInfo({ mikrotik_id, empresa_id, mac, username, durac
     const ctx = await carregarContextoPortal(mikrotik_id, mac);
     const redirectUrl = urlHttpSegura(ctx?.redirectUrl || ctx?.raw?.redirectUrl || ctx?.raw?.originUrl || "") || null;
 
-    if (gw.tipo === "grandstream" || gw.tipo === "intelbras") {
-      // External Web Portal + External RADIUS: o RADIUS ja foi provisionado por
-      // liberarUsuario; o "login final" e' um GET no login_url do gateway GWN/AP
-      // Intelbras (o navegador do cliente faz o redirect — hotspotRedirect.js).
-      // TODO(hardware): Intelbras assume os mesmos nomes de parametro do GWN.
+    if (gw.tipo === "intelbras") {
+      // Zeus OS (spec Captive Portal Externo v2.0): o RADIUS ja foi provisionado por
+      // liberarUsuario; o NAVEGADOR volta ao redirect_uri do AP com username, password,
+      // user_hash e continue, e o AP valida no nosso FreeRADIUS (hotspotRedirect.js).
       const saldo = await saldoSegundos(username);
       if (saldo === 0 && !duracaoSegundos) {
         return {
-          tipo: gw.tipo,
+          tipo: "intelbras",
+          ok: false,
+          erro: "Seu plano expirou ou seu limite de tempo foi atingido.",
+          redirect_url: redirectUrl,
+        };
+      }
+      const login = montarLoginIntelbras(ctx, gw);
+      return {
+        tipo: "intelbras",
+        ok: !!login,
+        intelbras: login,
+        redirect_url: redirectUrl || login?.continue || "http://neverssl.com",
+        erro: login ? undefined
+          : "Contexto do portal Intelbras nao encontrado (redirect sem redirect_uri/user_hash). Reconecte ao Wi-Fi.",
+      };
+    }
+
+    if (gw.tipo === "grandstream") {
+      // External Web Portal + External RADIUS: o RADIUS ja foi provisionado por
+      // liberarUsuario; o "login final" e' um GET no login_url do gateway GWN
+      // (o navegador do cliente faz o redirect — hotspotRedirect.js).
+      const saldo = await saldoSegundos(username);
+      if (saldo === 0 && !duracaoSegundos) {
+        return {
+          tipo: "grandstream",
           ok: false,
           erro: "Seu plano expirou ou seu limite de tempo foi atingido.",
           redirect_url: redirectUrl,
         };
       }
       return {
-        tipo: gw.tipo,
+        tipo: "grandstream",
         ok: true,
         gwn_login_url: (() => {
           const u = urlHttpSegura(ctx?.raw?.login_url || ctx?.raw?.loginUrl || "");

@@ -33,16 +33,34 @@ function detectPortalVendor(query = {}, opts = {}) {
   // manda apMac (doc 13080/13025).
   let vendor = opts.tipo || null;
   if (!vendor) {
-    if (q.login_url && (q.client_mac || q.ap_mac)) vendor = "grandstream";
+    if (q.redirect_uri && q.user_hash && q.ap_mac) vendor = "intelbras";
+    else if (q.login_url && (q.client_mac || q.ap_mac)) vendor = "grandstream";
     else if (q.clientMac || q.clientmac || q.gatewayMac || q.GatewayMac) vendor = "omada";
     else if (q.id && (q.ap || q.ssid)) vendor = "unifi";
     else vendor = "mikrotik";
   }
 
-  // Intelbras usa o mesmo formato de query do GWN (TODO(hardware): confirmar no AP).
-  if (vendor === "grandstream" || vendor === "intelbras") {
+  // Intelbras Zeus OS (spec "Captive Portal Externo v2.0", validado num AP 1350 AC-S):
+  // mac = cliente, ap_mac = AP, `ip` = IP do AP (NAO do cliente, entao nao vira ip do cliente),
+  // continue = URL original, redirect_uri = login do AP, user_hash = id do pedido.
+  if (vendor === "intelbras") {
     return {
-      vendor,
+      vendor: "intelbras",
+      mac: q.mac || null,
+      ip: null,
+      apIp: q.ip || null,
+      apMac: q.ap_mac || null,
+      ssid: q.ssid || null,
+      radioId: q.radio || null,
+      site: null,
+      redirectUrl: q.continue || null,
+      raw: q, // preserva redirect_uri/user_hash/ts/continue pro login final
+    };
+  }
+
+  if (vendor === "grandstream") {
+    return {
+      vendor: "grandstream",
       mac: q.client_mac || q.clientMac || q.mac || null,
       ip: q.client_ip || q.clientIp || q.ip || null,
       apMac: q.ap_mac || q.apMac || null,
