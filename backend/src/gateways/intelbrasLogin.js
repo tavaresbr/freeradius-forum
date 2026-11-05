@@ -68,4 +68,23 @@ function contextoIncompleto(ctx) {
   return !(raw.redirect_uri && raw.user_hash);
 }
 
-module.exports = { contextoIncompleto, loginUrlIntelbras, continuarUrl, montarLoginIntelbras, HOST_CAPTIVE_INTELBRAS };
+// Parametros do pedido do AP que precisam sobreviver a ida e volta da campanha pre-portal.
+const PARAMS_AP = ["continue", "auth_service", "ap_mac", "radio", "ssid", "ts", "redirect_uri", "user_hash"];
+
+/**
+ * Separa da query do AP so os parametros do pedido (strings curtas). Na ida para a campanha eles
+ * vao na URL e o player os devolve (preserva a query inteira), entao a 2a visita ao
+ * /hotspot/redirect chega COMPLETA e nao depende da ordem de gravacao no banco.
+ * Os valores so sao usados depois de validados (montarLoginIntelbras: host/porta/caminho do AP).
+ */
+function paramsDoAp(query) {
+  const out = {};
+  const q = query || {};
+  for (const k of PARAMS_AP) {
+    const v = q[k];
+    if (typeof v === "string" && v && v.length <= 512) out[k] = v;
+  }
+  return out;
+}
+
+module.exports = { paramsDoAp, contextoIncompleto, loginUrlIntelbras, continuarUrl, montarLoginIntelbras, HOST_CAPTIVE_INTELBRAS };

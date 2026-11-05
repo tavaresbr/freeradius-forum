@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const IntelbrasDriver = require('../../src/gateways/IntelbrasDriver');
 const { detectPortalVendor } = require('../../src/utils/portalVendor');
-const { montarLoginIntelbras, continuarUrl, contextoIncompleto } = require('../../src/gateways/intelbrasLogin');
+const { montarLoginIntelbras, continuarUrl, contextoIncompleto, paramsDoAp } = require('../../src/gateways/intelbrasLogin');
 const { calcularTrilha } = require('../../src/utils/trilhaAtivacao');
 
 test('IntelbrasDriver: teste de conexao ok, sem desconexao ativa nem sessoes', async () => {
@@ -96,4 +96,18 @@ test('intelbrasLogin: volta da campanha (sem redirect_uri/user_hash) e contexto 
   const volta = detectPortalVendor({ mac: 'D6:B2:48:79:F0:FA', ip: '', mikrotik_id: '29', empresa_id: '1', campanha_vista: '1' }, { tipo: 'intelbras' });
   assert.equal(contextoIncompleto(volta), true);
   assert.equal(contextoIncompleto(null), true);
+});
+
+test('intelbrasLogin: parametros do AP sobrevivem a campanha e a volta chega completa', () => {
+  const extras = paramsDoAp({ ...QUERY_AP, ip: '10.0.0.1', outro: 'x', lixo: ['a', 'b'] });
+  assert.equal(extras.redirect_uri, QUERY_AP.redirect_uri);
+  assert.equal(extras.user_hash, QUERY_AP.user_hash);
+  assert.equal(extras.outro, undefined);
+  assert.equal(extras.ip, undefined);
+  // volta da campanha: o player preserva a query e acrescenta campanha_vista
+  const volta = detectPortalVendor({ ...extras, mac: QUERY_AP.mac, ip: '', mikrotik_id: '29', campanha_vista: '1' }, { tipo: 'intelbras' });
+  assert.equal(contextoIncompleto(volta), false);
+  assert.ok(montarLoginIntelbras(volta, { ip: '10.8.0.16' }));
+  assert.deepEqual(paramsDoAp(null), {});
+  assert.equal(paramsDoAp({ user_hash: 'x'.repeat(600) }).user_hash, undefined);
 });
