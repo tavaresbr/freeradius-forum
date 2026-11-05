@@ -57,4 +57,15 @@ function montarLoginIntelbras(ctx, gw = {}) {
   return { url, user_hash: userHash, continue: continuarUrl(raw.continue) };
 }
 
-module.exports = { loginUrlIntelbras, continuarUrl, montarLoginIntelbras, HOST_CAPTIVE_INTELBRAS };
+/**
+ * Contexto Intelbras SEM os dados do pedido do AP (redirect_uri + user_hash).
+ * Acontece na volta da campanha pre-portal: o player devolve o cliente ao
+ * /hotspot/redirect so com mac/mikrotik_id/empresa_id/campanha_vista, sem os
+ * parametros do AP. Esse contexto nao pode apagar o completo ja salvo.
+ */
+function contextoIncompleto(ctx) {
+  const raw = ctx?.raw || {};
+  return !(raw.redirect_uri && raw.user_hash);
+}
+
+module.exports = { contextoIncompleto, loginUrlIntelbras, continuarUrl, montarLoginIntelbras, HOST_CAPTIVE_INTELBRAS };

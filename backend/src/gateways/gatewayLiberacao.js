@@ -36,7 +36,7 @@
 const db = require("../../db");
 const { getDriver } = require("./index");
 const { urlHttpSegura, hostPermitidoGateway } = require("../utils/entradaSegura");
-const { montarLoginIntelbras } = require("./intelbrasLogin");
+const { montarLoginIntelbras, contextoIncompleto } = require("./intelbrasLogin");
 
 const CONTEXTO_TTL_HORAS = 48;
 
@@ -64,6 +64,18 @@ async function salvarContextoPortal(portalCtx, { mikrotikId, empresaId }) {
   try {
     const macKey = normalizeMac(portalCtx?.mac);
     if (!macKey || !mikrotikId) return;
+
+    // Intelbras: a volta da campanha chega sem os dados do AP (redirect_uri/user_hash) e
+    // NAO pode sobrescrever o contexto completo do 1o redirect (o login final ficaria sem ele).
+    if (portalCtx.vendor === "intelbras" && contextoIncompleto(portalCtx)) {
+      await db.query(
+        `INSERT INTO portal_contexts (mikrotik_id, empresa_id, mac, vendor, contexto)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE atualizado_em = atualizado_em`,
+        [mikrotikId, empresaId || null, macKey, "intelbras", JSON.stringify(portalCtx)]
+      );
+      return;
+    }
 
     await db.query(
       `INSERT INTO portal_contexts (mikrotik_id, empresa_id, mac, vendor, contexto)

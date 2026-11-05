@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const IntelbrasDriver = require('../../src/gateways/IntelbrasDriver');
 const { detectPortalVendor } = require('../../src/utils/portalVendor');
-const { montarLoginIntelbras, continuarUrl } = require('../../src/gateways/intelbrasLogin');
+const { montarLoginIntelbras, continuarUrl, contextoIncompleto } = require('../../src/gateways/intelbrasLogin');
 const { calcularTrilha } = require('../../src/utils/trilhaAtivacao');
 
 test('IntelbrasDriver: teste de conexao ok, sem desconexao ativa nem sessoes', async () => {
@@ -88,4 +88,12 @@ test('trilha: intelbras usa RADIUS e aponta o tutorial na etapa de hotspot', () 
   const radius = t.etapas.find((e) => e.chave === 'radius');
   assert.notEqual(radius.estado, 'na');
   assert.ok(JSON.stringify(t).includes('tutorial-intelbras'));
+});
+
+test('intelbrasLogin: volta da campanha (sem redirect_uri/user_hash) e contexto incompleto', () => {
+  const completo = detectPortalVendor(QUERY_AP, { tipo: 'intelbras' });
+  assert.equal(contextoIncompleto(completo), false);
+  const volta = detectPortalVendor({ mac: 'D6:B2:48:79:F0:FA', ip: '', mikrotik_id: '29', empresa_id: '1', campanha_vista: '1' }, { tipo: 'intelbras' });
+  assert.equal(contextoIncompleto(volta), true);
+  assert.equal(contextoIncompleto(null), true);
 });
