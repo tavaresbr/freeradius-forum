@@ -365,6 +365,19 @@ async function garantirWebhook(empresaId) {
  * `especial` = envio por outro endpoint da Evolution (sendLocation, sendContact); `texto` e' o que fica gravado.
  */
 async function enviarMensagem(empresaId, adminId, conversa, { tipo = "texto", texto = "", midia = null, citada = null, especial = null, automatica = false } = {}) {
+  // Chat do painel (balao de suporte): a resposta fica so dentro do sistema, nada vai a Evolution.
+  if (require("../utils/suporte").ehChatPainel(conversa.jid)) {
+    if (midia || especial || tipo !== "texto") throw Object.assign(new Error("O chat do painel aceita só texto."), { status: 400 });
+    const [ins] = await db.query(
+      `INSERT INTO whatsapp_mensagens (empresa_id, conversa_id, wa_id, direcao, tipo, texto, status, admin_id) VALUES (?, ?, ?, 'out', 'texto', ?, 'enviada', ?)`,
+      [empresaId, conversa.id, `painel_${crypto.randomUUID()}`, texto || null, adminId || null]
+    );
+    await db.query(
+      `UPDATE whatsapp_conversas SET ultima_msg_em = NOW(), ultima_msg_previa = ?, nao_lidas = ${automatica ? "nao_lidas" : "0"} WHERE id = ? AND empresa_id = ?`,
+      [String(texto || "").replace(/\s+/g, " ").slice(0, 200), conversa.id, empresaId]
+    );
+    return { id: ins.insertId };
+  }
   // Responde SEMPRE pelo numero da conversa (quem chamou pode ter carregado so alguns campos da conversa).
   const numeroId = conversa.numero_id !== undefined ? Number(conversa.numero_id) || 0 : await numeroDaConversa(empresaId, conversa.id);
   let evo;

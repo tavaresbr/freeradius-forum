@@ -13,9 +13,9 @@ async function lerConfig() {
     const [[row]] = await db.execute("SELECT config_json FROM plataforma_configs WHERE chave = 'suporte'");
     const c = row ? (typeof row.config_json === "string" ? JSON.parse(row.config_json) : row.config_json) : {};
     const { config } = validarConfig(c || {});
-    return config || { ativo: true, telefone: "", mensagem: MSG_PADRAO };
+    return config || { ativo: true, telefone: "", mensagem: MSG_PADRAO, modo: "chat" };
   } catch {
-    return { ativo: true, telefone: "", mensagem: MSG_PADRAO };
+    return { ativo: true, telefone: "", mensagem: MSG_PADRAO, modo: "chat" };
   }
 }
 
@@ -38,7 +38,9 @@ exports.publico = async (req, res) => {
   try {
     const c = await lerConfig();
     const whatsapp = c.telefone || (await numeroConectado());
-    res.json({ ativo: !!(c.ativo && whatsapp), whatsapp: c.ativo ? whatsapp : null, mensagem: c.mensagem });
+    // Modo chat: abre a conversa dentro do sistema (nao precisa de numero); o WhatsApp externo vira so um atalho opcional.
+    const ativo = c.modo === "chat" ? !!c.ativo : !!(c.ativo && whatsapp);
+    res.json({ ativo, modo: c.modo, whatsapp: c.ativo ? whatsapp : null, mensagem: c.mensagem });
   } catch {
     res.json({ ativo: false });
   }
