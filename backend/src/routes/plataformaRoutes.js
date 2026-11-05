@@ -5,6 +5,7 @@ const exigeDonoPlataforma = require("../middleware/exigeDonoPlataforma");
 const c = require("../controllers/plataformaController");
 const e = require("../controllers/empresaPainelController");
 const bv = require("../controllers/boasVindasController");
+const sup = require("../controllers/suporteController");
 const { promocaoLimiter } = require("../middleware/rateLimiters");
 
 router.get("/eu", auth, c.eu);
@@ -21,6 +22,8 @@ router.post("/empresas/:id/reativar", auth, exigeDonoPlataforma, e.reativar);
 router.post("/empresas/:id/conversa", auth, exigeDonoPlataforma, promocaoLimiter, e.abrirConversa);
 router.post("/empresas/:id/whatsapp", auth, exigeDonoPlataforma, promocaoLimiter, e.enviarWhatsapp);
 router.post("/empresas/:id/boas-vindas", auth, exigeDonoPlataforma, promocaoLimiter, e.reenviarBoasVindas);
+router.get("/suporte", auth, exigeDonoPlataforma, sup.obter);
+router.put("/suporte", auth, exigeDonoPlataforma, sup.salvar);
 router.get("/boas-vindas", auth, exigeDonoPlataforma, bv.obter);
 router.put("/boas-vindas", auth, exigeDonoPlataforma, bv.salvar);
 router.post("/boas-vindas/teste", auth, exigeDonoPlataforma, promocaoLimiter, bv.teste);
