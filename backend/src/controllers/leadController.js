@@ -117,10 +117,11 @@ exports.capturaPassiva = async (req, res) => {
 // Login público para portal Lead (cria RADIUS + retorna gateway)
 exports.leadLogin = async (req, res) => {
   try {
-    const { nome, email, telefone, cpf, mac, ip, mikrotik_id, data_nascimento } = req.body;
+    const { nome, email, telefone, cpf, mac, ip: ipBody, mikrotik_id, data_nascimento } = req.body;
+    const ip = ipBody || null; // IP do cliente e' opcional (ex.: AP Intelbras nao o envia)
 
-    if (!mac || !ip) {
-      return res.status(400).json({ message: "MAC e IP são obrigatórios" });
+    if (!mac) {
+      return res.status(400).json({ message: "MAC é obrigatório" });
     }
     if (cpf && !validarCPF(cpf)) return res.status(400).json({ message: "CPF inválido" });
 
@@ -198,7 +199,7 @@ exports.leadLogin = async (req, res) => {
 
         const saldo = usernameDoLead ? await verificarSaldoRadius(username) : { temSaldo: false };
         if (saldo.temSaldo) {
-          const gatewaySaldo = plano.end_hotspot || ip;
+          const gatewaySaldo = plano.end_hotspot || ip || null;
           return res.json({
             success: true,
             gateway: gatewaySaldo,
@@ -288,7 +289,7 @@ exports.leadLogin = async (req, res) => {
       [empresaId, username, plano.id, plano.mikrotik_id]
     );
 
-    const gateway = plano.end_hotspot || ip;
+    const gateway = plano.end_hotspot || ip || null;
     const loginUrl = gateway ? `http://${gateway}/login?username=${username}&password=${senha}` : "";
 
     // Resolver portal_id Lead da empresa para notificacao WhatsApp

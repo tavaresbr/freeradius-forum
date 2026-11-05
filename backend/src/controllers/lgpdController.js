@@ -15,9 +15,11 @@ const { gerarContatos, FORMATOS: FORMATOS_CONTATOS } = require("../utils/exporta
 
 exports.lgpdLogin = async (req, res) => {
   try {
-    const { cpf, aceite, mac, ip, email, nome, telefone, mikrotik_id, data_nascimento } = req.body;
+    const { cpf, aceite, mac, ip: ipBody, email, nome, telefone, mikrotik_id, data_nascimento } = req.body;
+    // IP do cliente e' opcional: o AP Intelbras, por ex., manda o IP do proprio AP (nao do cliente).
+    const ip = ipBody || null;
 
-    if (aceite === undefined || !mac || !ip) {
+    if (aceite === undefined || !mac) {
       return res.status(400).json({ message: "Dados obrigatórios faltando" });
     }
 
@@ -103,7 +105,7 @@ exports.lgpdLogin = async (req, res) => {
 
         const saldo = verificado ? await verificarSaldoRadius(username) : { temSaldo: false };
         if (saldo.temSaldo) {
-          const gatewaySaldo = plano.end_hotspot || ip;
+          const gatewaySaldo = plano.end_hotspot || ip || null;
           return res.json({
             success: true,
             gateway: gatewaySaldo,
@@ -187,7 +189,7 @@ exports.lgpdLogin = async (req, res) => {
       [empresaId, username, plano.id, plano.mikrotik_id]
     );
 
-    const gateway = plano.end_hotspot || ip;
+    const gateway = plano.end_hotspot || ip || null;
     const loginUrl = gateway ? `http://${gateway}/login?username=${username}&password=${senha}` : "";
 
     // Resolver portal_id LGPD da empresa para notificacao WhatsApp
