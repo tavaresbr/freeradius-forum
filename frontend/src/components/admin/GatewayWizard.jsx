@@ -296,7 +296,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
                   <p className="text-gray-500 font-medium">Configure no controller Omada:</p>
                   <p>• RADIUS Profile → servidor {window.location.hostname} portas 1812 (auth) e 1813 (accounting) com este secret</p>
-                  <p>• SSID → Portal → External Web Portal → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o id aparece na lista após salvar)</p>
+                  <p>• SSID → Portal → External Web Portal → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o ID aparece na coluna ID da lista, depois de salvar)</p>
                   <p>• Pre-Authentication Access → liberar {window.location.hostname}</p>
                   <p className="text-emerald-500/90 pt-1">Nomes dos APs nos relatórios: depois de salvar, use o botão <b>API</b> na lista de equipamentos (opcional — captura de dados via API do controller; o portal continua 100% RADIUS).</p>
                 </div>
@@ -330,7 +330,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
                   <p className="text-gray-500 font-medium">Configure no controller/gateway GWN:</p>
                   <p>• RADIUS → servidor {window.location.hostname} portas 1812 (auth) e 1813 (accounting) com este secret</p>
-                  <p>• SSID → Captive Portal → External Web Portal → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o id aparece na lista após salvar)</p>
+                  <p>• SSID → Captive Portal → External Web Portal → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o ID aparece na coluna ID da lista, depois de salvar)</p>
                   <p>• Walled Garden / Pré-autenticação → liberar {window.location.hostname}</p>
                   <p className="text-rose-400/90 pt-1">Passo a passo com prints: menu Documentação → Tutorial Grandstream.</p>
                 </div>
@@ -347,7 +347,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
                   <p className="text-gray-500 font-medium">Configure na interface web do AP Intelbras:</p>
                   <p>• RADIUS → servidor {window.location.hostname} portas 1812 (auth) e 1813 (accounting) com este secret</p>
-                  <p>• Portal cativo → portal externo → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o id aparece na lista após salvar)</p>
+                  <p>• Portal cativo → portal externo → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o ID aparece na coluna ID da lista, depois de salvar)</p>
                   <p>• Acesso sem autenticação / Walled Garden → liberar {window.location.hostname}</p>
                   <p className="text-teal-400/90 pt-1">Passo a passo: menu Documentação → Tutorial Intelbras.</p>
                 </div>
@@ -386,7 +386,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 <p className="text-xs text-yellow-500/90">Use um admin <b>local</b> do controller — conta cloud Ubiquiti não funciona na API.</p>
                 <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
                   <p className="text-gray-500 font-medium">Configure no controller UniFi:</p>
-                  <p>• Settings → Hotspot → Landing Page → <b>External Portal Server</b> → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o id aparece na lista após salvar)</p>
+                  <p>• Settings → Hotspot → Landing Page → <b>External Portal Server</b> → https://{window.location.hostname}/hotspot/redirect/&lt;id&gt; (o ID aparece na coluna ID da lista, depois de salvar)</p>
                   <p>• Pre-Authorization Access / Walled Garden → liberar {window.location.hostname}</p>
                   <p>• A autorização final é feita por este servidor via API (authorize-guest) — nada a configurar de RADIUS.</p>
                 </div>

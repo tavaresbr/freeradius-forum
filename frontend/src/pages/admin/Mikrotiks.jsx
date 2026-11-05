@@ -614,6 +614,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
         <table className="w-full text-left text-sm">
           <thead className="text-gray-500 border-b border-gray-800">
             <tr>
+              <th className="p-2">ID</th>
               <th className="p-2">Nome</th>
               <th className="p-2">Tipo</th>
               <th className="p-2">IP</th>
@@ -630,6 +631,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               return (
               <React.Fragment key={m.id}>
               <tr className="border-b hover:bg-[#151821]">
+                <td className="p-2 text-gray-400">{m.id}</td>
                 <td className="p-2 font-medium text-white">{m.nome}</td>
                 <td className="p-2">
                   <span className={`text-xs px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
@@ -658,7 +660,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               </tr>
               {trilhaAberta === m.id && (
                 <tr className="border-b">
-                  <td colSpan={7} className="p-3">{renderTrilha(m)}</td>
+                  <td colSpan={8} className="p-3">{renderTrilha(m)}</td>
                 </tr>
               )}
               </React.Fragment>
@@ -683,6 +685,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
                   <span className={`px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
+                  <span>ID: {m.id}</span>
                   <span>{m.ip}</span>
                   {m.portal_nome ? (
                     <span className="px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
