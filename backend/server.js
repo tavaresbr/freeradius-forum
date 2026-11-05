@@ -75,6 +75,7 @@ const somentePrimitivos = require("./src/middleware/somentePrimitivos");
 const { detectPortalVendor } = require("./src/utils/portalVendor");
 const { normalizarId, normalizarMac, normalizarIp, normalizarSlug, normalizarHost, urlHttpSegura, urlPortalSegura } = require("./src/utils/entradaSegura");
 const { salvarContextoPortal } = require("./src/gateways/gatewayLiberacao");
+const { paramsDoAp } = require("./src/gateways/intelbrasLogin");
 
 // Rotas exclusivas do servidor principal (OTA updates) - não existem nos servidores de alunos
 const fs = require('fs');
@@ -604,7 +605,11 @@ app.get("/hotspot/redirect/:mikrotikId", async (req, res) => {
       ? await campanhaAtivaInfo(portal.id)
       : null;
     if (campanhaInfo && !(campanhaInfo.frequencia !== 'sempre' && campanhaJaVista(req.headers.cookie, campanhaInfo.id))) {
+      // Intelbras: leva os parametros do pedido do AP (redirect_uri/user_hash...) na ida e volta da
+      // campanha; sem isso a volta chega sem eles e o login final nao tem como autenticar no AP.
+      const extrasAp = mikrotik.tipo === 'intelbras' ? paramsDoAp(req.query) : {};
       const qs = new URLSearchParams({
+        ...extrasAp,
         mac: mac || '',
         ip: ip || '',
         mikrotik_id: mikrotikId,
