@@ -2,10 +2,11 @@ const { gerarAcessoTemporario } = require("./authTempController");
 const db = require("../../db");
 
 async function gerarAcessoTemporarioHandler(req, res) {
-  const { mac, ip, plano_id, mikrotik_id } = req.body;
+  const { mac, ip: ipBody, plano_id, mikrotik_id } = req.body;
+  const ip = ipBody || null; // opcional (AP Intelbras nao manda o IP do cliente)
 
-  if (!mac || !ip || !plano_id) {
-    return res.status(400).json({ error: "mac, ip e plano_id sao obrigatorios" });
+  if (!mac || !plano_id) {
+    return res.status(400).json({ error: "mac e plano_id sao obrigatorios" });
   }
 
   try {
