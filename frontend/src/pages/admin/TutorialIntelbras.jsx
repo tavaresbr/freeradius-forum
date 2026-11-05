@@ -54,7 +54,7 @@ export default function TutorialIntelbras() {
             <li><b>IP</b>: o IP do AP que enviará os pacotes RADIUS (o IP que o servidor enxerga).</li>
             <li><b>Secret RADIUS</b>: invente uma senha forte; você vai repeti-la no AP.</li>
           </ul>
-          <p>Ao salvar, o sistema cadastra o AP como cliente RADIUS e anota o <b>id</b> do equipamento (aparece na lista).</p>
+          <p>Ao salvar, o sistema cadastra o AP como cliente RADIUS e mostra o <b>ID</b> do equipamento na coluna ID da lista. Use esse número no lugar de <code className="bg-gray-100 dark:bg-slate-700 rounded px-1">&lt;id&gt;</code> na URL do portal, sem os sinais &lt; &gt; e sem usar o IP.</p>
         </Passo>
 
         <Passo numero={2} titulo="No AP: servidor RADIUS">
