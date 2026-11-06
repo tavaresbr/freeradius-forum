@@ -93,7 +93,7 @@ export default function Manutencoes({ headers }) {
             {dados.manutencoes.map((m) => (
               <tr key={m.id} className="border-t border-gray-800 align-top">
                 <td className="py-2">{m.titulo}</td>
-                <td>{m.equipamento_nome || "Todos"}</td>
+                <td className="dado-sensivel">{m.equipamento_nome || "Todos"}</td>
                 <td>{fmt(m.inicio_em)} → {fmt(m.fim_em)}</td>
                 <td>{m.avisar_clientes ? `${m.enviados}/${m.destinatarios} enviados` : "Sem aviso"}</td>
                 <td>{STATUS[m.status] || m.status}</td>

@@ -171,7 +171,7 @@ export default function AlertasTecnicos({ headers }) {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
           <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-5 w-full max-w-md space-y-3">
             <h2 className="text-lg font-semibold text-white">{aviso.tipo === "volta" ? "Avisar que normalizou" : "Avisar clientes agora"}</h2>
-            <p className="text-sm text-gray-300"><b>{aviso.previa.total}</b> cliente(s) {aviso.alerta.equipamento_nome ? `de ${aviso.alerta.equipamento_nome} ` : ""}vão receber o aviso por WhatsApp ({aviso.previa.bloqueados} ficam de fora por pedirem para não receber).</p>
+            <p className="text-sm text-gray-300"><b>{aviso.previa.total}</b> cliente(s) {aviso.alerta.equipamento_nome ? <span className="dado-sensivel">{`de ${aviso.alerta.equipamento_nome} `}</span> : ""}vão receber o aviso por WhatsApp ({aviso.previa.bloqueados} ficam de fora por pedirem para não receber).</p>
             <p className="text-xs text-yellow-300">Só é possível avisar uma vez por alerta.</p>
             <div className="flex gap-2 justify-end">
               <button className={btnSecundario} onClick={() => setAviso(null)}>Cancelar</button>

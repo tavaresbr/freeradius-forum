@@ -123,7 +123,7 @@ const UsuariosRadius = () => {
                     <td className="px-4 py-2"><span className="dado-sensivel">{u.username}</span></td>
                     <td className="px-4 py-2"><span className="dado-sensivel">{u.value}</span></td>
                     <td className="px-4 py-2">{u.plano || '-'}</td>
-                    <td className="px-4 py-2">{u.nas || '-'}</td>
+                    <td className="px-4 py-2"><span className="dado-sensivel">{u.nas || '-'}</span></td>
                     <td className="px-4 py-2">
                       <button onClick={() => handleDeletar(u.username)} className="text-red-600 hover:underline">Excluir</button>
                     </td>
