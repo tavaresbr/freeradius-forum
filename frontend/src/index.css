@@ -229,3 +229,11 @@ html { -webkit-text-size-adjust: 100%; }
   .painel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .painel select, .painel textarea,
   .super-pagina input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .super-pagina select, .super-pagina textarea { font-size: 16px; }
 }
+
+/* Modo privacidade: borra dados sensiveis (IP publico, chaves, e-mail, nomes) para video/print */
+[data-privacidade="on"] .dado-sensivel {
+  filter: blur(7px);
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}

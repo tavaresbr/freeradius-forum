@@ -282,7 +282,7 @@ export default function Wireguard() {
           </div>
           <div className="bg-[#1a1d27] rounded-lg p-5 border border-gray-800">
             <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Endpoint</h3>
-            <p className="text-xl font-bold text-blue-400">{status?.server?.endpoint}</p>
+            <p className="text-xl font-bold text-blue-400 dado-sensivel">{status?.server?.endpoint}</p>
           </div>
           <div className="bg-[#1a1d27] rounded-lg p-5 border border-gray-800">
             <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Server IP / Peers</h3>
@@ -297,7 +297,7 @@ export default function Wireguard() {
           <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Server Public Key</h3>
-            <p className="text-sm font-mono text-gray-300 select-all">{status?.server?.publicKey}</p>
+            <p className="text-sm font-mono text-gray-300 select-all dado-sensivel">{status?.server?.publicKey}</p>
           </div>
         </div>
 
@@ -327,7 +327,7 @@ export default function Wireguard() {
                           <span className={isOnline ? 'text-green-400' : 'text-gray-500'}>{isOnline ? 'Online' : 'Offline'}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-medium text-white">{client.name}</td>
+                      <td className="px-6 py-4 font-medium text-white"><span className="dado-sensivel">{client.name}</span></td>
                       <td className="px-6 py-4 text-gray-400">{client.address}</td>
                       <td className="px-6 py-4">
                         <span className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs rounded border border-blue-800/50">MikroTik</span>
@@ -366,7 +366,7 @@ export default function Wireguard() {
               return (
                 <div key={client.id} className="p-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-white break-words min-w-0">{client.name}</span>
+                    <span className="font-medium text-white break-words min-w-0 dado-sensivel">{client.name}</span>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
                       <span className={`text-sm ${isOnline ? 'text-green-400' : 'text-gray-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
