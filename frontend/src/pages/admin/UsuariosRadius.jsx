@@ -120,8 +120,8 @@ const UsuariosRadius = () => {
               <tbody>
                 {usuarios.map((u, idx) => (
                   <tr key={idx} className="border-t border-gray-800">
-                    <td className="px-4 py-2">{u.username}</td>
-                    <td className="px-4 py-2">{u.value}</td>
+                    <td className="px-4 py-2"><span className="dado-sensivel">{u.username}</span></td>
+                    <td className="px-4 py-2"><span className="dado-sensivel">{u.value}</span></td>
                     <td className="px-4 py-2">{u.plano || '-'}</td>
                     <td className="px-4 py-2">{u.nas || '-'}</td>
                     <td className="px-4 py-2">

@@ -53,7 +53,7 @@ const testarConexao = () => {
           type="text"
           value={form.public_key}
           onChange={(e) => setForm({ ...form, public_key: e.target.value })}
-          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500"
+          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500 dado-sensivel"
         />
       </div>
 
@@ -63,7 +63,7 @@ const testarConexao = () => {
           type="text"
           value={form.access_token}
           onChange={(e) => setForm({ ...form, access_token: e.target.value })}
-          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500"
+          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500 dado-sensivel"
         />
       </div>
 
@@ -73,7 +73,7 @@ const testarConexao = () => {
           type="text"
           value={form.client_id}
           onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500"
+          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500 dado-sensivel"
         />
       </div>
 
@@ -83,7 +83,7 @@ const testarConexao = () => {
           type="text"
           value={form.client_secret}
           onChange={(e) => setForm({ ...form, client_secret: e.target.value })}
-          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500"
+          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500 dado-sensivel"
         />
       </div>
       <div>
@@ -93,7 +93,7 @@ const testarConexao = () => {
           value={form.email_pagador}
           onChange={(e) => setForm({ ...form, email_pagador: e.target.value })}
           placeholder="email@empresa.com"
-          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500"
+          className="w-full p-2 bg-[#0d1117] border border-gray-700 text-white rounded focus:outline-none focus:border-blue-500 dado-sensivel"
         />
         <p className="text-xs text-gray-500 mt-1">Usado quando o cliente não preencher email</p>
       </div>
@@ -110,7 +110,7 @@ const testarConexao = () => {
   <label className="block mb-1 font-medium text-gray-300">Webhook Secret</label>
   <input
     type="text"
-    className="w-full bg-[#0d1117] border border-gray-700 text-white p-2 rounded focus:outline-none focus:border-blue-500"
+    className="w-full bg-[#0d1117] border border-gray-700 text-white p-2 rounded focus:outline-none focus:border-blue-500 dado-sensivel"
     value={form.webhook_secret}
     onChange={(e) => setForm({ ...form, webhook_secret: e.target.value })}
   />

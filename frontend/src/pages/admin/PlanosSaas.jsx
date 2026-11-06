@@ -185,7 +185,7 @@ export default function PlanosSaas() {
           {[["access_token", "Access Token"], ["public_key", "Public Key"], ["webhook_secret", "Segredo do webhook"], ["email_pagador", "E-mail do pagador (fallback)"]].map(([k, r]) => (
             <div key={k}>
               <label className="block text-sm text-gray-400 mb-1">{r}</label>
-              <input className={inputCls} value={cfg[k] || ""} onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })} autoComplete="off" />
+              <input className={`${inputCls} dado-sensivel`} value={cfg[k] || ""} onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })} autoComplete="off" />
             </div>
           ))}
           <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Salvar configuração</button>

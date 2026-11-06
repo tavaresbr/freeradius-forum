@@ -295,9 +295,9 @@ export default function Pagamentos() {
                     <tr key={p.id} className="hover:bg-[#252b3b] transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-white">#{p.id}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-white font-medium">{p.nome_plano}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400">{p.mac || "-"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-400">{p.ip || "-"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400">{p.mp_pagamento_id ?? "-"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400 dado-sensivel">{p.mac || "-"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-400 dado-sensivel">{p.ip || "-"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400 dado-sensivel">{p.mp_pagamento_id ?? "-"}</td>
                       <td className="px-6 py-4 whitespace-nowrap font-semibold text-white">
                         R$ {(p.valor / 100).toFixed(2)}
                       </td>

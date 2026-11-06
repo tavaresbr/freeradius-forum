@@ -74,7 +74,7 @@ export default function ConfiguracaoAsaas() {
           value={form.api_key}
           onChange={(e) => setForm({ ...form, api_key: e.target.value })}
           placeholder="$aact_..."
-          className={campo}
+          className={`${campo} dado-sensivel`}
         />
         <p className="text-xs text-gray-500 mt-1">Asaas › Integrações › Chaves de API.</p>
       </div>

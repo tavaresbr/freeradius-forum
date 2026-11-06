@@ -76,10 +76,10 @@ export default function Auditoria() {
                   {dados.itens.map((l) => (
                     <tr key={l.id} className="text-gray-200 border-b border-gray-800/60">
                       <td className="p-3 whitespace-nowrap">{dataHora(l.criado_em)}</td>
-                      <td className="p-3">{l.usuario || l.email || "—"}</td>
+                      <td className="p-3 dado-sensivel">{l.usuario || l.email || "—"}</td>
                       <td className="p-3">{rotulo(l.acao)}</td>
-                      <td className="p-3 break-words">{[l.entidade_id && `#${l.entidade_id}`, l.detalhes].filter(Boolean).join(" · ") || "—"}</td>
-                      <td className="p-3">{l.ip || "—"}</td>
+                      <td className="p-3 break-words dado-sensivel">{[l.entidade_id && `#${l.entidade_id}`, l.detalhes].filter(Boolean).join(" · ") || "—"}</td>
+                      <td className="p-3 dado-sensivel">{l.ip || "—"}</td>
                     </tr>
                   ))}
                   {dados.itens.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-gray-500">Nenhum registro no período.</td></tr>}

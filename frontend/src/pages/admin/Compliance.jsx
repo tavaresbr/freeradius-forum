@@ -285,8 +285,8 @@ export default function Compliance() {
                   )}
                   {aps.map((ap) => (
                     <tr key={ap.id} className="hover:bg-[#252b3b] transition-colors">
-                      <td className="px-4 py-3 text-gray-300 font-mono text-xs">{ap.mac}</td>
-                      <td className="px-4 py-3 text-gray-300 text-xs">{ap.ultimo_ssid || "-"}</td>
+                      <td className="px-4 py-3 text-gray-300 font-mono text-xs dado-sensivel">{ap.mac}</td>
+                      <td className="px-4 py-3 text-gray-300 text-xs dado-sensivel">{ap.ultimo_ssid || "-"}</td>
                       <td className="px-4 py-3 text-gray-300 text-xs">{formatDateTime(ap.visto_em)}</td>
                       <td className="px-4 py-3">
                         <input
@@ -363,22 +363,22 @@ export default function Compliance() {
                 {!loading &&
                   logs.map((log, i) => (
                     <tr key={i} className="hover:bg-[#252b3b] transition-colors">
-                      <td className="px-4 py-3 text-white font-mono text-xs">{log.username}</td>
-                      <td className="px-4 py-3 text-gray-300 text-xs">{log.cpf || "-"}</td>
-                      <td className="px-4 py-3 text-gray-300 font-mono text-xs">{log.mac}</td>
-                      <td className="px-4 py-3 text-gray-300 font-mono text-xs">{log.ip_atribuido}</td>
+                      <td className="px-4 py-3 text-white font-mono text-xs dado-sensivel">{log.username}</td>
+                      <td className="px-4 py-3 text-gray-300 text-xs dado-sensivel">{log.cpf || "-"}</td>
+                      <td className="px-4 py-3 text-gray-300 font-mono text-xs dado-sensivel">{log.mac}</td>
+                      <td className="px-4 py-3 text-gray-300 font-mono text-xs dado-sensivel">{log.ip_atribuido}</td>
                       <td className="px-4 py-3 text-gray-300 text-xs">
                         {log.equipamento ? (
-                          <span title={log.nas_ip}>{log.equipamento}{log.equipamento_tipo ? ` (${log.equipamento_tipo})` : ""}</span>
+                          <span className="dado-sensivel" title={log.nas_ip}>{log.equipamento}{log.equipamento_tipo ? ` (${log.equipamento_tipo})` : ""}</span>
                         ) : (
-                          <span className="font-mono">{log.nas_ip}</span>
+                          <span className="font-mono dado-sensivel">{log.nas_ip}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {!log.ap_nome && !log.ap_mac && !log.ssid && <span className="text-gray-300">-</span>}
-                        {log.ap_nome && <div className="text-white">{log.ap_nome}</div>}
-                        {log.ap_mac && <div className="font-mono text-gray-500">{log.ap_mac}</div>}
-                        {log.ssid && <div className="text-gray-500">{log.ssid}</div>}
+                        {log.ap_nome && <div className="text-white dado-sensivel">{log.ap_nome}</div>}
+                        {log.ap_mac && <div className="font-mono text-gray-500 dado-sensivel">{log.ap_mac}</div>}
+                        {log.ssid && <div className="text-gray-500 dado-sensivel">{log.ssid}</div>}
                       </td>
                       <td className="px-4 py-3 text-gray-300 text-xs">{formatDateTime(log.inicio_conexao)}</td>
                       <td className="px-4 py-3 text-gray-300 text-xs">{formatDateTime(log.fim_conexao)}</td>

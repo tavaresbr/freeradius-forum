@@ -68,11 +68,11 @@ export default function Sessoes() {
             <tbody>
               {sessoes.map((s, idx) => (
                 <tr key={idx} className="border-t border-gray-800">
-                  <td className="p-3">{s.username}</td>
-                  <td className="p-3">{s.cpf || "-"}</td>
-                  <td className="p-3">{s.mac || "-"}</td>
-                  <td className="p-3">{s.ip || "-"}</td>
-                  <td className="p-3">{s.gateway || "-"}</td>
+                  <td className="p-3 dado-sensivel">{s.username}</td>
+                  <td className="p-3 dado-sensivel">{s.cpf || "-"}</td>
+                  <td className="p-3 dado-sensivel">{s.mac || "-"}</td>
+                  <td className="p-3 dado-sensivel">{s.ip || "-"}</td>
+                  <td className="p-3 dado-sensivel">{s.gateway || "-"}</td>
                   <td className="p-3">{new Date(s.acctstarttime).toLocaleString("pt-BR")}</td>
                   <td className="p-3 font-medium">{formatarRestante(s)}</td>
                 </tr>

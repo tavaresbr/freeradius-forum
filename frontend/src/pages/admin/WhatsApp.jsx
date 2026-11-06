@@ -320,19 +320,19 @@ export default function WhatsApp() {
               {/* Numero */}
               <div className="bg-[#0f111a] rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Numero</p>
-                <p className="font-medium">{status.number || status.owner_jid?.split("@")[0] || "-"}</p>
+                <p className="font-medium dado-sensivel">{status.number || status.owner_jid?.split("@")[0] || "-"}</p>
               </div>
 
               {/* Nome */}
               <div className="bg-[#0f111a] rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Nome do Perfil</p>
-                <p className="font-medium">{status.profile_name || "-"}</p>
+                <p className="font-medium dado-sensivel">{status.profile_name || "-"}</p>
               </div>
 
               {/* Instancia */}
               <div className="bg-[#0f111a] rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Instancia</p>
-                <p className="font-medium font-mono text-sm">{status.instance_name}</p>
+                <p className="font-medium font-mono text-sm dado-sensivel">{status.instance_name}</p>
               </div>
             </div>
 
@@ -441,15 +441,15 @@ export default function WhatsApp() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-[#0f111a] rounded-lg p-3">
               <p className="text-xs text-gray-500">URL da API</p>
-              <p className="text-sm font-mono truncate">{config.api_url || "-"}</p>
+              <p className="text-sm font-mono truncate dado-sensivel">{config.api_url || "-"}</p>
             </div>
             <div className="bg-[#0f111a] rounded-lg p-3">
               <p className="text-xs text-gray-500">API Key</p>
-              <p className="text-sm font-mono truncate">{config.api_key ? "••••••••" + config.api_key.slice(-8) : "-"}</p>
+              <p className="text-sm font-mono truncate dado-sensivel">{config.api_key ? "••••••••" + config.api_key.slice(-8) : "-"}</p>
             </div>
             <div className="bg-[#0f111a] rounded-lg p-3">
               <p className="text-xs text-gray-500">Nome da Instancia</p>
-              <p className="text-sm font-mono">{config.instance_name || "-"}</p>
+              <p className="text-sm font-mono dado-sensivel">{config.instance_name || "-"}</p>
             </div>
           </div>
         ) : (
@@ -461,7 +461,7 @@ export default function WhatsApp() {
                 placeholder="http://localhost:8080"
                 value={config.api_url}
                 onChange={(e) => setConfig(prev => ({ ...prev, api_url: e.target.value }))}
-                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500 dado-sensivel"
               />
             </div>
             <div>
@@ -471,7 +471,7 @@ export default function WhatsApp() {
                 placeholder="Chave da API"
                 value={config.api_key}
                 onChange={(e) => setConfig(prev => ({ ...prev, api_key: e.target.value }))}
-                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500 dado-sensivel"
               />
             </div>
             <div>
@@ -481,7 +481,7 @@ export default function WhatsApp() {
                 placeholder="empresa_1"
                 value={config.instance_name}
                 onChange={(e) => setConfig(prev => ({ ...prev, instance_name: e.target.value }))}
-                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-[#0f111a] border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 focus:ring-1 focus:ring-blue-500 dado-sensivel"
               />
             </div>
             {configSaved && (
@@ -628,7 +628,7 @@ export default function WhatsApp() {
                 <React.Fragment key={log.id}>
                   <tr className="border-t border-gray-800 hover:bg-[#0f111a]">
                     <td className="px-3 py-2 text-gray-300 whitespace-nowrap">{formatDate(log.criado_em)}</td>
-                    <td className="px-3 py-2 text-gray-300 font-mono text-xs">{log.telefone || "-"}</td>
+                    <td className="px-3 py-2 text-gray-300 font-mono text-xs"><span className="dado-sensivel">{log.telefone || "-"}</span></td>
                     <td className="px-3 py-2 text-gray-400 text-xs">{log.portal_nome || "-"}</td>
                     <td className="px-3 py-2 text-gray-400 text-xs">{log.contexto_tipo || "-"}</td>
                     <td className="px-3 py-2">
@@ -658,7 +658,7 @@ export default function WhatsApp() {
                         {log.mensagem && (
                           <div>
                             <div className="text-xs text-gray-400 font-medium mb-1">Mensagem enviada:</div>
-                            <div className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-[#1a1d27] p-2 rounded">{log.mensagem}</div>
+                            <div className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-[#1a1d27] p-2 rounded dado-sensivel">{log.mensagem}</div>
                           </div>
                         )}
                       </td>

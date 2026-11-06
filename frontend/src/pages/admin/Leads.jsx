@@ -627,14 +627,14 @@ export default function Leads({ embutido = false }) {
                         />
                       </td>
                       <td className="px-4 py-3 text-gray-200">
-                        {lead.nome || "-"}
+                        <span className="dado-sensivel">{lead.nome || "-"}</span>
                         {Number(lead.whatsapp_optout) === 1 && (
                           <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-800/50" title="Não recebe promoções por WhatsApp">sem promoções</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-400">{lead.email || "-"}</td>
-                      <td className="px-4 py-3 text-gray-400 hidden md:table-cell whitespace-nowrap">{telefoneLista(lead.telefone)}</td>
-                      <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">{doc(lead)}</td>
+                      <td className="px-4 py-3 text-gray-400 dado-sensivel">{lead.email || "-"}</td>
+                      <td className="px-4 py-3 text-gray-400 hidden md:table-cell whitespace-nowrap dado-sensivel">{telefoneLista(lead.telefone)}</td>
+                      <td className="px-4 py-3 text-gray-400 hidden lg:table-cell dado-sensivel">{doc(lead)}</td>
                       <td className="px-4 py-3 text-gray-400 hidden xl:table-cell">
                         {lead.cidade ? `${lead.cidade}${lead.uf ? `/${lead.uf}` : ""}` : "-"}
                       </td>
