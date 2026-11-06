@@ -150,7 +150,7 @@ export default function VouchersRelatorio({ chamar, token, equipamentos, lotes }
                 {rel.data.map((v) => (
                   <tr key={v.id} className="border-t border-gray-800">
                     <td className="p-3 font-mono tracking-wider text-white">{v.codigo}</td>
-                    <td className="p-3">{v.plano_nome || "-"}<div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div></td>
+                    <td className="p-3">{v.plano_nome || "-"}<div className="text-xs text-gray-500 dado-sensivel">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div></td>
                     <td className="p-3">{v.lote || "-"}</td>
                     <td className="p-3">{fmtDataHora(v.usado_em)}{v.usado_equipamento && <div className="text-xs text-gray-500">{v.usado_equipamento}</div>}</td>
                     <td className="p-3 font-mono text-xs">{v.usado_mac || "-"}{v.usado_ip && <div className="text-gray-500">{v.usado_ip}</div>}</td>
