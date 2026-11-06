@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import SuporteBalao from "./SuporteBalao";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
+import TogglePrivacidade from "../TogglePrivacidade";
 import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
 
 export default function AdminLayout({ children }) {
@@ -299,7 +300,10 @@ export default function AdminLayout({ children }) {
         <div className="p-6 border-b border-apex-100">
           <div className="flex items-center justify-between">
             <MarcaApex className="text-lg" local="painel" empresa={slug} />
-            <ToggleTema className="hidden lg:block text-gray-600" />
+            <div className="hidden lg:flex items-center">
+              <TogglePrivacidade className="text-gray-600" />
+              <ToggleTema className="text-gray-600" />
+            </div>
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-2 rounded-lg hover:bg-apex-50 text-gray-500"
@@ -311,8 +315,8 @@ export default function AdminLayout({ children }) {
           </div>
           {/* Nome do usuário */}
           <div className="mt-2">
-            <p className="text-sm text-apex-900 font-medium truncate">{user?.nome || user?.email}</p>
-            {user?.nome && <p className="text-[11px] text-gray-500 truncate">{user?.email}</p>}
+            <p className="text-sm text-apex-900 font-medium truncate dado-sensivel">{user?.nome || user?.email}</p>
+            {user?.nome && <p className="text-[11px] text-gray-500 truncate dado-sensivel">{user?.email}</p>}
           </div>
           {/* Empresa switcher */}
           <div className="mt-3">
@@ -479,7 +483,10 @@ export default function AdminLayout({ children }) {
               </svg>
             </button>
             <MarcaApex className="text-base" local="painel" empresa={slug} />
-            <ToggleTema className="text-gray-600" />
+            <div className="flex items-center">
+              <TogglePrivacidade className="text-gray-600" />
+              <ToggleTema className="text-gray-600" />
+            </div>
           </div>
         </header>
 
