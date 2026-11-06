@@ -19,13 +19,16 @@ export default function usePrivacidade() {
   useEffect(() => {
     aplicarPrivacidade(ligada);
     const aoMudar = (e) => { if (e.key === CHAVE) setLigada(e.newValue === "on"); };
+    const aoAlternar = () => setLigada(privacidadeSalva());
     window.addEventListener("storage", aoMudar);
-    return () => window.removeEventListener("storage", aoMudar);
+    window.addEventListener("privacidade", aoAlternar);
+    return () => { window.removeEventListener("storage", aoMudar); window.removeEventListener("privacidade", aoAlternar); };
   }, [ligada]);
   const alternar = () => {
     const nova = !ligada;
     try { localStorage.setItem(CHAVE, nova ? "on" : "off"); } catch { /* sem storage */ }
     setLigada(nova);
+    window.dispatchEvent(new Event("privacidade")); // sincroniza os outros usos do hook na mesma aba
   };
   return { ligada, alternar };
 }

@@ -140,8 +140,8 @@ export default function Usuarios() {
             {usuarios.map((a) => (
               <tr key={a.id} className="border-b hover:bg-[#151821]">
                 <td className="p-2">{a.id}</td>
-                <td className="p-2">{a.nome || "—"}</td>
-                <td className="p-2">{a.email}</td>
+                <td className="p-2 dado-sensivel">{a.nome || "—"}</td>
+                <td className="p-2 dado-sensivel">{a.email}</td>
                 <td className="p-2">{rotuloPerfil(a.perfil)}</td>
                 <td className="p-2">{new Date(a.created_at).toLocaleString()}</td>
                 <td className="p-2 flex gap-2">

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Moldura from "../../components/admin/Moldura";
+import usePrivacidade from "../../hooks/usePrivacidade";
 
 export default function LgpdCadastros({ embutido = false }) {
+  const { ligada: privacidade } = usePrivacidade();
   const [registros, setRegistros] = useState([]);
   const [filteredRegistros, setFilteredRegistros] = useState([]);
   const [erro, setErro] = useState("");
@@ -226,7 +228,7 @@ export default function LgpdCadastros({ embutido = false }) {
               <label className="block text-xs text-gray-400">Equipamento
                 <select value={filtros.equipamento} onChange={mudaFiltro("equipamento")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Todos</option>
-                  {opcoes.equipamentos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                  {opcoes.equipamentos.map((e) => <option key={e.id} value={e.id}>{privacidade ? `Equipamento #${e.id}` : e.nome}</option>)}
                 </select>
               </label>
             )}
@@ -247,7 +249,7 @@ export default function LgpdCadastros({ embutido = false }) {
             <label className="block text-xs text-gray-400">Ponto de acesso
               <select value={filtros.ap} onChange={mudaFiltro("ap")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Todos</option>
-                {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac}</option>)}
+                {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{privacidade ? "Ponto de acesso" : (a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac)}</option>)}
               </select>
             </label>
             )}

@@ -468,7 +468,7 @@ export default function SuperDashboard() {
                   return (
                     <tr key={e.id} className="border-b border-gray-800/50 hover:bg-[#252b3b]">
                       <td className="p-4 font-medium text-white">
-                        <Link to={`/super/empresas/${e.id}`} className="hover:text-blue-400 hover:underline">{e.nome}</Link>
+                        <Link to={`/super/empresas/${e.id}`} className="hover:text-blue-400 hover:underline"><span className="dado-sensivel">{e.nome}</span></Link>
                         {(alertas[e.id] || []).map((a) => (
                           <span
                             key={a.tipo}
@@ -479,7 +479,7 @@ export default function SuperDashboard() {
                           </span>
                         ))}
                       </td>
-                      <td className="p-4 text-gray-400">{e.slug}</td>
+                      <td className="p-4 text-gray-400 dado-sensivel">{e.slug}</td>
                       <td className="p-4 text-gray-400">{e.assinatura_plano_nome || "—"}</td>
                       <td className="p-4 text-center">
                         {st ? (

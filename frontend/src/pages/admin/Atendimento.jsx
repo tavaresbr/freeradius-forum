@@ -547,7 +547,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                   className={`w-full text-left px-4 py-3 border-b border-gray-800 hover:bg-[#252b3b] cursor-pointer ${selecionadaId === c.id ? "bg-[#252b3b]" : ""}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-sm truncate ${c.nao_lidas > 0 ? "font-semibold text-white" : "text-gray-200"}`}>{titulo(c)}</span>
+                    <span className={`text-sm truncate ${c.nao_lidas > 0 ? "font-semibold text-white" : "text-gray-200"}`}><span className="dado-sensivel">{titulo(c)}</span></span>
                     <span className="text-xs text-gray-500 shrink-0">{hora(c.ultima_msg_em)}</span>
                   </div>
                   {c.etiquetas?.length > 0 && (
@@ -558,7 +558,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                   {numeros.length > 1 && <p className="text-[11px] text-blue-400 mt-0.5 truncate">📱 {nomeDoNumero(c.numero_id)}</p>}
                   {c.atendente_id && <p className="text-[11px] text-green-500 mt-0.5 truncate">👤 {c.atendente_id === eu ? "Você" : c.atendente_nome || "Atribuída"}</p>}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <span className="text-xs text-gray-400 truncate">{c.ultima_msg_previa || ""}</span>
+                    <span className="text-xs text-gray-400 truncate dado-sensivel">{c.ultima_msg_previa || ""}</span>
                     {c.nao_lidas > 0 && (
                       <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-green-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">{c.nao_lidas}</span>
                     )}
@@ -587,7 +587,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                       </div>
                     ) : (
                       <p className="text-white font-medium truncate">
-                        {conversa ? titulo(conversa) : "..."}
+                        <span className="dado-sensivel">{conversa ? titulo(conversa) : "..."}</span>
                         {conversa?.nota_satisfacao != null && <span className="ml-2 text-xs text-yellow-400" title="Nota de satisfação dada pelo cliente">{conversa.nota_satisfacao}★</span>}
                         {conversa && (
                           <button onClick={() => { setNomeEdit(conversa.nome || ""); setEditandoNome(true); }} className="ml-2 text-xs text-blue-400 hover:text-blue-300 cursor-pointer">editar nome</button>
@@ -596,7 +596,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                     )}
                     {conversa && (
                       <p className="text-xs text-gray-500 truncate">
-                        {formatarTelefone(conversa.telefone) || "Sem número identificado"}
+                        <span className="dado-sensivel">{formatarTelefone(conversa.telefone) || "Sem número identificado"}</span>
                         {conversa.lead_id && <> · <Link to={`/admin/${empresaSlug}/leads`} className="text-blue-400 hover:text-blue-300">cliente cadastrado</Link></>}
                       </p>
                     )}
@@ -663,14 +663,14 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                   {mensagens.map((m) => (
                     <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : m.direcao === "nota" ? "justify-center" : "justify-end"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : m.direcao === "nota" ? "bg-yellow-100 text-yellow-900 border border-yellow-300" : "bg-green-700/80 text-white"}`}>
-                        {m.resposta_previa && <div className="mb-1 px-2 py-1 border-l-2 border-current bg-black/10 rounded text-xs opacity-80 line-clamp-2">{m.resposta_previa}</div>}
+                        {m.resposta_previa && <div className="mb-1 px-2 py-1 border-l-2 border-current bg-black/10 rounded text-xs opacity-80 line-clamp-2 dado-sensivel">{m.resposta_previa}</div>}
                         {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? ` · ${m.autor}` : ""} (o cliente não vê)</p>}
                         {m.tem_midia && m.midia_expirada
                           ? <p className="text-xs italic opacity-70 mb-0.5">Mídia removida pela limpeza automática</p>
                           : m.tem_midia
                           ? <div className="mb-1"><MidiaMensagem mensagem={m} /></div>
                           : m.tipo !== "texto" && !(m.tipo === "outro" && m.texto) && <p className="text-xs opacity-70 mb-0.5">{{ imagem: "📷 Imagem", audio: "🎤 Áudio", video: "🎥 Vídeo", documento: "📄 Documento", outro: "Mensagem não suportada" }[m.tipo]}</p>}
-                        {m.texto}
+                        <span className="dado-sensivel">{m.texto}</span>
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}

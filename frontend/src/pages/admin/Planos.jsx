@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { Send } from "lucide-react";
+import usePrivacidade from "../../hooks/usePrivacidade";
 
 export default function Planos() {
+  const { ligada: privacidade } = usePrivacidade();
   const [planos, setPlanos] = useState([]);
   const [mikrotiks, setMikrotiks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -287,7 +289,7 @@ export default function Planos() {
           <select className="w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500" value={form.mikrotik_id} onChange={(e) => setForm({ ...form, mikrotik_id: e.target.value })}>
             <option value="">Selecione o Mikrotik</option>
             {mikrotiks.map((m) => (
-              <option key={m.id} value={m.id}>{m.nome}</option>
+              <option key={m.id} value={m.id}>{privacidade ? `Equipamento #${m.id}` : m.nome}</option>
             ))}
           </select>
         </div>

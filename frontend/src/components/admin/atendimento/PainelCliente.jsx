@@ -11,7 +11,7 @@ function Linha({ rotulo, children }) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-gray-500">{rotulo}</p>
-      <p className="text-sm text-gray-200 break-words">{children}</p>
+      <p className={`text-sm text-gray-200 break-words ${["Nome","CPF","Telefone","E-mail"].includes(rotulo) ? "dado-sensivel" : ""}`}>{children}</p>
     </div>
   );
 }
@@ -96,8 +96,8 @@ export default function PainelCliente({ dados, carregando, empresaSlug, conversa
               <input value={q} onChange={(e) => buscar(e.target.value)} placeholder="Nome, telefone ou e-mail" className={inputCls} autoFocus />
               {achados.map((c) => (
                 <button key={c.id} onClick={() => vincular(c.id)} className="w-full text-left px-3 py-2 rounded-lg bg-[#0f111a] border border-gray-800 hover:bg-[#252b3b] cursor-pointer">
-                  <span className="block text-sm text-gray-200 truncate">{c.nome}</span>
-                  <span className="block text-xs text-gray-500 truncate">{[c.telefone, c.email].filter(Boolean).join(" · ")}</span>
+                  <span className="block text-sm text-gray-200 truncate dado-sensivel">{c.nome}</span>
+                  <span className="block text-xs text-gray-500 truncate dado-sensivel">{[c.telefone, c.email].filter(Boolean).join(" · ")}</span>
                 </button>
               ))}
               {q.trim().length >= 2 && achados.length === 0 && <p className="text-xs text-gray-500">Nenhum cliente encontrado.</p>}

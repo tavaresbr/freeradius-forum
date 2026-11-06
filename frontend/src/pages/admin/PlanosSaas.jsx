@@ -231,8 +231,8 @@ export default function PlanosSaas() {
             {donos.map((u) => (
               <li key={u.id} className="flex items-center justify-between gap-3 py-2 flex-wrap">
                 <div className="min-w-0">
-                  <p className="text-sm text-white truncate">{u.nome || u.email}</p>
-                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  <p className="text-sm text-white truncate dado-sensivel">{u.nome || u.email}</p>
+                  <p className="text-xs text-gray-500 truncate dado-sensivel">{u.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {u.dono && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-800/30">Dono</span>}

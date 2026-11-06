@@ -117,8 +117,8 @@ export default function NumerosWhatsapp({ headers: base }) {
           return (
             <div key={n.id} className="bg-[#0f111a] rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="min-w-0">
-                <p className="font-medium truncate">{n.nome}</p>
-                <p className="text-xs text-gray-500 font-mono truncate">{n.instance_name}</p>
+                <p className="font-medium truncate dado-sensivel">{n.nome}</p>
+                <p className="text-xs text-gray-500 font-mono truncate dado-sensivel">{n.instance_name}</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-2 text-sm"><span className={`w-2.5 h-2.5 rounded-full ${cor}`} />{rotulo}</span>

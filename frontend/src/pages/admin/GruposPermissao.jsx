@@ -314,8 +314,8 @@ export default function GruposPermissao() {
                 {adminsGrupo.map((a) => (
                   <div key={a.id} className="flex items-center justify-between bg-[#0d1117] rounded-lg px-4 py-3">
                     <div>
-                      <p className="text-white text-sm font-medium">{a.nome || a.email}</p>
-                      <p className="text-gray-500 text-xs">{a.email} · <span className="text-blue-400">{a.role}</span></p>
+                      <p className="text-white text-sm font-medium dado-sensivel">{a.nome || a.email}</p>
+                      <p className="text-gray-500 text-xs dado-sensivel">{a.email} · <span className="text-blue-400">{a.role}</span></p>
                     </div>
                     <button onClick={() => desvincularAdmin(a.id)}
                       className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-xs hover:bg-red-600/30">
