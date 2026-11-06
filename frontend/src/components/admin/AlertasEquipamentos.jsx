@@ -93,7 +93,7 @@ export default function AlertasEquipamentos({ onFechar }) {
               <ul className="space-y-1 text-sm">
                 {equip.map((e) => (
                   <li key={e.id} className="flex flex-wrap justify-between gap-2 text-gray-200">
-                    <span>{e.nome}{e.ip ? ` (${e.ip})` : ""}</span>
+                    <span className="dado-sensivel">{e.nome}{e.ip ? ` (${e.ip})` : ""}</span>
                     <span className={e.verificado_em ? (e.online ? "text-green-400" : "text-red-400") : "text-gray-500"}>
                       {e.verificado_em ? `${e.online ? "Online" : "Sem resposta"} · ${hora(e.verificado_em)}` : "ainda não verificado"}
                     </span>

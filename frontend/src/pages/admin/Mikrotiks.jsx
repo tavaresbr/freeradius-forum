@@ -3,6 +3,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import GatewayWizard from "../../components/admin/GatewayWizard";
 import TrilhaAtivacao, { progresso } from "../../components/admin/TrilhaAtivacao";
 import AlertasEquipamentos from "../../components/admin/AlertasEquipamentos";
+import Sensivel from "../../components/Sensivel";
 
 // Badges por tipo de gateway (default mikrotik pra linhas antigas sem tipo)
 const TIPO_BADGES = {
@@ -576,7 +577,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   const prox = trilhas[m.id].etapas.find((e) => e.estado === "pendente" && e.chave !== "conectividade") || trilhas[m.id].etapas.find((e) => e.estado === "pendente");
                   return (
                     <li key={m.id} className="flex flex-wrap items-center gap-x-2">
-                      <button onClick={() => setTrilhaAberta(m.id)} className="text-blue-400 hover:underline text-left cursor-pointer">{m.nome}</button>
+                      <button onClick={() => setTrilhaAberta(m.id)} className="text-blue-400 hover:underline text-left cursor-pointer"><Sensivel>{m.nome}</Sensivel></button>
                       <span className="text-gray-500">{ok}/{total}</span>
                       {prox && <span className="text-amber-400">Próximo: {prox.titulo}</span>}
                     </li>
@@ -598,7 +599,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
           <ul className="space-y-1 text-sm">
             {resultadoPadroes.map((r) => (
               <li key={`${r.id}-${r.nome}`} className={r.ok ? "text-green-400" : "text-red-400"}>
-                {r.ok ? "✔" : "✖"} {r.nome}: {r.mensagem}
+                {r.ok ? "✔" : "✖"} <Sensivel>{r.nome}: {r.mensagem}</Sensivel>
               </li>
             ))}
           </ul>
@@ -632,11 +633,11 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               <React.Fragment key={m.id}>
               <tr className="border-b hover:bg-[#151821]">
                 <td className="p-2 text-gray-400">{m.id}</td>
-                <td className="p-2 font-medium text-white">{m.nome}</td>
+                <td className="p-2 font-medium text-white"><Sensivel>{m.nome}</Sensivel></td>
                 <td className="p-2">
                   <span className={`text-xs px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
                 </td>
-                <td className="p-2">{m.ip}</td>
+                <td className="p-2"><Sensivel>{m.ip}</Sensivel></td>
                 <td className="p-2">
                   {m.portal_nome ? (
                     <span className="text-xs px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
@@ -674,7 +675,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
             return (
               <div key={m.id} className="bg-[#151821] border border-gray-800 rounded-lg p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-white break-words min-w-0">{m.nome}</span>
+                  <span className="font-medium text-white break-words min-w-0"><Sensivel>{m.nome}</Sensivel></span>
                   {m.status === "loading" ? (
                     <span className="text-gray-500 text-xs shrink-0">Verificando...</span>
                   ) : (
@@ -686,7 +687,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
                   <span className={`px-2 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
                   <span>ID: {m.id}</span>
-                  <span>{m.ip}</span>
+                  <span><Sensivel>{m.ip}</Sensivel></span>
                   {m.portal_nome ? (
                     <span className="px-2 py-0.5 rounded border border-blue-800/50 bg-blue-900/20 text-blue-400">{m.portal_nome}</span>
                   ) : (
@@ -738,7 +739,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">API do Controller — {apiGw.nome}</h3>
+              <h3 className="text-lg font-semibold text-white">API do Controller — <Sensivel>{apiGw.nome}</Sensivel></h3>
               <button onClick={() => setApiGw(null)} className="text-gray-400 hover:text-white cursor-pointer">×</button>
             </div>
 
@@ -750,7 +751,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">URL do controller (https://ip-do-controller)</label>
-                <input className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                <input className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500 dado-sensivel"
                   value={apiForm.controller_url}
                   onChange={(e) => setApiForm({ ...apiForm, controller_url: e.target.value })}
                   placeholder="https://192.168.0.10" />
@@ -758,7 +759,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Admin local (Viewer)</label>
-                  <input className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                  <input className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500 dado-sensivel"
                     value={apiForm.api_user}
                     onChange={(e) => setApiForm({ ...apiForm, api_user: e.target.value })} />
                 </div>
@@ -783,8 +784,8 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   <ul className="mt-2 text-xs text-gray-300 space-y-0.5 max-h-40 overflow-y-auto">
                     {apiMsg.aps.map((ap) => (
                       <li key={ap.mac} className="flex gap-2">
-                        <span className="font-mono text-gray-500">{ap.mac}</span>
-                        <span>{ap.nome || "(sem nome)"}</span>
+                        <span className="font-mono text-gray-500"><Sensivel>{ap.mac}</Sensivel></span>
+                        <span><Sensivel>{ap.nome || "(sem nome)"}</Sensivel></span>
                       </li>
                     ))}
                   </ul>
@@ -929,7 +930,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                     ))}
                   </select>
                   {scanData.addresses?.filter(a => a.interface === wizardConfig.interface).map(a => (
-                    <p key={a.address} className="text-xs text-green-500 mt-1">IP atual: {a.address}</p>
+                    <p key={a.address} className="text-xs text-green-500 mt-1">IP atual: <Sensivel>{a.address}</Sensivel></p>
                   ))}
                 </div>
                 )}
@@ -1060,7 +1061,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                 </div>
                 {scanData.pools?.length > 0 && (
                   <div className="text-xs text-gray-600">
-                    Pools existentes: {scanData.pools.map(p => `${p.name} (${p.ranges})`).join(", ")}
+                    Pools existentes: <Sensivel>{scanData.pools.map(p => `${p.name} (${p.ranges})`).join(", ")}</Sensivel>
                   </div>
                 )}
 
@@ -1082,7 +1083,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   <p>• Walled Garden → domínio do sistema liberado</p>
                   <p>• Login URL → redirect para o portal vinculado</p>
                   {scanData.radius?.length > 0 && (
-                    <p className="text-yellow-500 mt-1">Atenção: RADIUS existente será atualizado ({scanData.radius[0].address})</p>
+                    <p className="text-yellow-500 mt-1">Atenção: RADIUS existente será atualizado (<Sensivel>{scanData.radius[0].address}</Sensivel>)</p>
                   )}
                 </div>
 
@@ -1112,7 +1113,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold text-white">Nome do Wi-Fi{wifi.nome ? ` — ${wifi.nome}` : ""}</h3>
+              <h3 className="text-lg font-semibold text-white">Nome do Wi-Fi{wifi.nome ? <> — <Sensivel>{wifi.nome}</Sensivel></> : ""}</h3>
               <button onClick={() => setWifi(null)} className="text-gray-400 hover:text-white cursor-pointer">×</button>
             </div>
             {wifi.carregando && <p className="text-sm text-gray-400 animate-pulse">Lendo o roteador...</p>}
@@ -1166,7 +1167,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1d27] rounded-xl border border-gray-700 w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold text-white">Diagnóstico do hotspot{diag.nome ? ` — ${diag.nome}` : ""}</h3>
+              <h3 className="text-lg font-semibold text-white">Diagnóstico do hotspot{diag.nome ? <> — <Sensivel>{diag.nome}</Sensivel></> : ""}</h3>
               <button onClick={() => setDiag(null)} className="text-gray-400 hover:text-white cursor-pointer">×</button>
             </div>
             {diag.carregando && <p className="text-sm text-gray-400 animate-pulse">Lendo o roteador (pode levar até 1 minuto em roteador lento)...</p>}
@@ -1184,7 +1185,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                         <span className={c.status === "erro" ? "text-red-400" : c.status === "aviso" ? "text-yellow-400" : "text-green-400"}>{c.status === "erro" ? "✗" : c.status === "aviso" ? "!" : "✓"}</span>
                         <div className="min-w-0 flex-1">
                           <p className="text-white font-medium">{c.titulo}</p>
-                          {c.detalhe && <p className="text-xs text-gray-400 break-words">{c.detalhe}</p>}
+                          {c.detalhe && <p className="text-xs text-gray-400 break-words dado-sensivel">{c.detalhe}</p>}
                           {c.correcao && typeof c.correcao === "string" && <p className="text-xs text-gray-500 mt-1">Como corrigir: {c.correcao}</p>}
                           {c.correcao && typeof c.correcao === "object" && (
                             <button
@@ -1235,7 +1236,7 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                   'text-green-400'
                 }`}>
                   <span className="text-gray-600 select-none shrink-0">{String(i + 1).padStart(2, '0')}</span>
-                  <span>{line}</span>
+                  <span className="dado-sensivel">{line}</span>
                 </div>
               ))}
             </div>

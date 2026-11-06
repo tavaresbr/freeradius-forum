@@ -287,7 +287,7 @@ export default function Wireguard() {
           <div className="bg-[#1a1d27] rounded-lg p-5 border border-gray-800">
             <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Server IP / Peers</h3>
             <p className="text-xl font-bold text-white">
-              {status?.server?.address} <span className="text-sm font-normal text-gray-500 ml-2">{status?.clients?.filter(c => c.latestHandshakeAt).length} / {status?.clients?.length} online</span>
+              <span className="dado-sensivel">{status?.server?.address}</span> <span className="text-sm font-normal text-gray-500 ml-2">{status?.clients?.filter(c => c.latestHandshakeAt).length} / {status?.clients?.length} online</span>
             </p>
           </div>
         </div>
@@ -328,7 +328,7 @@ export default function Wireguard() {
                         </div>
                       </td>
                       <td className="px-6 py-4 font-medium text-white"><span className="dado-sensivel">{client.name}</span></td>
-                      <td className="px-6 py-4 text-gray-400">{client.address}</td>
+                      <td className="px-6 py-4 text-gray-400"><span className="dado-sensivel">{client.address}</span></td>
                       <td className="px-6 py-4">
                         <span className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs rounded border border-blue-800/50">MikroTik</span>
                       </td>
@@ -373,7 +373,7 @@ export default function Wireguard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-                    <span>{client.address}</span>
+                    <span className="dado-sensivel">{client.address}</span>
                     <span className="px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded border border-blue-800/50">MikroTik</span>
                     <span>Handshake: {client.latestHandshakeAt ? new Date(client.latestHandshakeAt).toLocaleString() : '—'}</span>
                   </div>
@@ -479,7 +479,7 @@ export default function Wireguard() {
 
             <div className="bg-[#0d1117] rounded-lg border border-gray-800 overflow-auto min-h-0 flex-1 max-h-[50vh]">
               <pre className="text-xs leading-relaxed text-green-400 font-mono whitespace-pre-wrap break-words p-3">
-                {scriptData}
+                <span className="dado-sensivel">{scriptData}</span>
               </pre>
             </div>
 

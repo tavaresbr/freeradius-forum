@@ -70,7 +70,7 @@ export default function TrilhaAtivacao({ trilha, status, onTestar, onHotspot, on
                   {e.estado === "manual" && <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-600/60 text-amber-400">manual</span>}
                   {e.estado === "na" && <span className="text-[10px] text-gray-600">não se aplica</span>}
                 </div>
-                {e.detalhe && e.estado !== "na" && <p className="text-xs text-gray-500 break-words">{e.detalhe}</p>}
+                {e.detalhe && e.estado !== "na" && <p className="text-xs text-gray-500 break-words"><span className="dado-sensivel">{e.detalhe}</span></p>}
                 {e.chave === "hotspot" && e.estado !== "manual" && onDiagnosticar && (
                   <button onClick={() => onDiagnosticar()} className="mt-1 mr-2 text-xs px-2 py-1 rounded border border-amber-700/60 text-amber-400 hover:bg-amber-900/20 cursor-pointer" title="Confere no roteador login.html, error.html, status.html e o resto do hotspot (só leitura)">
                     Diagnosticar

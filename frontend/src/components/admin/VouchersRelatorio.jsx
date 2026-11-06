@@ -132,7 +132,7 @@ export default function VouchersRelatorio({ chamar, token, equipamentos, lotes }
                     <thead className="text-xs text-gray-500"><tr><th className="text-left py-1">Nome</th><th className="text-right">Usados</th><th className="text-right">Disp.</th><th className="text-right">Canc.</th></tr></thead>
                     <tbody>
                       {linhas.length === 0 && <tr><td colSpan={4} className="py-2 text-gray-500">Sem dados.</td></tr>}
-                      {linhas.map((l) => <tr key={chave(l)} className="border-t border-gray-800"><td className="py-1">{nome(l)}</td><td className="text-right">{l.usados_periodo}</td><td className="text-right">{l.disponiveis}</td><td className="text-right">{l.cancelados}</td></tr>)}
+                      {linhas.map((l) => <tr key={chave(l)} className="border-t border-gray-800"><td className="py-1"><span className="dado-sensivel">{nome(l)}</span></td><td className="text-right">{l.usados_periodo}</td><td className="text-right">{l.disponiveis}</td><td className="text-right">{l.cancelados}</td></tr>)}
                     </tbody>
                   </table>
                 </div>

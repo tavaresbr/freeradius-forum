@@ -236,8 +236,8 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                       className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded border cursor-pointer transition-colors ${form.ip === p.ip ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-gray-700 text-gray-300 hover:border-gray-500"}`}
                     >
                       <span className={`w-2 h-2 rounded-full ${p.online ? "bg-green-500" : "bg-red-500"}`} />
-                      <span className="font-medium">{p.nome}</span>
-                      <span className="text-gray-500">{p.ip}</span>
+                      <span className="font-medium dado-sensivel">{p.nome}</span>
+                      <span className="text-gray-500 dado-sensivel">{p.ip}</span>
                     </button>
                   ))}
                 </div>
@@ -245,7 +245,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
             )}
             <div>
               <label className={labelCls}>Nome</label>
-              <input className={inputCls} value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder={`Ex: ${vendor.nome} Matriz`} />
+              <input className={`${inputCls} dado-sensivel`} value={form.nome} onChange={(e) => set("nome", e.target.value)} placeholder={`Ex: ${vendor.nome} Matriz`} />
             </div>
 
             <div>
@@ -256,7 +256,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 {form.tipo === "grandstream" && "IP do Gateway/Router GWN (origem dos pacotes RADIUS)"}
                 {form.tipo === "intelbras" && "IP do AP Intelbras (origem dos pacotes RADIUS)"}
               </label>
-              <input className={inputCls} value={form.ip} onChange={(e) => set("ip", e.target.value)} placeholder="192.168.1.1" />
+              <input className={`${inputCls} dado-sensivel`} value={form.ip} onChange={(e) => set("ip", e.target.value)} placeholder="192.168.1.1" />
             </div>
 
             {/* MikroTik */}
@@ -265,7 +265,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className={labelCls}>Usuário API</label>
-                    <input className={inputCls} value={form.usuario} onChange={(e) => set("usuario", e.target.value)} />
+                    <input className={`${inputCls} dado-sensivel`} value={form.usuario} onChange={(e) => set("usuario", e.target.value)} />
                   </div>
                   <div className="w-28">
                     <label className={labelCls}>Porta API</label>
@@ -281,7 +281,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                 </p>
                 <div>
                   <label className={labelCls}>Endereço Hotspot (preenchido pelo wizard de Hotspot)</label>
-                  <input className={inputCls} value={form.end_hotspot} onChange={(e) => set("end_hotspot", e.target.value)} placeholder="hotspot.minharede.com" />
+                  <input className={`${inputCls} dado-sensivel`} value={form.end_hotspot} onChange={(e) => set("end_hotspot", e.target.value)} placeholder="hotspot.minharede.com" />
                 </div>
               </>
             )}
@@ -315,7 +315,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <label className={labelCls}>API Key</label>
-                      <input className={inputCls} value={form.gwn_api_key} onChange={(e) => set("gwn_api_key", e.target.value)} />
+                      <input className={`${inputCls} dado-sensivel`} value={form.gwn_api_key} onChange={(e) => set("gwn_api_key", e.target.value)} />
                     </div>
                     <div className="flex-1">
                       <label className={labelCls}>API Secret</label>
@@ -324,7 +324,7 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                   </div>
                   <div className="mt-2">
                     <label className={labelCls}>Network ID</label>
-                    <input className={inputCls} value={form.gwn_network_id} onChange={(e) => set("gwn_network_id", e.target.value)} />
+                    <input className={`${inputCls} dado-sensivel`} value={form.gwn_network_id} onChange={(e) => set("gwn_network_id", e.target.value)} />
                   </div>
                 </div>
                 <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800 text-xs text-gray-400 space-y-1">
@@ -361,18 +361,18 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
                   <label className={labelCls}>
                     Controller URL (host:8443 standalone / host:443 UniFi OS)
                   </label>
-                  <input className={inputCls} value={form.controller_url} onChange={(e) => set("controller_url", e.target.value)}
+                  <input className={`${inputCls} dado-sensivel`} value={form.controller_url} onChange={(e) => set("controller_url", e.target.value)}
                     placeholder="192.168.1.10:8443" />
                 </div>
                 <div>
                   <label className={labelCls}>Site</label>
-                  <input className={inputCls} value={form.controller_site} onChange={(e) => set("controller_site", e.target.value)}
+                  <input className={`${inputCls} dado-sensivel`} value={form.controller_site} onChange={(e) => set("controller_site", e.target.value)}
                     placeholder="default" />
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className={labelCls}>Admin local</label>
-                    <input className={inputCls} value={form.api_user} onChange={(e) => set("api_user", e.target.value)} />
+                    <input className={`${inputCls} dado-sensivel`} value={form.api_user} onChange={(e) => set("api_user", e.target.value)} />
                   </div>
                   <div className="flex-1">
                     <label className={labelCls}>Senha</label>
@@ -421,9 +421,9 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
               <p className="text-gray-500 text-xs font-medium mb-1">Resumo</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                 <span className="text-gray-500">Tipo</span><span className="text-white">{vendor.nome}{(form.tipo === "omada" || form.tipo === "grandstream" || form.tipo === "intelbras") ? " (External RADIUS)" : ""}</span>
-                <span className="text-gray-500">Nome</span><span className="text-white">{form.nome}</span>
-                <span className="text-gray-500">IP</span><span className="text-white">{form.ip}</span>
-                {form.tipo === "unifi" && (<><span className="text-gray-500">Controller</span><span className="text-white break-all">{form.controller_url}</span></>)}
+                <span className="text-gray-500">Nome</span><span className="text-white dado-sensivel">{form.nome}</span>
+                <span className="text-gray-500">IP</span><span className="text-white dado-sensivel">{form.ip}</span>
+                {form.tipo === "unifi" && (<><span className="text-gray-500">Controller</span><span className="text-white break-all dado-sensivel">{form.controller_url}</span></>)}
               </div>
               <p className="text-xs text-gray-500 pt-1">Após salvar, a conexão é testada automaticamente na lista (status Online/Offline).</p>
             </div>
