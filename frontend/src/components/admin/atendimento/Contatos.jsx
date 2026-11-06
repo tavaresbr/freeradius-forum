@@ -105,8 +105,8 @@ export default function Contatos({ headers }) {
             {!carregando && dados.contatos.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-gray-500">Nenhum contato encontrado.</td></tr>}
             {dados.contatos.map((c) => (
               <tr key={`${c.origem}-${c.conversa_id || c.lead_id}`} className="border-b border-gray-800/60">
-                <td className="p-3">{c.nome || "Sem nome"}</td>
-                <td className="p-3 font-mono text-xs">{c.telefone || "-"}</td>
+                <td className="p-3 dado-sensivel">{c.nome || "Sem nome"}</td>
+                <td className="p-3 font-mono text-xs dado-sensivel">{c.telefone || "-"}</td>
                 <td className="p-3">{c.etiquetas.map((e) => <span key={e.id} style={{ backgroundColor: e.cor }} className="inline-block text-xs text-white px-2 py-0.5 rounded-full mr-1">{e.nome}</span>)}</td>
                 <td className="p-3">{fmt(c.atividade)}</td>
                 <td className="p-3">

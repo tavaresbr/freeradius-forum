@@ -228,9 +228,9 @@ export default function EmpresaPainel() {
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div className="min-w-0">
             <Link to="/super" className="text-sm text-gray-500 hover:text-gray-300">← Painel Super Admin</Link>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mt-1 break-words">{empresa.nome}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mt-1 break-words"><span className="dado-sensivel">{empresa.nome}</span></h1>
             <div className="flex flex-wrap items-center gap-2 mt-2 text-sm">
-              <span className="text-gray-500">{empresa.slug}</span>
+              <span className="text-gray-500 dado-sensivel">{empresa.slug}</span>
               {st && <span className={`px-2 py-1 rounded text-xs ${st.classe}`}>{st.rotulo}</span>}
               <span className={`px-2 py-1 rounded text-xs ${empresa.ativo ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>
                 {empresa.ativo ? "Ativa" : "Suspensa"}
@@ -284,10 +284,10 @@ export default function EmpresaPainel() {
             </div>
             <Caixa titulo="Cadastro">
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                <div><dt className="text-gray-500">{empresa.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</dt><dd className="text-gray-200">{empresa.cnpj || empresa.cpf || "—"}</dd></div>
+                <div><dt className="text-gray-500">{empresa.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</dt><dd className="text-gray-200 dado-sensivel">{empresa.cnpj || empresa.cpf || "—"}</dd></div>
                 <div>
                   <dt className="text-gray-500">E-mail</dt>
-                  <dd className="text-gray-200 break-words">{empresa.email || "—"}</dd>
+                  <dd className="text-gray-200 break-words dado-sensivel">{empresa.email || "—"}</dd>
                   {empresa.email && (
                     <button type="button" onClick={() => copiar(empresa.email, "email")} className="mt-2 px-3 py-1 rounded-lg text-xs border border-gray-700 text-gray-300 hover:bg-gray-800">
                       {copiado === "email" ? "Copiado!" : "Copiar"}
@@ -296,7 +296,7 @@ export default function EmpresaPainel() {
                 </div>
                 <div>
                   <dt className="text-gray-500">Telefone</dt>
-                  <dd className="text-gray-200">{empresa.telefone || "—"}</dd>
+                  <dd className="text-gray-200 dado-sensivel">{empresa.telefone || "—"}</dd>
                   {empresa.telefone && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       <button type="button" disabled={ocupado} onClick={abrirChat} className="px-3 py-1 rounded-lg text-xs bg-green-600 text-white hover:bg-green-500 disabled:opacity-50">Conversar no WhatsApp</button>
@@ -558,7 +558,7 @@ export default function EmpresaPainel() {
               <ul className="space-y-3">
                 {notas.map((n) => (
                   <li key={n.id} className="border border-gray-800 rounded-lg p-3 text-sm">
-                    <p className="text-gray-200 whitespace-pre-wrap break-words">{n.texto}</p>
+                    <p className="text-gray-200 whitespace-pre-wrap break-words dado-sensivel">{n.texto}</p>
                     <p className="text-gray-600 text-xs mt-2 flex justify-between gap-3">
                       <span>{n.autor || "—"} · {dataHora(n.criado_em)}</span>
                       <button onClick={() => removerNota(n.id)} className="text-red-400 hover:text-red-300">Remover</button>
@@ -573,7 +573,7 @@ export default function EmpresaPainel() {
                 {historico.map((h) => (
                   <li key={h.id} className="border-l-2 border-gray-700 pl-3 text-sm">
                     <p className="text-gray-200">{ACOES[h.acao] || h.acao}</p>
-                    {h.detalhes && <p className="text-gray-400 break-words">{h.detalhes}</p>}
+                    {h.detalhes && <p className="text-gray-400 break-words dado-sensivel">{h.detalhes}</p>}
                     <p className="text-gray-600 text-xs">{h.autor || "—"} · {dataHora(h.criado_em)}</p>
                   </li>
                 ))}

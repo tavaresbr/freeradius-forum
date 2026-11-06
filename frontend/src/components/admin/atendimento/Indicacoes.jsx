@@ -124,7 +124,7 @@ export default function Indicacoes({ headers }) {
           <ul className="space-y-1">
             {achados.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-2 text-sm text-gray-300 border-t border-gray-800 pt-1">
-                <span className="flex-1 min-w-[140px]">{c.nome || "(sem nome)"} <span className="text-gray-500">{c.telefone || ""}</span></span>
+                <span className="flex-1 min-w-[140px] dado-sensivel">{c.nome || "(sem nome)"} <span className="text-gray-500">{c.telefone || ""}</span></span>
                 <button className={btnSecundario} disabled={busy || !cfg?.ativo} onClick={() => gerar(c, false)}>Ver código</button>
                 <button className={btnSecundario} disabled={busy || !cfg?.ativo || !c.telefone} onClick={() => gerar(c, true)}>Enviar por WhatsApp</button>
               </li>
@@ -134,8 +134,8 @@ export default function Indicacoes({ headers }) {
         {!cfg?.ativo && <p className="text-xs text-gray-500">Ligue e salve o programa para gerar convites.</p>}
         {convite && (
           <div className="bg-[#0f111a] border border-gray-800 rounded-lg p-3 text-sm space-y-1">
-            <p className="text-gray-300">Código de {convite.cliente.nome || "cliente"}: <b className="text-white">{convite.codigo}</b></p>
-            {convite.link && <p className="text-gray-400 break-all">{convite.link} <button className="text-blue-400 ml-2 cursor-pointer" onClick={() => copiar(convite.link)}>copiar</button></p>}
+            <p className="text-gray-300">Código de <span className="dado-sensivel">{convite.cliente.nome || "cliente"}</span>: <b className="text-white dado-sensivel">{convite.codigo}</b></p>
+            {convite.link && <p className="text-gray-400 break-all dado-sensivel">{convite.link} <button className="text-blue-400 ml-2 cursor-pointer" onClick={() => copiar(convite.link)}>copiar</button></p>}
             <p className="text-gray-400 whitespace-pre-line">{convite.mensagem} <button className="text-blue-400 ml-2 cursor-pointer" onClick={() => copiar(convite.mensagem)}>copiar</button></p>
           </div>
         )}
@@ -154,8 +154,8 @@ export default function Indicacoes({ headers }) {
           <tbody>
             {lista.itens.map((i) => (
               <tr key={i.id} className="border-t border-gray-800">
-                <td className="py-2">{i.indicador_nome || "-"}</td>
-                <td>{i.indicado_cpf}</td>
+                <td className="py-2 dado-sensivel">{i.indicador_nome || "-"}</td>
+                <td className="dado-sensivel">{i.indicado_cpf}</td>
                 <td>{STATUS[i.status] || i.status}{i.motivo ? ` · ${MOTIVO[i.motivo] || i.motivo}` : ""}</td>
                 <td>{i.cupom_codigo ? `${i.cupom_codigo}${Number(i.cupom_usos) ? " (usado)" : ""}` : "-"}</td>
                 <td>{fmt(i.criado_em)}</td>
@@ -170,7 +170,7 @@ export default function Indicacoes({ headers }) {
         <div className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4">
           <h2 className="text-base font-semibold text-white mb-2">Quem mais indicou</h2>
           <ol className="list-decimal pl-5 text-sm text-gray-300 space-y-1">
-            {lista.ranking.map((r, n) => <li key={`${r.nome}-${n}`}>{r.nome} — {r.indicacoes}</li>)}
+            {lista.ranking.map((r, n) => <li key={`${r.nome}-${n}`}><span className="dado-sensivel">{r.nome}</span> — {r.indicacoes}</li>)}
           </ol>
         </div>
       )}

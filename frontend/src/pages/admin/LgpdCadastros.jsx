@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Moldura from "../../components/admin/Moldura";
+import usePrivacidade from "../../hooks/usePrivacidade";
 
 export default function LgpdCadastros({ embutido = false }) {
+  const { ligada: privacidade } = usePrivacidade();
   const [registros, setRegistros] = useState([]);
   const [filteredRegistros, setFilteredRegistros] = useState([]);
   const [erro, setErro] = useState("");
@@ -226,7 +228,7 @@ export default function LgpdCadastros({ embutido = false }) {
               <label className="block text-xs text-gray-400">Equipamento
                 <select value={filtros.equipamento} onChange={mudaFiltro("equipamento")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Todos</option>
-                  {opcoes.equipamentos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                  {opcoes.equipamentos.map((e) => <option key={e.id} value={e.id}>{privacidade ? `Equipamento #${e.id}` : e.nome}</option>)}
                 </select>
               </label>
             )}
@@ -247,7 +249,7 @@ export default function LgpdCadastros({ embutido = false }) {
             <label className="block text-xs text-gray-400">Ponto de acesso
               <select value={filtros.ap} onChange={mudaFiltro("ap")} className="w-full px-3 py-2 bg-[#0d1117] border border-gray-700 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Todos</option>
-                {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac}</option>)}
+                {opcoes.aps.map((a) => <option key={a.ap_mac} value={a.ap_mac}>{privacidade ? "Ponto de acesso" : (a.ap_nome ? `${a.ap_nome} (${a.ap_mac})` : a.ap_mac)}</option>)}
               </select>
             </label>
             )}
@@ -364,18 +366,18 @@ export default function LgpdCadastros({ embutido = false }) {
                 <tbody className="bg-[#1a1d27] divide-y divide-gray-800">
                   {filteredRegistros.map((r) => (
                     <tr key={r.id} className="hover:bg-[#252b3b] transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap font-medium text-white">{r.nome || "---"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-400">{r.email || "---"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-400">{r.telefone || "---"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-white">{maskCPF(r.cpf)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400">{r.mac || "---"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-400">{r.ip || "---"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{r.equipamento_nome || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-medium text-white dado-sensivel">{r.nome || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-400 dado-sensivel">{r.email || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-400 dado-sensivel">{r.telefone || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-white dado-sensivel">{maskCPF(r.cpf)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400 dado-sensivel">{r.mac || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-400 dado-sensivel">{r.ip || "---"}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 dado-sensivel">{r.equipamento_nome || "---"}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs">
                         {!r.ap_nome && !r.ap_mac && !r.ssid && <span className="text-gray-400">---</span>}
-                        {r.ap_nome && <div className="text-white">{r.ap_nome}</div>}
-                        {r.ap_mac && <div className="font-mono text-gray-500">{r.ap_mac}</div>}
-                        {r.ssid && <div className="text-gray-500">{r.ssid}</div>}
+                        {r.ap_nome && <div className="text-white dado-sensivel">{r.ap_nome}</div>}
+                        {r.ap_mac && <div className="font-mono text-gray-500 dado-sensivel">{r.ap_mac}</div>}
+                        {r.ssid && <div className="text-gray-500 dado-sensivel">{r.ssid}</div>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${(ORIGEM_LABELS[r.origem] || { cls: "bg-gray-800 text-gray-400" }).cls}`}>

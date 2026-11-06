@@ -196,7 +196,7 @@ function ResultadoContatos({ r }) {
       </div>
       {r.amostra?.length > 0 && (
         <ul className="text-xs text-gray-400 space-y-1">
-          {r.amostra.map((c, i) => <li key={i}>{c.nome} — {c.telefone}</li>)}
+          {r.amostra.map((c, i) => <li key={i} className="dado-sensivel">{c.nome} — {c.telefone}</li>)}
         </ul>
       )}
     </div>

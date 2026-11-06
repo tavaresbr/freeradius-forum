@@ -316,14 +316,14 @@ export default function Vouchers() {
                 </td>
                 <td className="p-3">
                   {v.plano_nome || "-"}
-                  <div className="text-xs text-gray-500">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div>
+                  <div className="text-xs text-gray-500 dado-sensivel">{v.equipamento_nome || "Qualquer equipamento (legado)"}</div>
                 </td>
                 <td className="p-3">{v.lote || "-"}</td>
                 <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${STATUS[v.status]?.[1]}`}>{STATUS[v.status]?.[0]}</span></td>
                 <td className="p-3">{fmtDia(v.valido_ate)}</td>
                 <td className="p-3">
                   {fmt(v.usado_em)}
-                  {v.usado_equipamento && <div className="text-xs text-gray-500">{v.usado_equipamento}</div>}
+                  {v.usado_equipamento && <div className="text-xs text-gray-500 dado-sensivel">{v.usado_equipamento}</div>}
                 </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {v.status === "disponivel" && <button className="text-yellow-400 hover:underline mr-3" onClick={() => acao(v.id, "cancelar")}>Cancelar</button>}

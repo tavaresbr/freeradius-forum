@@ -211,13 +211,13 @@ export default function EmpresasAdmin() {
                       </label>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="font-medium text-white">{e.nome}</p>
-                      <p className="text-xs text-gray-500">/{e.slug}</p>
+                      <p className="font-medium text-white dado-sensivel">{e.nome}</p>
+                      <p className="text-xs text-gray-500 dado-sensivel">/{e.slug}</p>
                     </td>
                     <td className="px-5 py-4 text-gray-400">{e.tipo_pessoa === "PF" && e.cpf ? mascaraCpf(e.cpf) : e.cnpj || "—"}</td>
                     <td className="px-5 py-4">
-                      <p className="text-gray-300 text-xs">{e.email}</p>
-                      {e.telefone && <p className="text-gray-500 text-xs">{e.telefone}</p>}
+                      <p className="text-gray-300 text-xs dado-sensivel">{e.email}</p>
+                      {e.telefone && <p className="text-gray-500 text-xs dado-sensivel">{e.telefone}</p>}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="flex gap-3 justify-center text-xs">

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import usePrivacidade from "../../hooks/usePrivacidade";
 
 // Modelos de mensagem do dono da plataforma para a empresa. Variaveis trocadas no servidor:
 // {{nome}} {{empresa}} {{plano}} {{trial_ate}} {{vence_em}} {{link_painel}}.
@@ -10,13 +11,14 @@ export const MODELOS = [
 ];
 
 export default function EnviarMensagemEmpresa({ empresa, req, onFechar, onEnviada }) {
+  const { ligada: privacidade } = usePrivacidade();
   const [texto, setTexto] = useState(MODELOS[0].texto);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
   const enviar = async (ev) => {
     ev.preventDefault();
-    if (!window.confirm(`Enviar esta mensagem para ${empresa.nome} (${empresa.telefone})?`)) return;
+    if (!window.confirm(privacidade ? "Enviar esta mensagem para a empresa?" : `Enviar esta mensagem para ${empresa.nome} (${empresa.telefone})?`)) return;
     setEnviando(true);
     setErro("");
     try {

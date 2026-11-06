@@ -133,7 +133,7 @@ export default function Dashboard() {
                   <tbody className="divide-y divide-gray-800">
                     {dados.sessoes.map((s, i) => (
                       <tr key={i} className="hover:bg-[#252b3b] transition-colors">
-                        <td className="px-4 sm:px-6 py-3 text-gray-300 break-words">{s.nome}</td>
+                        <td className="px-4 sm:px-6 py-3 text-gray-300 break-words"><span className="dado-sensivel">{s.nome}</span></td>
                         <td className="px-4 sm:px-6 py-3 text-right">
                           <span className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs font-semibold rounded">{s.conectados}</span>
                         </td>

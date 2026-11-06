@@ -254,16 +254,16 @@ export default function SessoesLog() {
                     key={`${r.username}-${r.conectado_em}-${i}`}
                     className="border-b border-gray-800 hover:bg-[#151821]"
                   >
-                    <td className="p-3 font-medium">{r.username || "-"}</td>
-                    <td className="p-3">{r.mac || "-"}</td>
-                    <td className="p-3">{r.ip || "-"}</td>
-                    <td className="p-3">{r.nas_ip || "-"}</td>
-                    <td className="p-3">{r.nas_nome || "-"}</td>
+                    <td className="p-3 font-medium dado-sensivel">{r.username || "-"}</td>
+                    <td className="p-3 dado-sensivel">{r.mac || "-"}</td>
+                    <td className="p-3 dado-sensivel">{r.ip || "-"}</td>
+                    <td className="p-3 dado-sensivel">{r.nas_ip || "-"}</td>
+                    <td className="p-3 dado-sensivel">{r.nas_nome || "-"}</td>
                     <td className="p-3 text-xs">
                       {!r.ap_nome && !r.ap_mac && !r.ssid && "-"}
-                      {r.ap_nome && <div className="text-white">{r.ap_nome}</div>}
-                      {r.ap_mac && <div className="font-mono text-gray-500">{r.ap_mac}</div>}
-                      {r.ssid && <div className="text-gray-500">{r.ssid}</div>}
+                      {r.ap_nome && <div className="text-white dado-sensivel">{r.ap_nome}</div>}
+                      {r.ap_mac && <div className="font-mono text-gray-500 dado-sensivel">{r.ap_mac}</div>}
+                      {r.ssid && <div className="text-gray-500 dado-sensivel">{r.ssid}</div>}
                     </td>
                     <td className="p-3">{fmtDateTime(r.conectado_em)}</td>
                     <td className="p-3">{fmtDateTime(r.desconectado_em)}</td>

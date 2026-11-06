@@ -7,12 +7,14 @@ import SuporteBalao from "./SuporteBalao";
 import MarcaApex from "../public/MarcaApex";
 import ToggleTema from "../ToggleTema";
 import TogglePrivacidade from "../TogglePrivacidade";
+import usePrivacidade from "../../hooks/usePrivacidade";
 import { avisoAtivo, tocarAviso, notificar } from "../../utils/avisoWhatsapp";
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { empresaSlug } = useParams();
+  const { ligada: privacidade } = usePrivacidade();
   const { user, logout, isSuperAdmin, donoPlataforma, empresas, switchEmpresa, hasPermission } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
   const [switchingEmpresa, setSwitchingEmpresa] = useState(false);
@@ -340,12 +342,12 @@ export default function AdminLayout({ children }) {
                 className="w-full bg-white border border-gray-300 text-gray-700 text-xs rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-apex-500 focus:border-apex-500"
               >
                 {empresas.map(e => (
-                  <option key={e.id} value={e.id}>{e.nome}</option>
+                  <option key={e.id} value={e.id}>{privacidade ? `Empresa #${e.id}` : e.nome}</option>
                 ))}
               </select>
             ) : (
               <div className="text-xs text-gray-500">
-                <span className="text-gray-700 font-medium">{user?.empresa_nome || 'Empresa'}</span>
+                <span className="text-gray-700 font-medium dado-sensivel">{user?.empresa_nome || 'Empresa'}</span>
               </div>
             )}
             {user?.role && (

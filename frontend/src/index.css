@@ -235,5 +235,6 @@ html { -webkit-text-size-adjust: 100%; }
   filter: blur(7px);
   user-select: none;
   -webkit-user-select: none;
-  pointer-events: none;
 }
+/* so nao-formularios perdem o clique; campos continuam editaveis (borrados) */
+[data-privacidade="on"] .dado-sensivel:not(input):not(textarea):not(select) { pointer-events: none; }

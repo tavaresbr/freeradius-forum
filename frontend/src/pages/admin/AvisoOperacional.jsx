@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Moldura from "../../components/admin/Moldura";
 import SeletorModelo from "../../components/admin/atendimento/SeletorModelo";
+import usePrivacidade from "../../hooks/usePrivacidade";
 
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500 text-sm";
 const btnPrimario = "bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 disabled:opacity-50 cursor-pointer";
@@ -15,6 +16,7 @@ const fmt = (d) => (d ? new Date(d).toLocaleString("pt-BR") : "-");
 
 // Aviso operacional (queda, manutencao) para quem esta CONECTADO agora. Respeita quem pediu para nao receber mensagens.
 export default function AvisoOperacional({ embutido = false }) {
+  const { ligada: privacidade } = usePrivacidade();
   const token = localStorage.getItem("admin_token");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const [mensagem, setMensagem] = useState(MODELO);
@@ -88,7 +90,7 @@ export default function AvisoOperacional({ embutido = false }) {
             <label className="block text-xs text-gray-500 mb-1">Equipamento (opcional)</label>
             <select className={inputCls} value={equipamento} onChange={(e) => { setEquipamento(e.target.value); setPrevia(null); }} aria-label="Equipamento">
               <option value="">Todos os equipamentos</option>
-              {equipamentos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              {equipamentos.map((m) => <option key={m.id} value={m.id}>{privacidade ? `Equipamento #${m.id}` : m.nome}</option>)}
             </select>
           </div>
           <div>
@@ -104,7 +106,7 @@ export default function AvisoOperacional({ embutido = false }) {
           {previa && (
             <div className="border border-gray-800 rounded-lg p-3 space-y-2 text-sm">
               <p className="text-white"><strong>{previa.total}</strong> cliente(s) conectado(s) agora{previa.excedeu ? ` (limite de ${previa.limite} por aviso)` : ""}.</p>
-              {previa.amostra.length > 0 && <p className="text-gray-400">Exemplo: {previa.amostra.map((a) => `${a.nome || "—"} (${a.telefone})`).join(", ")}</p>}
+              {previa.amostra.length > 0 && <p className="text-gray-400 dado-sensivel">Exemplo: {previa.amostra.map((a) => `${a.nome || "—"} (${a.telefone})`).join(", ")}</p>}
               <p className="text-gray-300 whitespace-pre-wrap bg-[#0d1117] rounded p-2">{previa.mensagem_exemplo}</p>
               <button className={btnPrimario} disabled={busy || previa.total === 0} onClick={enviar}>Enviar aviso agora</button>
             </div>

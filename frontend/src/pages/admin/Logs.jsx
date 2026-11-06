@@ -326,7 +326,7 @@ export default function Logs() {
 
         <div className="text-xs text-gray-500 mb-2 flex items-center gap-4 flex-wrap">
           <span>
-            Arquivo: <code className="text-gray-400">{meta.path}</code>
+            Arquivo: <code className="text-gray-400 dado-sensivel">{meta.path}</code>
           </span>
           <span>Tamanho: {fmtBytes(meta.size)}</span>
           <span>
@@ -347,7 +347,7 @@ export default function Logs() {
         <div
           ref={preRef}
           onScroll={onScroll}
-          className="bg-black border border-gray-700 rounded-lg p-3 h-[62vh] overflow-auto font-mono text-xs leading-relaxed"
+          className="bg-black border border-gray-700 rounded-lg p-3 h-[62vh] overflow-auto font-mono text-xs leading-relaxed dado-sensivel"
         >
           {linhasVisiveis.length === 0 && !loading && (
             <div className="italic" style={{ color: "#9ca3af" }}>Sem linhas para exibir.</div>

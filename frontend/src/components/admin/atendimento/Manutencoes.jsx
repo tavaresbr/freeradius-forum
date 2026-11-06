@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import SeletorModelo from "./SeletorModelo";
+import usePrivacidade from "../../../hooks/usePrivacidade";
 
 const inputCls = "w-full px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-blue-800 text-sm";
 const btnPrimario = "bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-500 disabled:opacity-50 cursor-pointer";
@@ -15,6 +16,7 @@ const fmt = (v) => { const m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec
 
 // Manutenções programadas: agenda por equipamento, avisos aos clientes (antes e depois) e silêncio dos alertas da equipe.
 export default function Manutencoes({ headers }) {
+  const { ligada: privacidade } = usePrivacidade();
   const [quando, setQuando] = useState("futuras");
   const [dados, setDados] = useState({ manutencoes: [], antecedencias: [], pronto: true });
   const [equipamentos, setEquipamentos] = useState([]);
@@ -115,7 +117,7 @@ export default function Manutencoes({ headers }) {
             <label className="text-xs text-gray-400 block">Equipamento
               <select className={inputCls} value={form.equipamento_id} onChange={(e) => { set("equipamento_id", e.target.value); setPrevia(null); }}>
                 <option value="">Todos os equipamentos</option>
-                {equipamentos.map((eq) => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
+                {equipamentos.map((eq) => <option key={eq.id} value={eq.id}>{privacidade ? `Equipamento #${eq.id}` : eq.nome}</option>)}
               </select>
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -163,7 +165,7 @@ export default function Manutencoes({ headers }) {
                   {previa && (
                     <span className="text-sm text-gray-300">
                       <b>{previa.total}</b> cliente(s){previa.excedeu ? ` (limite de ${previa.limite})` : ""}; {previa.bloqueados} fora por pedirem para não receber.
-                      {previa.amostra?.length ? ` Ex.: ${previa.amostra.map((a) => `${a.nome || "cliente"} ${a.telefone}`).join(", ")}` : ""}
+                      {previa.amostra?.length ? <span className="dado-sensivel">{` Ex.: ${previa.amostra.map((a) => `${a.nome || "cliente"} ${a.telefone}`).join(", ")}`}</span> : ""}
                     </span>
                   )}
                 </div>

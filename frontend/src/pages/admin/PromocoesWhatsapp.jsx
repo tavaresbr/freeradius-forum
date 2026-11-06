@@ -302,7 +302,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
               <p className="text-xs text-gray-500 mb-1">Exemplo da mensagem:</p>
               <pre className="whitespace-pre-wrap text-gray-200 bg-[#1a1d27] rounded p-3 text-xs">{previa.mensagem_exemplo}</pre>
               {previa.amostra.length > 0 && (
-                <p className="text-xs text-gray-500 mt-3">Primeiros: {previa.amostra.map((a) => `${a.nome || "sem nome"} (${a.telefone})`).join(", ")}</p>
+                <p className="text-xs text-gray-500 mt-3 dado-sensivel">Primeiros: {previa.amostra.map((a) => `${a.nome || "sem nome"} (${a.telefone})`).join(", ")}</p>
               )}
               <div className="mt-4">
                 <button onClick={criarEIniciar} disabled={ocupado || !nome.trim() || previa.total === 0} className={btnPrimario}>
@@ -342,7 +342,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
             <div>
               <p className="text-sm text-white mb-2">Últimos erros</p>
               <ul className="text-xs text-gray-400 space-y-1">
-                {detalhe.erros.map((e, i) => <li key={i}>{e.nome || "sem nome"} ({e.telefone}): {e.erro_msg}</li>)}
+                {detalhe.erros.map((e, i) => <li key={i}><span className="dado-sensivel">{e.nome || "sem nome"} ({e.telefone})</span>: {e.erro_msg}</li>)}
               </ul>
             </div>
           )}
