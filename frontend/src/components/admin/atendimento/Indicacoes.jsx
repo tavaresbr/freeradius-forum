@@ -1,3 +1,4 @@
+import usePrivacidade from "../../../hooks/usePrivacidade";
 import React, { useCallback, useEffect, useState } from "react";
 
 const inputCls = "w-full px-3 py-2 bg-[#0f111a] border border-gray-800 rounded-lg text-gray-200 focus:outline-none focus:border-blue-800 text-sm";
@@ -28,6 +29,7 @@ function Desconto({ rotulo, valor, onChange }) {
 
 // Indicações: cliente indica cliente. O indicado ganha desconto na 1ª compra e o indicador ganha um cupom único.
 export default function Indicacoes({ headers }) {
+  const { ligada: privacidade } = usePrivacidade();
   const [cfg, setCfg] = useState(null);
   const [lista, setLista] = useState({ itens: [], resumo: {}, ranking: [], pronto: true });
   const [status, setStatus] = useState("");
@@ -76,7 +78,7 @@ export default function Indicacoes({ headers }) {
     if (d) { setCfg(d.config); setMsg({ tipo: "ok", texto: "Configuração salva." }); }
   };
   const gerar = async (c, enviar) => {
-    if (enviar && !window.confirm(`Enviar o convite por WhatsApp para ${c.nome || "o cliente"}?`)) return;
+    if (enviar && !window.confirm(`Enviar o convite por WhatsApp para ${privacidade ? "o cliente" : (c.nome || "o cliente")}?`)) return;
     const d = await chamar("/api/atendimento/indicacoes/convite", "POST", { lead_id: c.id, enviar });
     if (d) { setConvite({ ...d, cliente: c }); if (enviar) setMsg({ tipo: "ok", texto: "Convite enviado." }); }
   };

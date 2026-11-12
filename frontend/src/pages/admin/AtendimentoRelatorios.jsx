@@ -111,7 +111,7 @@ export default function AtendimentoRelatorios({ embutido = false }) {
                 {dados.por_atendente.length === 0 ? <p className="text-sm text-gray-500">Nenhuma mensagem enviada por atendente.</p> : (
                   <table className="w-full text-sm">
                     <thead><tr className="text-left text-xs text-gray-500"><th className="pb-1">Atendente</th><th className="pb-1 text-right">Enviadas</th></tr></thead>
-                    <tbody>{dados.por_atendente.map((a) => <tr key={a.nome} className="text-gray-200"><td className="py-1">{a.nome}</td><td className="py-1 text-right">{a.enviadas}</td></tr>)}</tbody>
+                    <tbody>{dados.por_atendente.map((a) => <tr key={a.nome} className="text-gray-200"><td className="py-1 dado-sensivel">{a.nome}</td><td className="py-1 text-right">{a.enviadas}</td></tr>)}</tbody>
                   </table>
                 )}
               </section>
