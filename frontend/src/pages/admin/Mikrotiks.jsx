@@ -1127,14 +1127,14 @@ const carregarMikrotiks = async (abrirMaisNovo = false) => {
                       <input type="checkbox" checked={wifi.marcados.includes(r.nome)}
                         onChange={(e) => setWifi(w => ({ ...w, marcados: e.target.checked ? [...w.marcados, r.nome] : w.marcados.filter(n => n !== r.nome) }))} />
                       <span className="font-medium text-white">{r.nome}</span>
-                      <span className="text-gray-400 break-all">atual: "{r.ssid}"</span>
+                      <span className="text-gray-400 break-all dado-sensivel">atual: "{r.ssid}"</span>
                       {!r.ligado && <span className="text-xs text-yellow-400">(desligado)</span>}
                     </label>
                   ))}
                 </div>
                 <label className="block text-xs text-gray-500 mb-1">Novo nome do Wi-Fi</label>
                 <input
-                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 dado-sensivel"
                   value={wifi.ssid} maxLength={32}
                   onChange={(e) => setWifi(w => ({ ...w, ssid: e.target.value }))}
                   placeholder="Nome que o cliente vê ao procurar a rede"

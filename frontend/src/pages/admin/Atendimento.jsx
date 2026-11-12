@@ -556,7 +556,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                     </div>
                   )}
                   {numeros.length > 1 && <p className="text-[11px] text-blue-400 mt-0.5 truncate">📱 {nomeDoNumero(c.numero_id)}</p>}
-                  {c.atendente_id && <p className="text-[11px] text-green-500 mt-0.5 truncate">👤 {c.atendente_id === eu ? "Você" : c.atendente_nome || "Atribuída"}</p>}
+                  {c.atendente_id && <p className="text-[11px] text-green-500 mt-0.5 truncate dado-sensivel">👤 {c.atendente_id === eu ? "Você" : c.atendente_nome || "Atribuída"}</p>}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-gray-400 truncate dado-sensivel">{c.ultima_msg_previa || ""}</span>
                     {c.nao_lidas > 0 && (
@@ -610,7 +610,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                         <div role="menu" className="absolute right-0 top-full mt-1 z-30 w-56 max-h-64 overflow-y-auto bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-1">
                           {conversa.atendente_id !== eu && <button role="menuitem" onClick={() => donoDaConversa("assumir")} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer">Assumir para mim</button>}
                           {atendentes.filter((a) => a.id !== eu && a.id !== conversa.atendente_id).map((a) => (
-                            <button key={a.id} role="menuitem" onClick={() => donoDaConversa("transferir", { admin_id: a.id })} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer truncate">Transferir para {a.nome || a.email}</button>
+                            <button key={a.id} role="menuitem" onClick={() => donoDaConversa("transferir", { admin_id: a.id })} className="w-full text-left px-3 py-2 rounded text-sm text-gray-200 hover:bg-[#252b3b] cursor-pointer truncate">Transferir para <span className="dado-sensivel">{a.nome || a.email}</span></button>
                           ))}
                           {conversa.atendente_id && <button role="menuitem" onClick={() => donoDaConversa("transferir", { admin_id: null })} className="w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:bg-[#252b3b] cursor-pointer">Liberar (sem atendente)</button>}
                         </div>
@@ -664,7 +664,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                     <div key={m.id} className={`flex ${m.direcao === "in" ? "justify-start" : m.direcao === "nota" ? "justify-center" : "justify-end"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${m.direcao === "in" ? "bg-[#252b3b] text-gray-100" : m.direcao === "nota" ? "bg-yellow-100 text-yellow-900 border border-yellow-300" : "bg-green-700/80 text-white"}`}>
                         {m.resposta_previa && <div className="mb-1 px-2 py-1 border-l-2 border-current bg-black/10 rounded text-xs opacity-80 line-clamp-2 dado-sensivel">{m.resposta_previa}</div>}
-                        {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? ` · ${m.autor}` : ""} (o cliente não vê)</p>}
+                        {m.direcao === "nota" && <p className="text-[11px] font-semibold uppercase tracking-wide mb-0.5">Nota interna{m.autor ? <> · <span className="dado-sensivel">{m.autor}</span></> : ""} (o cliente não vê)</p>}
                         {m.tem_midia && m.midia_expirada
                           ? <p className="text-xs italic opacity-70 mb-0.5">Mídia removida pela limpeza automática</p>
                           : m.tem_midia
@@ -674,7 +674,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}
-                          {m.direcao === "out" && m.automatica ? <span className="opacity-70">· 🤖 automática</span> : m.direcao === "out" && m.autor && <span className="opacity-70">· {m.autor}</span>}
+                          {m.direcao === "out" && m.automatica ? <span className="opacity-70">· 🤖 automática</span> : m.direcao === "out" && m.autor && <span className="opacity-70 dado-sensivel">· {m.autor}</span>}
                           {m.direcao !== "nota" && m.status !== "erro" && <button onClick={() => { setCitando(m); setModo("resposta"); }} className="ml-1 opacity-70 hover:opacity-100 cursor-pointer" aria-label="Responder esta mensagem" title="Responder esta mensagem">↩</button>}
                         </div>
                         {m.status === "erro" && <p className="text-xs text-red-200 mt-1">{m.erro || "Falha no envio"}</p>}
