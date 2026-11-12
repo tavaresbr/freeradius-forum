@@ -89,6 +89,8 @@ async function obterStatus(empresaId) {
     exportacao: !migrado || !!row.inclui_exportacao || tem("exportacao"),
     // Dominio proprio vem da migration 046 (coluna propria): sem ela nao bloqueia.
     dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio || tem("dominio"),
+    // IA gera custo para a plataforma: ao contrario dos outros recursos, sem a migration 077 (coluna ausente) NAO libera.
+    ia: !!(row && "inclui_ia" in row) && (!!row.inclui_ia || tem("ia")),
   };
   const v = { ...calcularEstado(row), plano_nome: row?.plano_nome || null, plano_valor: row?.plano_valor ?? null,
               plano_max_equipamentos: row?.max_equipamentos ?? null, plano_max_admins: row?.max_admins ?? null,
@@ -100,7 +102,9 @@ async function obterStatus(empresaId) {
               max_whatsapp_numeros: limiteEfetivo(row?.max_whatsapp_numeros ?? null, extras.whatsapp_numeros),
               plano_max_whatsapp_numeros: row?.max_whatsapp_numeros ?? null,
               recursos, extras,
-              plano_recursos: { whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao, dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio },
+              // Limite mensal de respostas da IA: o do plano (NULL = ilimitado). Com adicional "ia" e plano sem IA, ilimitado.
+              ia_respostas_mes: row && row.inclui_ia ? (row.ia_respostas_mes ?? null) : null,
+              plano_recursos: {ia: !!(row && "inclui_ia" in row && row.inclui_ia),  whatsapp: !migrado || !!row.inclui_whatsapp, campanhas: !migrado || !!row.inclui_campanhas, exportacao: !migrado || !!row.inclui_exportacao, dominio: !(row && "inclui_dominio" in row) || !!row.inclui_dominio },
               adicionais: vigentes.map((a) => ({
                 id: a.id, adicional_id: a.adicional_id, nome: a.nome, tipo: a.tipo, quantidade: a.quantidade,
                 valor: Number(a.valor), vence_em: a.vence_em,
@@ -184,7 +188,7 @@ async function temRecurso(empresaId, nome) {
     const st = await obterStatus(empresaId);
     return st.recursos ? st.recursos[nome] !== false : true;
   } catch (err) {
-    if (tabelaInexistente(err)) return true;
+    if (tabelaInexistente(err)) return nome !== "ia"; // IA gera custo: sem a tabela nao libera
     throw err;
   }
 }

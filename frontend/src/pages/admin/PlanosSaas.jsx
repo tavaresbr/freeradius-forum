@@ -5,13 +5,13 @@ import { ITENS_SITE, itensDoPlano } from "../../utils/itensSitePlano";
 import { totalDoPeriodo } from "../../utils/periodoPlano";
 import { useAuth } from "../../contexts/AuthContext";
 
-const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", max_whatsapp_numeros: 1, inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [], desconto_3m: "", desconto_6m: "", desconto_12m: "", aplicar_todos: false, destaque: false };
+const VAZIO = { nome: "", descricao: "", valor: "", ciclo_dias: 30, max_equipamentos: "", max_admins: "", max_portais: "", max_whatsapp_numeros: 1, inclui_whatsapp: false, inclui_campanhas: false, inclui_exportacao: false, inclui_dominio: false, inclui_ia: false, ia_respostas_mes: "", gratis: false, trial_dias: "", ativo: true, ordem: 0, exibir_site: [], desconto_3m: "", desconto_6m: "", desconto_12m: "", aplicar_todos: false, destaque: false };
 const TIPOS = [
   ["equipamentos", "Equipamentos (sobe o limite)"], ["admins", "Administradores (sobe o limite)"],
-  ["portais", "Portal cativo extra"], ["whatsapp_numeros", "Número de WhatsApp extra (sobe o limite)"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"],
+  ["portais", "Portal cativo extra"], ["whatsapp_numeros", "Número de WhatsApp extra (sobe o limite)"], ["whatsapp", "Módulo WhatsApp"], ["campanhas", "Módulo Campanhas"], ["ia", "Atendente com IA"],
   ["exportacao", "Exportação da base"], ["sem_marca", "Remover marca Apex"], ["dominio", "Domínio próprio"],
 ];
-const TIPOS_ATIVOS = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "dominio"]; // sem_marca ainda nao tem efeito: so inativo
+const TIPOS_ATIVOS = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "dominio", "ia"]; // sem_marca ainda nao tem efeito: so inativo
 const VAZIO_AD = { nome: "", descricao: "", tipo: "equipamentos", incremento: 1, valor: "", ciclo_dias: 30, plano_minimo_id: "", ativo: true, ordem: 0 };
 const inputCls = "w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm";
 
@@ -102,9 +102,9 @@ export default function PlanosSaas() {
   const duplicar = (p) => {
     setEditId(null);
     setCopiaDe(p.nome);
-    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", max_whatsapp_numeros: p.max_whatsapp_numeros ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: false, destaque: false, ordem: (p.ordem ?? 0) + 1 });
+    setForm({ ...p, id: undefined, nome: `${p.nome} (cópia)`, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", max_whatsapp_numeros: p.max_whatsapp_numeros ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, inclui_ia: !!p.inclui_ia, ia_respostas_mes: p.ia_respostas_mes ?? "", gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: false, destaque: false, ordem: (p.ordem ?? 0) + 1 });
   };
-  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", max_whatsapp_numeros: p.max_whatsapp_numeros ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: !!p.ativo, destaque: !!p.destaque }); };
+  const editar = (p) => { setCopiaDe(null); setEditId(p.id); setForm({ ...p, max_equipamentos: p.max_equipamentos ?? "", max_admins: p.max_admins ?? "", max_portais: p.max_portais ?? "", max_whatsapp_numeros: p.max_whatsapp_numeros ?? "", inclui_whatsapp: !!p.inclui_whatsapp, inclui_campanhas: !!p.inclui_campanhas, inclui_exportacao: !!p.inclui_exportacao, inclui_dominio: !!p.inclui_dominio, inclui_ia: !!p.inclui_ia, ia_respostas_mes: p.ia_respostas_mes ?? "", gratis: !!p.gratis, trial_dias: p.trial_dias ?? "", exibir_site: itensDoPlano(p), desconto_3m: p.desconto_3m ?? "", desconto_6m: p.desconto_6m ?? "", desconto_12m: p.desconto_12m ?? "", ativo: !!p.ativo, destaque: !!p.destaque }); };
   const campo = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -262,9 +262,15 @@ export default function PlanosSaas() {
                 <div className="col-span-2"><label className="block text-sm text-gray-400 mb-1">Dias de teste</label><input type="number" min="1" max="365" disabled={!!form.gratis} placeholder="padrão 7" className={inputCls} value={form.gratis ? "" : form.trial_dias} onChange={campo("trial_dias")} /></div>
                 <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2" data-testid="recursos-plano">
                   <span className="w-full text-sm text-gray-400">Recursos incluídos</span>
-                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
+                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"], ["inclui_ia", "Atendente com IA (Claude)"]].map(([k, r]) => (
                     <label key={k} className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={!!form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} /> {r}</label>
                   ))}
+                  {form.inclui_ia && (
+                    <div className="w-full">
+                      <label className="block text-sm text-gray-400 mb-1">Respostas da IA por mês (vazio = ilimitado; o custo da API é seu)</label>
+                      <input type="number" min="1" placeholder="ilimitado" className={inputCls} value={form.ia_respostas_mes ?? ""} onChange={campo("ia_respostas_mes")} />
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-2" data-testid="descontos-periodo">
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-1">

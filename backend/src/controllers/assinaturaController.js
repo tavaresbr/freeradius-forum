@@ -32,9 +32,9 @@ async function getPlataformaMp() {
 const mascarar = (v) => (v ? `${String(v).slice(0, 8)}...` : "");
 
 // Adicionais que o sistema ja sabe aplicar (Fase 1): sobem o limite de equipamentos/admins.
-const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio"];
-const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "dominio"];
-const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao", "dominio"]; // quantidade fixa 1; o plano pode ja incluir
+const TIPOS_ADICIONAL = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "sem_marca", "dominio", "ia"];
+const TIPOS_APLICAVEIS = ["equipamentos", "admins", "portais", "whatsapp_numeros", "whatsapp", "campanhas", "exportacao", "dominio", "ia"];
+const TIPOS_LIGA_DESLIGA = ["whatsapp", "campanhas", "exportacao", "dominio", "ia"]; // quantidade fixa 1; o plano pode ja incluir
 const MAX_QUANTIDADE = 20;
 const TIPO_PLANO_MAX = { equipamentos: "plano_max_equipamentos", admins: "plano_max_admins", portais: "plano_max_portais", whatsapp_numeros: "plano_max_whatsapp_numeros" };
 
@@ -557,6 +557,19 @@ function exibirSite(v) {
 }
 
 const AVISO_047 = "Plano salvo, mas 'Plano grátis' e 'Dias de teste' só funcionam depois de rodar a migration 047 no servidor.";
+// IA (migration 077): inclui_ia e limite mensal gravados a parte; sem as colunas o plano ainda salva.
+const AVISO_077 = "Plano salvo, mas a IA só funciona depois de rodar a migration 077 no servidor.";
+async function salvarIa(id, b) {
+  if (!("inclui_ia" in b) && !("ia_respostas_mes" in b)) return null;
+  const lim = b.ia_respostas_mes === "" || b.ia_respostas_mes == null ? null : Math.max(1, parseInt(b.ia_respostas_mes, 10) || 1);
+  try {
+    await db.execute("UPDATE saas_planos SET inclui_ia = ?, ia_respostas_mes = ? WHERE id = ?", [b.inclui_ia ? 1 : 0, b.inclui_ia ? lim : null, id]);
+    return null;
+  } catch (err) {
+    if (!colunaAusente(err)) throw err;
+    return b.inclui_ia ? AVISO_077 : null;
+  }
+}
 const AVISO_068 = "Plano salvo, mas 'Mostrar no site' só funciona depois de rodar a migration 068 no servidor.";
 const colunaAusente = (err) => err && (err.code === "ER_BAD_FIELD_ERROR" || err.errno === 1054);
 
@@ -584,7 +597,8 @@ exports.criarPlano = async (req, res) => {
     const avDesc = await salvarDescontos(r.insertId, req.body || {});
     const avDest = await salvarDestaque(r.insertId, req.body || {});
     const avNum = await salvarMaxNumeros(r.insertId, req.body || {});
-    aviso = aviso || avDesc || avDest || avNum || undefined;
+    const avIa = await salvarIa(r.insertId, req.body || {});
+    aviso = aviso || avDesc || avDest || avNum || avIa || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.status(201).json({ id: r.insertId, aviso, aplicados });
@@ -616,7 +630,8 @@ exports.atualizarPlano = async (req, res) => {
     const avDesc = await salvarDescontos(req.params.id, req.body || {});
     const avDest = await salvarDestaque(req.params.id, req.body || {});
     const avNum = await salvarMaxNumeros(req.params.id, req.body || {});
-    aviso = aviso || avDesc || avDest || avNum || undefined;
+    const avIa = await salvarIa(req.params.id, req.body || {});
+    aviso = aviso || avDesc || avDest || avNum || avIa || undefined;
     const aplicados = await aplicarDescontosATodos(req.body || {});
     invalidar();
     res.json({ message: "Plano atualizado", aviso, aplicados });
