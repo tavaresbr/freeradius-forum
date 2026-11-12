@@ -1,40 +1,13 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
-import { useAuth } from "../../contexts/AuthContext";
-
-// "Nova Telecom" -> "Nova-Telecom" (sem acentos; so letras, numeros e hifen, como o nome do roteador exige)
-function baseNomePeer(nomeEmpresa) {
-  return String(nomeEmpresa || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-    .slice(0, 40).replace(/-+$/, "") || "Peer";
-}
-
-// Proximo nome livre: base-01, base-02... (maior sufixo existente + 1)
-function sugerirNomePeer(nomeEmpresa, peers) {
-  const base = baseNomePeer(nomeEmpresa);
-  const nomes = new Set((peers || []).map((c) => String(c.name || "").toLowerCase()));
-  const re = new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`, "i");
-  let maior = 0;
-  for (const c of peers || []) {
-    const m = re.exec(String(c.name || ""));
-    if (m) maior = Math.max(maior, parseInt(m[1], 10));
-  }
-  let n = maior + 1;
-  const nome = (i) => `${base}-${String(i).padStart(2, "0")}`;
-  while (nomes.has(nome(n).toLowerCase())) n++;
-  return nome(n);
-}
+import AdicionarPeerFlow, { ScriptPeerModal } from "../../components/admin/AdicionarPeerFlow";
 
 export default function Wireguard() {
-  const { user } = useAuth();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [newPeerName, setNewPeerName] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [scriptData, setScriptData] = useState("");
-  const [scriptCopiado, setScriptCopiado] = useState(false);
   const [renomear, setRenomear] = useState(null); // { id, nome, erro, salvando }
   const [serverSettings, setServerSettings] = useState({ wgPort: '51820', wgHost: '92.113.34.197' });
   const [editSettings, setEditSettings] = useState({ wgPort: '', wgHost: '' });
@@ -74,35 +47,6 @@ export default function Wireguard() {
     const interval = setInterval(loadStatus, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleAddPeer = async (e) => {
-    e.preventDefault();
-    if (!newPeerName) return;
-    try {
-      const res = await fetch("/api/wireguard/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: newPeerName })
-      });
-      
-      const criado = await res.json().catch(() => ({}));
-      if (!res.ok || !criado.id) throw new Error(criado.message || "Erro ao criar peer");
-      const createdClient = criado;
-
-      const scriptRes = await fetch(`/api/wireguard/clients/${createdClient.id}/config`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const scriptJson = await scriptRes.json();
-      
-      setShowAddModal(false);
-      setNewPeerName("");
-      setScriptData(scriptJson.routerOsScript);
-      setShowScriptModal(true);
-      loadStatus();
-    } catch (err) {
-      alert(err.message || "Erro ao criar peer");
-    }
-  };
 
   const handleDelete = async (id) => {
     if (!confirm("Deseja deletar este peer? Isso derrubará a VPN do Mikrotik!")) return;
@@ -150,28 +94,6 @@ export default function Wireguard() {
     }
   };
 
-  const copyToClipboard = async () => {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(scriptData);
-      } else {
-        // Fallback para contextos sem Clipboard API (http, navegadores antigos)
-        const ta = document.createElement("textarea");
-        ta.value = scriptData;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      setScriptCopiado(true);
-      setTimeout(() => setScriptCopiado(false), 2500);
-    } catch (err) {
-      alert("Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C.");
-    }
-  };
-
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -193,10 +115,7 @@ export default function Wireguard() {
             VPN WireGuard
           </h1>
           <button 
-            onClick={() => {
-              setNewPeerName(sugerirNomePeer(user?.empresa_nome || user?.empresa_slug, status?.clients));
-              setShowAddModal(true);
-            }}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold shadow-lg shadow-green-900/40 hover:bg-green-500 transition-colors"
           >
             <span className="text-lg leading-none">+</span> Adicionar Peer
@@ -432,72 +351,16 @@ export default function Wireguard() {
         </div>
       )}
 
-      {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-[#1a1d27] border border-gray-700 rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-white mb-4">Adicionar Peer</h3>
-            <form onSubmit={handleAddPeer} className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-400 block mb-1">Identificação (Nome do Mikrotik)</label>
-                <input
-                  autoFocus
-                  onFocus={(e) => e.target.select()}
-                  placeholder="Ex: RB-Torre-Centro"
-                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
-                  value={newPeerName}
-                  onChange={(e) => setNewPeerName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded text-gray-400 hover:text-white">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Salvar e Gerar Script</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Adicionar peer (modal de nome + script) */}
+      <AdicionarPeerFlow
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onCreated={loadStatus}
+        peers={status?.clients}
+      />
 
-      {/* Script Modal */}
-      {showScriptModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1d27] border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col p-5">
-            <div className="flex items-start justify-between gap-4 mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-white">Script de Instalação Rápida</h3>
-                <p className="text-gray-400 text-xs mt-1">
-                  Para um Mikrotik <strong>resetado com "No Default Configuration"</strong> (ether1 = internet). Cole no terminal (New Terminal) do roteador: configura internet, DNS, NAT, firewall, hora, VPN, API e Wi-Fi, e deixa só o wizard de Hotspot para o painel.
-                </p>
-              </div>
-              <button onClick={() => setShowScriptModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none" title="Fechar">&times;</button>
-            </div>
-
-            <p className="text-yellow-400 text-xs mb-3">
-              Depois de colar: se o servidor tiver a senha padrão configurada, ela já vai no script; senão defina a senha do admin (<code>/user set admin password=...</code>). Use a mesma ao cadastrar o equipamento. Pode colar de novo sem erro.
-            </p>
-
-            <div className="bg-[#0d1117] rounded-lg border border-gray-800 overflow-auto min-h-0 flex-1 max-h-[50vh]">
-              <pre className="text-xs leading-relaxed text-green-400 font-mono whitespace-pre-wrap break-words p-3">
-                <span className="dado-sensivel">{scriptData}</span>
-              </pre>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-4">
-              <span className="text-gray-500 text-xs">{scriptData ? scriptData.split("\n").length : 0} linhas</span>
-              <div className="flex gap-2">
-                <button onClick={() => setShowScriptModal(false)} className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600">Fechar</button>
-                <button
-                  onClick={copyToClipboard}
-                  className={`px-4 py-2 text-white rounded font-medium transition-colors ${scriptCopiado ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
-                >
-                  {scriptCopiado ? "Copiado!" : "Copiar script"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Ver script de um peer existente */}
+      <ScriptPeerModal open={showScriptModal} script={scriptData} onClose={() => setShowScriptModal(false)} />
 
     </AdminLayout>
   );

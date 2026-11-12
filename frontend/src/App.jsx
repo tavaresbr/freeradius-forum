@@ -41,6 +41,7 @@ import TutorialOmada from "./pages/admin/TutorialOmada";
 import TutorialGrandstream from "./pages/admin/TutorialGrandstream";
 import TutorialIntelbras from "./pages/admin/TutorialIntelbras";
 import TutorialUnifi from "./pages/admin/TutorialUnifi";
+import ComecePorAqui from "./pages/admin/ComecePorAqui";
 import CampanhaEditor from "./pages/admin/CampanhaEditor";
 import Empresas from "./pages/super/Empresas";
 import EmpresaPainel from "./pages/super/EmpresaPainel";
@@ -125,6 +126,7 @@ function App() {
       <Route path="/admin/:empresaSlug/identidade-plataforma" element={<RotaDono><IdentidadePlataforma /></RotaDono>} />
       <Route path="/admin/:empresaSlug/mikrotiks" element={<RotaPrivada><Mikrotiks /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/vpn" element={<RotaPrivada><Wireguard /></RotaPrivada>} />
+      <Route path="/admin/:empresaSlug/comece-por-aqui" element={<RotaPrivada><ComecePorAqui /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-omada" element={<RotaPrivada><TutorialOmada /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-grandstream" element={<RotaPrivada><TutorialGrandstream /></RotaPrivada>} />
       <Route path="/admin/:empresaSlug/tutorial-intelbras" element={<RotaPrivada><TutorialIntelbras /></RotaPrivada>} />
