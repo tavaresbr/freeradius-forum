@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
+import GatewayWizard from "../../components/admin/GatewayWizard";
+import AdicionarPeerFlow from "../../components/admin/AdicionarPeerFlow";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function Dashboard() {
   const [dados, setDados] = useState(null);
@@ -7,6 +11,50 @@ export default function Dashboard() {
   const [hoje, setHoje] = useState(null); // numeros do dia (falha silenciosa: o dashboard principal nao depende dele)
 
   const token = localStorage.getItem("admin_token");
+  const navigate = useNavigate();
+  const { empresaSlug } = useParams();
+  const { hasPermission } = useAuth();
+  const basePath = `/admin/${empresaSlug}`;
+  const podePeer = hasPermission("vpn", "criar");
+  const podeEquipamento = hasPermission("mikrotiks", "criar");
+  const [showPeer, setShowPeer] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [portais, setPortais] = useState([]);
+
+  const abrirWizard = () => {
+    setShowWizard(true);
+    fetch("/api/portais", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setPortais(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  };
+
+  const aoSalvarEquipamento = () => {
+    setShowWizard(false);
+    carregarDados();
+    navigate(`${basePath}/mikrotiks`); // a tela Equipamentos abre a Trilha do equipamento novo
+  };
+
+  const botoesAcao = (podePeer || podeEquipamento) && (
+    <div className="flex flex-wrap gap-3">
+      {podePeer && (
+        <button
+          onClick={() => setShowPeer(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold shadow-lg shadow-green-900/40 hover:bg-green-500 transition-colors"
+        >
+          <span className="text-lg leading-none">+</span> Adicionar Peer
+        </button>
+      )}
+      {podeEquipamento && (
+        <button
+          onClick={abrirWizard}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold shadow transition-colors"
+        >
+          + Adicionar Equipamento
+        </button>
+      )}
+    </div>
+  );
 
   const carregarDados = async () => {
     try {
@@ -78,10 +126,39 @@ export default function Dashboard() {
 
   return (
     <AdminLayout>
-      <div className="flex items-center gap-3 mb-6 sm:mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
+        <div className="flex items-center gap-3">
         <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        </div>
+        {botoesAcao}
       </div>
+
+      {dados && dados.mikrotiks?.total === 0 && (
+        <section className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 sm:p-5" aria-label="Primeiros passos">
+          <h2 className="text-lg font-semibold text-white">👋 Primeiros passos</h2>
+          <p className="text-sm text-gray-300 mt-1">
+            Você ainda não tem nenhum equipamento. O caminho é simples: crie a VPN do roteador (Adicionar Peer), cole o script nele e depois cadastre o equipamento.
+          </p>
+          <Link to={`${basePath}/comece-por-aqui`} className="inline-block mt-3 text-sm font-semibold text-blue-400 hover:text-blue-300 underline">
+            Ver o passo a passo completo →
+          </Link>
+        </section>
+      )}
+
+      <AdicionarPeerFlow
+        open={showPeer}
+        onClose={() => setShowPeer(false)}
+        proximoPasso={podeEquipamento ? { label: "Já colei, cadastrar equipamento", onClick: abrirWizard } : null}
+      />
+      <GatewayWizard
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        onSaved={aoSalvarEquipamento}
+        portais={portais}
+        token={token}
+        editando={null}
+      />
 
       {erro && <p className="text-red-400 mb-4">{erro}</p>}
 
