@@ -112,6 +112,7 @@ function AcoesDoCanto({ onAcao, empresaSlug }) {
             <button role="menuitem" className={`${itemCls} text-green-400`} onClick={() => escolher("nova")}>Nova conversa</button>
             <button role="menuitem" className={itemCls} onClick={() => escolher("automacao")}>Resposta automática</button>
             <button role="menuitem" className={itemCls} onClick={() => escolher("chatbot")}>Chatbot</button>
+            <button role="menuitem" className={itemCls} onClick={() => escolher("ia")}>Atendente com IA</button>
             <button role="menuitem" className={itemCls} onClick={() => escolher("etiquetas")}>Etiquetas</button>
             <Link to={`/admin/${empresaSlug}/whatsapp`} role="menuitem" className={`${itemCls} border-t border-gray-800`} onClick={() => setAberto(false)}>Conexão e histórico de envios</Link>
           </div>

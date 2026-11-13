@@ -189,6 +189,9 @@ async function registrarMensagem(empresaId, data, numeroId = 0) {
     // em segundo plano, nunca atrapalha o webhook.
     require("./whatsappChatbot").processar(empresaId, conversaId, m)
       .catch((err) => { console.warn("[atendimento] chatbot falhou:", err.message); return { tratada: false }; })
+      // Atendente por IA (desligado por padrao): so entra se o chatbot de menu nao tratou a mensagem
+      .then((r) => (r && r.tratada ? r : require("./whatsappIaAtendente").processar(empresaId, conversaId, m)
+        .catch((err) => { console.warn("[atendimento] atendente IA falhou:", err.message); return { tratada: false }; })))
       .then((r) => (r && r.tratada ? null : require("./whatsappAutomacao").responderAutomatico(empresaId, conversaId, m)))
       .catch((err) => console.warn("[atendimento] resposta automatica falhou:", err.message));
   }
