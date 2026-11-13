@@ -52,7 +52,7 @@ export default function AtendimentoRelatorios({ embutido = false }) {
 
   const baixarCsv = () => {
     if (!dados) return;
-    const linhas = [["Dia", "Recebidas", "Enviadas"], ...dados.por_dia.map((d) => [d.dia, d.recebidas, d.enviadas]), [], ["Atendente", "Mensagens enviadas"], ...dados.por_atendente.map((a) => [a.nome, a.enviadas])];
+    const linhas = [["Dia", "Recebidas", "Enviadas"], ...dados.por_dia.map((d) => [d.dia, d.recebidas, d.enviadas]), [], ["Atendente", "Mensagens enviadas"], ...dados.por_atendente.map((a) => [a.nome, a.enviadas]), ...(dados.ia ? [[], ["IA", "Respostas", "Passou para a equipe", "Uso no mês"], ["", dados.ia.respostas, dados.ia.transferidas, dados.ia.mes.usadas]] : [])];
     const csv = linhas.map((l) => l.map((c) => `"${celula(c).replace(/"/g, '""')}"`).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -85,6 +85,14 @@ export default function AtendimentoRelatorios({ embutido = false }) {
               <Card titulo="1ª resposta (mediana)" valor={dur(dados.primeira_resposta.mediana_seg)} detalhe="Respostas automáticas não contam" />
               <Card titulo="Satisfação" valor={dados.satisfacao.media != null ? `${dados.satisfacao.media} / 5` : "—"} detalhe={`${dados.satisfacao.respostas} notas`} />
             </div>
+
+            {dados.ia && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card titulo="Respostas da IA" valor={dados.ia.respostas} detalhe="No período" />
+                <Card titulo="IA passou para a equipe" valor={dados.ia.transferidas} detalhe="No período" />
+                <Card titulo="Uso da IA no mês" valor={dados.ia.mes.usadas} detalhe={dados.ia.mes.limite == null ? "Sem limite no plano" : `de ${dados.ia.mes.limite} respostas`} />
+              </div>
+            )}
 
             <section className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4">
               <h2 className="text-sm font-semibold text-white mb-3">Mensagens por dia</h2>

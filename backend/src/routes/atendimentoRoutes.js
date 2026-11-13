@@ -50,6 +50,7 @@ router.delete("/agendadas/:id", au.cancelarAgendada);
 router.get("/relatorios", rel.relatorios);
 router.get("/ia-status", rel.iaStatus);
 router.post("/conversas/:id/sugerir", sugestaoIaLimiter, rel.sugerir);
+router.post("/conversas/:id/ia", sugestaoIaLimiter, rel.acaoIa);
 router.get("/chatbot", au.obterChatbot);
 router.put("/chatbot", au.salvarChatbot);
 router.get("/ia-atendente", au.obterIaAtendente);

@@ -105,6 +105,11 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
   const [modo, setModo] = useState("resposta"); // resposta | nota
   const [iaAtiva, setIaAtiva] = useState(false); // "Sugerir resposta" liberado (chave no servidor + empresa ligou)
   const [sugerindo, setSugerindo] = useState(false);
+  const [iaInfo, setIaInfo] = useState({ recurso_ia: false, restantes: null }); // acoes extras do copiloto (plano com IA)
+  const [menuIa, setMenuIa] = useState(false);
+  const [iaResumo, setIaResumo] = useState("");
+  const [iaEtiquetas, setIaEtiquetas] = useState([]);
+  const [textoAntesIa, setTextoAntesIa] = useState(null); // para desfazer melhorar/traduzir
   const [modal, setModal] = useState(null); // etiquetas | respostas | nova
   const [menuEtiquetas, setMenuEtiquetas] = useState(false);
   // Acoes da engrenagem do hub (Nova conversa, Resposta automatica, Chatbot, Etiquetas) chegam como "pedido"
@@ -233,7 +238,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
 
   useEffect(() => { carregarEtiquetas(); carregarRespostas(); carregarNumeros(); }, [carregarEtiquetas, carregarRespostas, carregarNumeros]);
   useEffect(() => {
-    fetch("/api/atendimento/ia-status", { headers }).then((r) => (r.ok ? r.json() : null)).then((d) => setIaAtiva(!!d?.ativo)).catch(() => {});
+    fetch("/api/atendimento/ia-status", { headers }).then((r) => (r.ok ? r.json() : null)).then((d) => { setIaAtiva(!!d?.ativo); setIaInfo({ recurso_ia: !!d?.recurso_ia, restantes: d?.restantes ?? null }); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modal]);
   useEffect(() => { setCliente(null); setPainelAberto(false); setMenuEtiquetas(false); setModo("resposta"); if (selecionadaId) carregarCliente(selecionadaId); }, [selecionadaId, carregarCliente]);
@@ -468,6 +473,25 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
     }
   };
 
+  // Acoes do copiloto: resumir / melhorar / traduzir / etiquetar (cada uma conta 1 resposta do limite mensal)
+  const usarIa = async (acao, idioma) => {
+    if (!selecionadaId || sugerindo) return;
+    setMenuIa(false); setSugerindo(true); setErroEnvio("");
+    try {
+      const res = await fetch(`/api/atendimento/conversas/${selecionadaId}/ia`, { method: "POST", headers, body: JSON.stringify({ acao, texto, idioma }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroEnvio(d.error || "Não foi possível usar a IA agora"); return; }
+      if (acao === "resumir") setIaResumo(d.resultado || "");
+      else if (acao === "etiquetar") setIaEtiquetas(d.etiquetas || []);
+      else { setTextoAntesIa(texto); setModo("resposta"); setTexto(d.resultado || texto); }
+      setIaInfo((i) => ({ ...i, restantes: i.restantes == null ? null : Math.max(0, i.restantes - 1) }));
+    } catch {
+      setErroEnvio("Erro de conexão");
+    } finally {
+      setSugerindo(false);
+    }
+  };
+
   const aplicarResposta = (r) => {
     const primeiro = (conversa?.nome || "").trim().split(/\s+/)[0] || "cliente";
     setTexto(r.texto.replace(/\{\{\s*nome\s*\}\}/gi, primeiro).replace(/\{\{\s*empresa\s*\}\}/gi, cliente?.empresa || ""));
@@ -686,6 +710,24 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                 </div>
 
                 <footer className={`p-3 border-t border-gray-800 relative ${modo === "nota" ? "bg-yellow-50" : ""}`}>
+                  {iaResumo && (
+                    <div className="mb-2 p-2 rounded-lg border border-blue-900 bg-blue-900/10 text-sm text-gray-200 whitespace-pre-wrap">
+                      <div className="flex items-center justify-between gap-2 mb-1"><span className="text-xs font-semibold text-blue-300">✨ Resumo da conversa</span><button onClick={() => setIaResumo("")} className="text-xs text-gray-400 hover:text-white cursor-pointer" aria-label="Fechar resumo">Fechar</button></div>
+                      {iaResumo}
+                    </div>
+                  )}
+                  {iaEtiquetas.length > 0 && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                      <span>✨ Etiquetas sugeridas:</span>
+                      {iaEtiquetas.map((et) => (
+                        <button key={et.id} onClick={async () => { await alternarEtiqueta({ id: et.id }); setIaEtiquetas((l) => l.filter((x) => x.id !== et.id)); }} className="px-2 py-0.5 rounded-full border border-gray-700 text-gray-200 hover:bg-[#252b3b] cursor-pointer">+ {et.nome}</button>
+                      ))}
+                      <button onClick={() => setIaEtiquetas([])} className="text-gray-500 hover:text-white cursor-pointer">Dispensar</button>
+                    </div>
+                  )}
+                  {textoAntesIa !== null && (
+                    <div className="mb-2 text-xs text-gray-400">Texto alterado pela IA. <button onClick={() => { setTexto(textoAntesIa); setTextoAntesIa(null); }} className="text-blue-400 hover:underline cursor-pointer">Desfazer</button></div>
+                  )}
                   <div className="flex gap-1 mb-2">
                     {[["resposta", "Responder"], ["nota", "Nota interna"]].map(([k, rot]) => (
                       <button key={k} onClick={() => { setModo(k); if (k === "nota") setArquivo(null); }}
@@ -759,7 +801,20 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                       className={`${inputCls} resize-none`}
                     />
                     {iaAtiva && modo !== "nota" && (
-                      <button onClick={sugerir} disabled={sugerindo || enviando} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" title="Gera um rascunho de resposta com IA (você revisa antes de enviar)" aria-label="Sugerir resposta com IA">{sugerindo ? "…" : "✨"}</button>
+                      <div className="relative">
+                        <button onClick={iaInfo.recurso_ia ? () => setMenuIa((v) => !v) : sugerir} disabled={sugerindo || enviando} className="px-3 py-2 bg-[#0f111a] border border-gray-800 text-gray-300 rounded-lg hover:bg-[#252b3b] text-sm cursor-pointer disabled:opacity-50" title="Assistente de IA (você revisa antes de enviar)" aria-label="Assistente de IA" aria-haspopup={iaInfo.recurso_ia ? "menu" : undefined} aria-expanded={iaInfo.recurso_ia ? menuIa : undefined}>{sugerindo ? "…" : "✨"}</button>
+                        {menuIa && (
+                          <div role="menu" className="absolute right-0 bottom-full mb-1 z-30 w-56 bg-[#1a1d27] border border-gray-800 rounded-lg shadow-lg p-1">
+                            <button role="menuitem" className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer" onClick={() => { setMenuIa(false); sugerir(); }}>Sugerir resposta</button>
+                            <button role="menuitem" className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer" onClick={() => usarIa("resumir")}>Resumir a conversa</button>
+                            <button role="menuitem" disabled={!texto.trim()} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer disabled:opacity-40" onClick={() => usarIa("melhorar")}>Melhorar meu texto</button>
+                            <button role="menuitem" disabled={!texto.trim()} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer disabled:opacity-40" onClick={() => usarIa("traduzir", "en")}>Traduzir para inglês</button>
+                            <button role="menuitem" disabled={!texto.trim()} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer disabled:opacity-40" onClick={() => usarIa("traduzir", "es")}>Traduzir para espanhol</button>
+                            <button role="menuitem" className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#252b3b] rounded cursor-pointer" onClick={() => usarIa("etiquetar")}>Sugerir etiquetas</button>
+                            {iaInfo.restantes != null && <p className="px-3 py-1 text-xs text-gray-500">{iaInfo.restantes} respostas de IA restantes no mês</p>}
+                          </div>
+                        )}
+                      </div>
                     )}
                     <button onClick={enviar} disabled={enviando || (!texto.trim() && (modo === "nota" || !arquivo))} className={`px-4 py-2 ${modo === "nota" ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"} text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer`}>
                       {enviando ? "..." : modo === "nota" ? "Salvar nota" : "Enviar"}
