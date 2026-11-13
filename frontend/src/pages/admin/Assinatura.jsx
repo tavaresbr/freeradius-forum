@@ -288,7 +288,7 @@ export default function Assinatura() {
                   <li>✓ {qtd(p.max_admins, "administrador", "administradores")}</li>
                   {p.max_portais !== undefined && <li>✓ {qtd(p.max_portais, "portal", "portais")}</li>}
                   {p.max_whatsapp_numeros !== undefined && <li>✓ {qtd(p.max_whatsapp_numeros, "número de WhatsApp", "números de WhatsApp")}</li>}
-                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"]].map(([k, r]) => (
+                  {[["inclui_whatsapp", "WhatsApp"], ["inclui_campanhas", "Campanhas"], ["inclui_exportacao", "Exportação da base"], ["inclui_dominio", "Domínio próprio"], ["inclui_ia", "Atendente com IA"]].map(([k, r]) => (
                     p[k] !== undefined && <li key={k} className={p[k] ? "" : "opacity-50"}>{p[k] ? "✓" : "—"} {r}</li>
                   ))}
                 </ul>

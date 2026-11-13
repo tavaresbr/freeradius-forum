@@ -114,19 +114,17 @@ test('relatorios: agrega tudo escopado por empresa; media, mediana e notas', asy
 test('IA: limpa CPF/telefone/e-mail, manda so texto da conversa, usa a chave do servidor e devolve o rascunho', async () => {
   limpar();
   process.env.ANTHROPIC_API_KEY = 'sk-teste';
-  const original = axios.post;
   let enviado;
-  axios.post = async (url, body, cfg) => { enviado = { url, body, cfg }; return { data: { content: [{ type: 'text', text: 'Olá Maria, já te ajudo!' }] } }; };
   try {
     const ia = carregar('src/services/sugestaoIA.js', { db: criarDb() });
+    // SDK oficial: troca o cliente por um falso (nenhuma chamada de rede)
+    require('../../src/services/claudeClient').obterCliente = () => ({ messages: { create: async (body) => { enviado = { body }; return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Olá Maria, já te ajudo!' }] }; } } });
     assert.strictEqual(ia.disponivel(), true);
     const r = await ia.sugerirResposta({
       nome: 'Maria Souza', empresa: 'Apex', plano: 'Plano 1h', restanteMin: 12,
       mensagens: [{ direcao: 'in', texto: 'meu cpf 123.456.789-09 tel (93) 99999-0000 mail a@b.com nao conecta' }, { direcao: 'nota', texto: 'segredo interno' }, { direcao: 'out', texto: 'Vou verificar' }, { direcao: 'in', texto: 'e agora?' }],
     });
     assert.strictEqual(r, 'Olá Maria, já te ajudo!');
-    assert.match(enviado.url, /api\.anthropic\.com\/v1\/messages$/);
-    assert.strictEqual(enviado.cfg.headers['x-api-key'], 'sk-teste');
     assert.strictEqual(enviado.body.model, 'claude-haiku-5-5');
     const conteudo = enviado.body.messages[0].content;
     assert.doesNotMatch(conteudo, /123\.456|99999|a@b\.com|segredo interno/);
@@ -137,7 +135,7 @@ test('IA: limpa CPF/telefone/e-mail, manda so texto da conversa, usa a chave do 
     delete process.env.ANTHROPIC_API_KEY;
     assert.strictEqual(ia.disponivel(), false);
     await assert.rejects(ia.sugerirResposta({ mensagens: [{ direcao: 'in', texto: 'oi' }] }), /IA não configurada/);
-  } finally { axios.post = original; delete process.env.ANTHROPIC_API_KEY; }
+  } finally { delete process.env.ANTHROPIC_API_KEY; }
 });
 
 test('IA: endpoint exige a chave no servidor e a liberacao da empresa; conversa de outra empresa = 404', async () => {
