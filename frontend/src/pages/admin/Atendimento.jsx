@@ -10,6 +10,7 @@ import EnviarEspecial from "../../components/admin/atendimento/EnviarEspecial";
 import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
 import Chatbot from "../../components/admin/atendimento/Chatbot";
+import IaAtendente from "../../components/admin/atendimento/IaAtendente";
 
 const FILTROS = [
   ["aberta", "Abertas"],
@@ -674,7 +675,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
                         <div className="flex items-center justify-end gap-1 mt-1 text-[11px] opacity-80">
                           <span>{hora(m.criado_em)}</span>
                           {m.direcao === "out" && <Ticks status={m.status} />}
-                          {m.direcao === "out" && m.automatica ? <span className="opacity-70">· 🤖 automática</span> : m.direcao === "out" && m.autor && <span className="opacity-70 dado-sensivel">· {m.autor}</span>}
+                          {m.direcao === "out" && m.automatica ? <span className="opacity-70">· {m.ia ? "🤖 IA" : "🤖 automática"}</span> : m.direcao === "out" && m.autor && <span className="opacity-70 dado-sensivel">· {m.autor}</span>}
                           {m.direcao !== "nota" && m.status !== "erro" && <button onClick={() => { setCitando(m); setModo("resposta"); }} className="ml-1 opacity-70 hover:opacity-100 cursor-pointer" aria-label="Responder esta mensagem" title="Responder esta mensagem">↩</button>}
                         </div>
                         {m.status === "erro" && <p className="text-xs text-red-200 mt-1">{m.erro || "Falha no envio"}</p>}
@@ -782,6 +783,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
               onEnviado={async () => { setModal(null); noFimRef.current = true; await carregarMensagens(selecionadaId); carregarConversas(); }} />
           )}
           {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
+          {modal === "ia" && <IaAtendente headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
           {modal === "nova" && <NovaConversa headers={headers} numeros={numeros} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}

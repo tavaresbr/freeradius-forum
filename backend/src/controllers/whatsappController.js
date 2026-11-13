@@ -313,6 +313,7 @@ async function saveConfig(req, res) {
       ...(atual.aviso_expiracao ? { aviso_expiracao: atual.aviso_expiracao } : {}),
       ...(atual.alerta_equipamentos ? { alerta_equipamentos: atual.alerta_equipamentos } : {}),
       ...(atual.chatbot ? { chatbot: atual.chatbot } : {}),
+      ...(atual.ia_atendente ? { ia_atendente: atual.ia_atendente } : {}),
       ...(atual.pos_compra ? { pos_compra: atual.pos_compra } : {}),
       ...(atual.renovacao ? { renovacao: atual.renovacao } : {}),
       ...(atual.nao_perturbe ? { nao_perturbe: atual.nao_perturbe } : {}),

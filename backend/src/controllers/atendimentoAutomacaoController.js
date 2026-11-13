@@ -6,6 +6,10 @@ const auto = require("../services/whatsappAutomacao");
 const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
 const bot = require("../utils/chatbot");
+const cfgIa = require("../utils/iaAtendente");
+const claude = require("../services/claudeClient");
+const iaUso = require("../services/iaUso");
+const { temRecurso } = require("../utils/assinatura");
 const posCompra = require("../utils/posCompra");
 const renovacao = require("../utils/renovacao");
 const { renderTemplate, normalizarTelefone, gravarLog } = require("../services/whatsappNotify");
@@ -171,6 +175,64 @@ exports.salvarChatbot = async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     erro500(res, err, "Erro ao salvar o chatbot");
+  }
+};
+
+// ---- Atendente por IA (Claude) ----
+const MSG_077 = "Recurso indisponível: rode a migration 077 (node migrations/077_ia_atendente.js).";
+
+// GET /api/atendimento/ia-atendente
+exports.obterIaAtendente = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    const recurso = await temRecurso(req.empresa_id, "ia");
+    res.json({
+      ia_atendente: cfgIa.mesclarComPadrao(cfg.ia_atendente),
+      chave_no_servidor: claude.disponivel(),
+      recurso,
+      pronto: await temColuna("whatsapp_mensagens", "ia"),
+      uso: recurso ? await iaUso.situacao(req.empresa_id) : null,
+    });
+  } catch (err) { erro500(res, err, "Erro ao buscar o atendente por IA"); }
+};
+
+async function exigirIaPronta(req, res) {
+  if (!claude.disponivel()) { res.status(503).json({ error: "A IA não está configurada neste servidor (ANTHROPIC_API_KEY)." }); return false; }
+  if (!(await temRecurso(req.empresa_id, "ia"))) { res.status(403).json({ code: "RECURSO_NAO_CONTRATADO", error: "O Atendente com IA não está incluído no seu plano." }); return false; }
+  if (!(await temColuna("whatsapp_mensagens", "ia"))) { res.status(503).json({ error: MSG_077 }); return false; }
+  return true;
+}
+
+// PUT /api/atendimento/ia-atendente
+exports.salvarIaAtendente = async (req, res) => {
+  try {
+    const ia = cfgIa.validarIaAtendente(req.body);
+    if (ia.ativo && !(await exigirIaPronta(req, res))) return;
+    await auto.salvarChave(req.empresa_id, "ia_atendente", ia);
+    res.json({ success: true, ia_atendente: ia });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar o atendente por IA");
+  }
+};
+
+// POST /api/atendimento/ia-atendente/testar { mensagem, config? } -> simula uma mensagem do cliente (nada e enviado)
+exports.testarIaAtendente = async (req, res) => {
+  try {
+    if (!(await exigirIaPronta(req, res))) return;
+    const mensagem = typeof req.body?.mensagem === "string" ? req.body.mensagem.trim() : "";
+    if (!mensagem || mensagem.length > 500) return res.status(400).json({ error: "Escreva a mensagem do cliente (até 500 caracteres)." });
+    const salva = cfgIa.mesclarComPadrao((await auto.lerConfigJson(req.empresa_id)).ia_atendente);
+    // testa o que esta na tela (ainda nao salvo), mas validado do mesmo jeito; nunca liga nada
+    const cfg = req.body?.config ? cfgIa.validarIaAtendente({ ...req.body.config, ativo: false }) : salva;
+    const st = await iaUso.situacao(req.empresa_id);
+    if (st.restantes === 0) return res.status(429).json({ error: "O limite mensal de respostas da IA foi atingido." });
+    const r = await require("../services/whatsappIaAtendente").testar(req.empresa_id, cfg, mensagem);
+    if (r.falha) return res.status(502).json({ error: `A IA não conseguiu responder (${r.falha}).`, ferramentas: r.ferramentas });
+    res.json({ resposta: r.texto || null, transferiu: r.transferir ? r.transferir.motivo : null, ferramentas: r.ferramentas });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao testar o atendente por IA");
   }
 };
 
