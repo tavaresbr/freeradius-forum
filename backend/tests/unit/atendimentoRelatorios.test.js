@@ -144,7 +144,7 @@ test('IA: endpoint exige a chave no servidor e a liberacao da empresa; conversa 
     db: criarDb((sql, p) => {
       if (/SELECT \* FROM whatsapp_conversas WHERE id = \? AND empresa_id = \?/.test(sql)) return p[1] === 7 ? [[{ id: 5, nome: 'Maria', lead_id: null }]] : [[]];
     }),
-    extras: { 'src/services/whatsappAutomacao.js': { obterAutomacao: async () => cfg } },
+    extras: { 'src/services/whatsappAutomacao.js': { obterAutomacao: async () => cfg }, 'src/utils/assinatura.js': { temRecurso: async () => false, obterStatus: async () => ({}) } },
   });
   process.env.ANTHROPIC_API_KEY = 'sk';
   try {
@@ -156,7 +156,7 @@ test('IA: endpoint exige a chave no servidor e a liberacao da empresa; conversa 
     assert.strictEqual(res.statusCode, 404);
     res = criarRes();
     await montar({ ia_sugestao: true }).iaStatus(req(), res);
-    assert.deepStrictEqual(res.body, { disponivel: true, ativo: true });
+    assert.deepStrictEqual(res.body, { disponivel: true, ativo: true, recurso_ia: false, restantes: null });
     delete process.env.ANTHROPIC_API_KEY;
     res = criarRes();
     await montar({ ia_sugestao: true }).sugerir(req({ params: { id: '5' } }), res);

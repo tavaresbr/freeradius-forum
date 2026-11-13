@@ -74,7 +74,7 @@ exports.resumo = async (req, res) => {
     const id = emp.id;
     const agora = new Date();
 
-    const [assinatura, adicionais, cobrancas, uso, planosGratis] = await Promise.all([
+    const [assinatura, adicionais, cobrancas, uso, usoIa, planosGratis] = await Promise.all([
       bloco("assinatura", async () => {
         const a = await primeira("SELECT * FROM assinaturas WHERE empresa_id = ?", [id]);
         if (!a) return null;
@@ -110,6 +110,13 @@ exports.resumo = async (req, res) => {
           vendas_30d: { n: Number(vd.n) || 0, valor: (Number(vd.centavos) || 0) / 100 },
         };
       }),
+      bloco("ia", async () => {
+        // Custo da IA (do mes corrente); tabela ausente = bloco vazio
+        const iaUso = require("../services/iaUso");
+        const st = await iaUso.situacao(id);
+        const t = await primeira("SELECT tokens_in, tokens_out FROM ia_uso WHERE empresa_id = ? AND mes = ?", [id, st.mes]);
+        return { mes: st.mes, respostas: st.usadas, limite: st.limite, tokens_in: Number(t?.tokens_in) || 0, tokens_out: Number(t?.tokens_out) || 0 };
+      }),
       bloco("planos_gratis", () => linhas("SELECT id, nome FROM saas_planos WHERE gratis = 1 AND ativo = 1 ORDER BY ordem, id")),
     ]);
     const alertas = await bloco("alertas", () => alertasDaEmpresa(emp, uso ? uso.equipamentos : 0));
@@ -125,7 +132,7 @@ exports.resumo = async (req, res) => {
       },
       cliente_ha: cliente.texto,
       dias_de_cliente: cliente.dias,
-      assinatura, adicionais, cobrancas, uso, alertas,
+      assinatura, adicionais, cobrancas, uso, uso_ia: usoIa, alertas,
       planos: planos || [],
       planos_gratis: planosGratis || [],
     });

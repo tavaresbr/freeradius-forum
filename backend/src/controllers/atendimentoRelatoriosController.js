@@ -4,6 +4,8 @@ const auto = require("../services/whatsappAutomacao");
 const ia = require("../services/sugestaoIA");
 const { temColuna } = require("../utils/schemaCache");
 const { verificarSaldoRadius } = require("../utils/leadUtils");
+const { temRecurso, obterStatus } = require("../utils/assinatura");
+const iaUso = require("../services/iaUso");
 
 const erro500 = (res, err, msg) => { console.error("[atendimento]", err.message); res.status(500).json({ error: msg }); };
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -79,8 +81,19 @@ exports.relatorios = async (req, res) => {
     }
     const conv = { abertas: 0, resolvidas: 0, novas: Number(novas.n) };
     for (const s of status) { if (s.status === "aberta") conv.abertas = Number(s.n); else if (s.status === "resolvida") conv.resolvidas = Number(s.n); }
+    // Bloco IA (so se a migration 077 rodou): respostas da IA, conversas passadas ao humano e uso do mes
+    let iaBloco = null;
+    if (await temColuna("whatsapp_mensagens", "ia")) {
+      try {
+        const [[r]] = await db.query("SELECT COUNT(*) AS n FROM whatsapp_mensagens WHERE empresa_id = ? AND direcao = 'out' AND ia = 1 AND criado_em BETWEEN ? AND ?", [emp, ini, fim]);
+        const [[t]] = await db.query("SELECT COUNT(*) AS n FROM whatsapp_mensagens WHERE empresa_id = ? AND direcao = 'nota' AND texto LIKE '🤖 IA passou para um atendente%' AND criado_em BETWEEN ? AND ?", [emp, ini, fim]);
+        const uso = await iaUso.situacao(emp);
+        iaBloco = { respostas: Number(r.n), transferidas: Number(t.n), mes: { usadas: uso.usadas, limite: uso.limite, restantes: uso.restantes } };
+      } catch (e) { console.warn("[atendimento] relatorio IA:", e.message); }
+    }
     res.json({
       periodo: { de, ate },
+      ia: iaBloco,
       por_dia: porDia.map((d) => ({ dia: d.dia instanceof Date ? ymd(d.dia) : String(d.dia).slice(0, 10), recebidas: Number(d.recebidas), enviadas: Number(d.enviadas) })),
       primeira_resposta: { conversas: segs.length, media_seg: segs.length ? Math.round(segs.reduce((a, b) => a + b, 0) / segs.length) : null, mediana_seg: mediana(segs) },
       por_atendente: porAtendente.map((a) => ({ nome: a.nome, enviadas: Number(a.enviadas) })),
@@ -97,9 +110,41 @@ exports.relatorios = async (req, res) => {
 exports.iaStatus = async (req, res) => {
   try {
     const cfg = await auto.obterAutomacao(req.empresa_id);
-    res.json({ disponivel: ia.disponivel(), ativo: ia.disponivel() && !!cfg.ia_sugestao });
+    const recursoIa = ia.disponivel() && !!cfg.ia_sugestao && await temRecurso(req.empresa_id, "ia");
+    const st = recursoIa ? await iaUso.situacao(req.empresa_id) : null;
+    res.json({ disponivel: ia.disponivel(), ativo: ia.disponivel() && !!cfg.ia_sugestao, recurso_ia: !!recursoIa, restantes: st ? st.restantes : null });
   } catch (err) { erro500(res, err, "Erro ao consultar a IA"); }
 };
+
+
+/** Contexto mascarado da conversa para a IA (ultimas mensagens + nome, empresa, plano e saldo). */
+async function montarContexto(empresaId, conversa) {
+  const [recentes] = await db.query(
+    "SELECT direcao, texto FROM whatsapp_mensagens WHERE empresa_id = ? AND conversa_id = ? AND direcao IN ('in','out') AND texto IS NOT NULL ORDER BY id DESC LIMIT 20",
+    [empresaId, conversa.id]
+  );
+  const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [empresaId]).catch(() => [[{}]]);
+  let plano = null, restanteMin = null;
+  if (conversa.lead_id) {
+    try {
+      const [[l]] = await db.query("SELECT cpf FROM leads WHERE id = ? AND empresa_id = ?", [conversa.lead_id, empresaId]);
+      const cpf = String(l?.cpf || "").replace(/\D/g, "");
+      if (cpf) {
+        const [[ru]] = await db.query("SELECT p.nome FROM radius_users ru LEFT JOIN planos p ON p.id = ru.plano_id WHERE ru.empresa_id = ? AND ru.username = ? LIMIT 1", [empresaId, cpf]);
+        plano = ru?.nome || null;
+        const sd = await verificarSaldoRadius(cpf);
+        if (sd.existe) restanteMin = Math.ceil((sd.tempoRestante || 0) / 60);
+      }
+    } catch { /* contexto extra e' opcional */ }
+  }
+  return { mensagens: recentes.reverse(), nome: conversa.nome, empresa: emp?.nome, plano, restanteMin };
+}
+
+/** Reserva 1 resposta do limite mensal do plano (true = pode usar). */
+async function reservarCota(empresaId) {
+  const st = await obterStatus(empresaId).catch(() => ({}));
+  return iaUso.reservar(empresaId, st.ia_respostas_mes == null ? null : Number(st.ia_respostas_mes));
+}
 
 // POST /api/atendimento/conversas/:id/sugerir  -> { sugestao }
 exports.sugerir = async (req, res) => {
@@ -111,30 +156,62 @@ exports.sugerir = async (req, res) => {
     if (!ia.disponivel()) return res.status(503).json({ error: "Sugestão por IA não está disponível neste servidor." });
     const cfg = await auto.obterAutomacao(req.empresa_id);
     if (!cfg.ia_sugestao) return res.status(403).json({ error: "A sugestão por IA está desligada. Ative em Resposta automática." });
-    const [recentes] = await db.query(
-      "SELECT direcao, texto FROM whatsapp_mensagens WHERE empresa_id = ? AND conversa_id = ? AND direcao IN ('in','out') AND texto IS NOT NULL ORDER BY id DESC LIMIT 20",
-      [req.empresa_id, conversa.id]
-    );
-    const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [req.empresa_id]).catch(() => [[{}]]);
-    let plano = null, restanteMin = null;
-    if (conversa.lead_id) {
-      try {
-        const [[l]] = await db.query("SELECT cpf FROM leads WHERE id = ? AND empresa_id = ?", [conversa.lead_id, req.empresa_id]);
-        const cpf = String(l?.cpf || "").replace(/\D/g, "");
-        if (cpf) {
-          const [[ru]] = await db.query("SELECT p.nome FROM radius_users ru LEFT JOIN planos p ON p.id = ru.plano_id WHERE ru.empresa_id = ? AND ru.username = ? LIMIT 1", [req.empresa_id, cpf]);
-          plano = ru?.nome || null;
-          const sd = await verificarSaldoRadius(cpf);
-          if (sd.existe) restanteMin = Math.ceil((sd.tempoRestante || 0) / 60);
-        }
-      } catch { /* contexto extra e' opcional */ }
+    const ctx = await montarContexto(req.empresa_id, conversa);
+    let reservou = false;
+    if (await temRecurso(req.empresa_id, "ia")) { // com o recurso, a sugestao tambem conta no limite mensal
+      const r = await reservarCota(req.empresa_id);
+      if (!r) return res.status(429).json({ error: "O limite mensal de respostas da IA foi atingido." });
+      reservou = true;
     }
-    const sugestao = await ia.sugerirResposta({ mensagens: recentes.reverse(), nome: conversa.nome, empresa: emp?.nome, plano, restanteMin });
+    let sugestao;
+    try { sugestao = await ia.sugerirResposta(ctx); } catch (e) { if (reservou) await iaUso.devolver(req.empresa_id); throw e; }
     res.json({ sugestao });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("[atendimento] sugestao IA:", err.response?.status || err.message);
     res.status(502).json({ error: "Não foi possível gerar a sugestão agora. Tente de novo." });
+  }
+};
+
+// POST /api/atendimento/conversas/:id/ia { acao: resumir|melhorar|traduzir|etiquetar, texto?, idioma? }
+// Exige chave no servidor + liberacao da empresa (ia_sugestao) + recurso `ia` do plano; cada chamada conta 1 resposta do mes.
+exports.acaoIa = async (req, res) => {
+  let reservou = false;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Conversa inválida" });
+    const acao = typeof req.body?.acao === "string" ? req.body.acao : "";
+    if (!ia.ACOES.includes(acao)) return res.status(400).json({ error: "Ação de IA inválida" });
+    const [[conversa]] = await db.query("SELECT * FROM whatsapp_conversas WHERE id = ? AND empresa_id = ?", [id, req.empresa_id]);
+    if (!conversa) return res.status(404).json({ error: "Conversa não encontrada" });
+    if (!ia.disponivel()) return res.status(503).json({ error: "A IA não está disponível neste servidor." });
+    const cfg = await auto.obterAutomacao(req.empresa_id);
+    if (!cfg.ia_sugestao) return res.status(403).json({ error: "A IA do atendimento está desligada. Ative em Resposta automática." });
+    if (!(await temRecurso(req.empresa_id, "ia"))) return res.status(403).json({ code: "RECURSO_NAO_CONTRATADO", error: "O Atendente com IA não está incluído no seu plano." });
+    let ctx = { texto: req.body?.texto, idioma: req.body?.idioma };
+    if (acao === "etiquetar") {
+      const [et] = await db.query("SELECT id, nome FROM whatsapp_etiquetas WHERE empresa_id = ? ORDER BY nome LIMIT 50", [req.empresa_id]).catch(() => [[]]);
+      ctx.etiquetas = et;
+    }
+    if (acao === "resumir" || acao === "etiquetar") ctx = { ...(await montarContexto(req.empresa_id, conversa)), ...ctx };
+    ia.montarPedido(acao, ctx); // valida a entrada ANTES de gastar cota
+    if (!(await reservarCota(req.empresa_id))) return res.status(429).json({ error: "O limite mensal de respostas da IA foi atingido." });
+    reservou = true;
+    try {
+      const r = await ia.executarAcao(acao, ctx);
+      await iaUso.registrarTokens(req.empresa_id, r.tokens.entrada, r.tokens.saida);
+      reservou = false;
+      if (acao === "etiquetar") return res.json({ etiquetas: (ctx.etiquetas || []).filter((e) => r.etiquetas.includes(Number(e.id))) });
+      return res.json({ resultado: r.texto });
+    } catch (e) {
+      if (e.tokens) await iaUso.registrarTokens(req.empresa_id, e.tokens.entrada, e.tokens.saida);
+      throw e;
+    }
+  } catch (err) {
+    if (reservou) await iaUso.devolver(req.empresa_id);
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("[atendimento] acao IA:", err.response?.status || err.message);
+    res.status(502).json({ error: "Não foi possível usar a IA agora. Tente de novo." });
   }
 };
 

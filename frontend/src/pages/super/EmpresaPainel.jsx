@@ -209,7 +209,7 @@ export default function EmpresaPainel() {
     );
   }
 
-  const { empresa, assinatura, adicionais, cobrancas, uso, alertas, planos, planos_gratis: planosGratisLista } = dados;
+  const { empresa, assinatura, adicionais, cobrancas, uso, uso_ia: usoIa, alertas, planos, planos_gratis: planosGratisLista } = dados;
   const st = assinatura ? STATUS[assinatura.status] : null;
   const fim = assinatura && (assinatura.status === "trial" ? assinatura.trial_ate || assinatura.vence_em : assinatura.vence_em);
   const planosPagos = (planos || []).filter((p) => !p.gratis);
@@ -537,6 +537,9 @@ export default function EmpresaPainel() {
               <CartaoMetrica rotulo="Novos clientes (30 dias)" valor={uso.clientes_novos_30d.toLocaleString("pt-BR")} />
               <CartaoMetrica rotulo="Conexões (30 dias)" valor={uso.conexoes_30d.toLocaleString("pt-BR")} dica="Só gateways cadastrados pelo IP do equipamento" />
               <CartaoMetrica rotulo="Vendas do hotspot (30 dias)" valor={moeda(uso.vendas_30d.valor)} dica={`${uso.vendas_30d.n} venda(s) aprovada(s)`} />
+              {usoIa && (
+                <CartaoMetrica rotulo={`IA em ${usoIa.mes} (custo da plataforma)`} valor={`${usoIa.respostas.toLocaleString("pt-BR")}${usoIa.limite != null ? ` / ${usoIa.limite.toLocaleString("pt-BR")}` : ""}`} dica={`${usoIa.tokens_in.toLocaleString("pt-BR")} tokens de entrada · ${usoIa.tokens_out.toLocaleString("pt-BR")} de saída`} />
+              )}
             </div>
           ) : (
             <p className="text-gray-500 text-sm">Não foi possível calcular o uso agora.</p>
