@@ -134,6 +134,7 @@ test('gravarEquipamentoLead: so equipamento da propria empresa, so se NULL, e nu
   const up = m.db.calls.find((c) => /UPDATE leads/.test(c.sql));
   assert.match(up.sql, /mikrotik_id IS NULL/);
   assert.match(up.sql, /empresa_id = \?/);
+  assert.match(up.sql, /REPLACE\(REPLACE\(REPLACE\(cpf/); // CPF gravado com mascara tambem casa
   assert.deepStrictEqual(up.params, [9, 5, '52998224725']);
   // id invalido / coluna ausente => silencioso
   m = mk(async () => { throw Object.assign(new Error("Unknown column 'mikrotik_id'"), {}); });

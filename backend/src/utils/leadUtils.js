@@ -436,8 +436,11 @@ async function gravarEquipamentoLead(empresaId, { cpf, mac }, mikrotikId) {
   try {
     const [[mtk]] = await db.execute("SELECT id FROM mikrotiks WHERE id = ? AND empresa_id = ?", [id, empresaId]);
     if (!mtk) return;
+    // leads.cpf guarda o CPF como o cliente digitou (com pontos e traco) e aqui chega so com digitos:
+    // comparar a coluna crua nunca casava e o equipamento ficava vazio na tela Cadastros LGPD.
+    const coluna = chave[0] === "cpf" ? "REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '')" : "mac";
     await db.execute(
-      `UPDATE leads SET mikrotik_id = ? WHERE empresa_id = ? AND ${chave[0]} = ? AND mikrotik_id IS NULL`,
+      `UPDATE leads SET mikrotik_id = ? WHERE empresa_id = ? AND ${coluna} = ? AND mikrotik_id IS NULL`,
       [id, empresaId, chave[1]]
     );
   } catch (err) {
