@@ -16,7 +16,7 @@ function Print({ src, alt }) {
       <img
         src={src}
         alt={alt}
-        className="rounded-lg border border-gray-200 shadow-sm my-3 w-full max-w-4xl hover:shadow-md transition-shadow cursor-zoom-in"
+        className="rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm my-3 w-full max-w-4xl hover:shadow-md transition-shadow cursor-zoom-in"
       />
     </a>
   );
@@ -24,23 +24,23 @@ function Print({ src, alt }) {
 
 function Passo({ numero, titulo, children }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 mb-6">
       <div className="flex items-center gap-3 mb-4">
         <span className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
           {numero}
         </span>
-        <h3 className="text-lg font-semibold text-gray-800">{titulo}</h3>
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{titulo}</h3>
       </div>
-      <div className="text-sm text-gray-600 space-y-2">{children}</div>
+      <div className="text-sm text-gray-600 dark:text-gray-300 space-y-2">{children}</div>
     </div>
   );
 }
 
 function Aviso({ tipo = "info", children }) {
   const estilos = {
-    info: "bg-blue-50 border-blue-200 text-blue-800",
-    atencao: "bg-yellow-50 border-yellow-300 text-yellow-800",
-    ok: "bg-green-50 border-green-200 text-green-800",
+    info: "bg-blue-50 dark:bg-blue-900/30 border-blue-200 text-blue-800 dark:text-blue-200",
+    atencao: "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300 text-yellow-800 dark:text-yellow-200",
+    ok: "bg-green-50 dark:bg-green-900/30 border-green-200 text-green-800 dark:text-green-200",
   };
   const icones = { info: "ℹ️", atencao: "⚠️", ok: "✅" };
   return (
@@ -54,8 +54,8 @@ function Aviso({ tipo = "info", children }) {
 function Campo({ nome, valor }) {
   return (
     <li className="flex flex-wrap gap-2 items-baseline">
-      <span className="font-medium text-gray-700">{nome}:</span>
-      <code className="bg-gray-100 rounded px-2 py-0.5 text-xs text-gray-800">{valor}</code>
+      <span className="font-medium text-gray-700 dark:text-gray-200">{nome}:</span>
+      <code className="bg-gray-100 dark:bg-slate-700 rounded px-2 py-0.5 text-xs text-gray-800 dark:text-gray-100">{valor}</code>
     </li>
   );
 }
@@ -80,15 +80,15 @@ export default function TutorialOmada() {
     <AdminLayout>
       <div className="max-w-6xl">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Tutorial — Integração TP-Link Omada</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Tutorial — Integração TP-Link Omada</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Passo a passo completo para conectar um controller Omada (OC200/OC300/software) ao sistema de hotspot,
             usando portal externo + RADIUS. Modelo homologado em produção.
           </p>
         </div>
 
         {/* Navegação por seções */}
-        <div className="flex flex-wrap gap-2 mb-6 sticky top-0 bg-gray-50 py-2 z-10">
+        <div className="flex flex-wrap gap-2 mb-6 sticky top-0 bg-gray-50 dark:bg-slate-900 py-2 z-10">
           {SECOES.map((s) => (
             <button
               key={s.id}
@@ -96,7 +96,7 @@ export default function TutorialOmada() {
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 secaoAtiva === s.id
                   ? "bg-blue-600 text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
+                  : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
               }`}
             >
               {s.titulo}
@@ -106,8 +106,8 @@ export default function TutorialOmada() {
 
         {/* ============ VISÃO GERAL ============ */}
         <section id="visao-geral" className="mb-10">
-          <h2 className="text-xl font-bold text-gray-800 mb-3">Como funciona a integração</h2>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-sm text-gray-600 space-y-3">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">Como funciona a integração</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 text-sm text-gray-600 dark:text-gray-300 space-y-3">
             <p>
               O Omada é integrado no modo <strong>External Web Portal + External RADIUS</strong>: o controller
               redireciona o cliente do Wi-Fi para o portal deste sistema e valida usuário/senha diretamente no
@@ -115,7 +115,7 @@ export default function TutorialOmada() {
               fica centralizado aqui — igual ao MikroTik.
             </p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>O cliente conecta no Wi-Fi e o Omada o redireciona para <code className="bg-gray-100 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>;</li>
+              <li>O cliente conecta no Wi-Fi e o Omada o redireciona para <code className="bg-gray-100 dark:bg-slate-700 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>;</li>
               <li>O portal (lead, LGPD, planos ou login) abre no celular do cliente;</li>
               <li>Após o cadastro/pagamento, o sistema cria as credenciais no RADIUS e o navegador conclui a autenticação no controller automaticamente;</li>
               <li>O controller valida no RADIUS (porta 1812), inicia o accounting (porta 1813) e libera a navegação;</li>
@@ -131,13 +131,13 @@ export default function TutorialOmada() {
 
         {/* ============ PARTE 1 — SISTEMA ============ */}
         <section id="sistema" className="mb-10">
-          <h2 className="text-xl font-bold text-gray-800 mb-3">Parte 1 — Configuração no sistema</h2>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">Parte 1 — Configuração no sistema</h2>
 
           <Passo numero="1" titulo="Confira o portal e o plano">
             <p>
               Em <strong>Portais</strong>, verifique qual portal será usado (ex.: “Cadastro de LEAD”). Em{" "}
               <strong>Planos</strong>, garanta que existe o plano correspondente — para portal de lead, um plano
-              com o nome <code className="bg-gray-100 rounded px-1">Lead</code> na empresa, com a duração (minutos)
+              com o nome <code className="bg-gray-100 dark:bg-slate-700 rounded px-1">Lead</code> na empresa, com a duração (minutos)
               e velocidade (Mbps) desejadas. É esse plano que define o tempo grátis e o limite de banda.
             </p>
           </Passo>
@@ -157,7 +157,7 @@ export default function TutorialOmada() {
             <Aviso tipo="ok">
               Ao salvar, o sistema cria o cliente RADIUS (NAS) e reinicia o FreeRADIUS automaticamente.
               Anote o <strong>ID do equipamento</strong> exibido na lista — ele monta a URL do portal externo:{" "}
-              <code className="bg-green-100 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>
+              <code className="bg-green-100 dark:bg-green-800/50 rounded px-1">{`https://${HOST}/hotspot/redirect/<ID>`}</code>
             </Aviso>
             <Aviso tipo="atencao">
               Se não souber o IP público do local, cadastre com o IP aproximado e corrija depois: na primeira
@@ -168,8 +168,8 @@ export default function TutorialOmada() {
 
         {/* ============ PARTE 2 — OMADA ============ */}
         <section id="omada" className="mb-10">
-          <h2 className="text-xl font-bold text-gray-800 mb-3">Parte 2 — Configuração no controller Omada</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">Parte 2 — Configuração no controller Omada</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Acesse o controller (Omada Cloud ou IP local) e selecione o <strong>site</strong> do cliente.
             Todos os menus abaixo ficam em <strong>Settings / Network Config</strong>.
           </p>
@@ -202,7 +202,7 @@ export default function TutorialOmada() {
           <Passo numero="2" titulo="Criar (ou usar) o SSID do hotspot">
             <p>
               Em <strong>Network Config → WLAN → Create New Wireless Network</strong>: dê o nome da rede
-              (ex.: <code className="bg-gray-100 rounded px-1">WiFi-Gratis</code>), marque{" "}
+              (ex.: <code className="bg-gray-100 dark:bg-slate-700 rounded px-1">WiFi-Gratis</code>), marque{" "}
               <strong>Guest Network</strong> e Security <strong>None</strong> (rede aberta — a autenticação é
               feita pelo portal). Aplique.
             </p>
@@ -256,17 +256,17 @@ export default function TutorialOmada() {
             <Aviso tipo="atencao">
               Sem essas entradas o cliente <strong>não consegue abrir o portal</strong> antes de autenticar
               (walled garden). Se o portal for de <strong>venda com PIX</strong>, adicione também os domínios do
-              Mercado Pago: <code className="bg-yellow-100 rounded px-1">mercadopago.com.br</code>,{" "}
-              <code className="bg-yellow-100 rounded px-1">mercadolibre.com</code> e{" "}
-              <code className="bg-yellow-100 rounded px-1">mlstatic.com</code>.
+              Mercado Pago: <code className="bg-yellow-100 dark:bg-yellow-800/50 rounded px-1">mercadopago.com.br</code>,{" "}
+              <code className="bg-yellow-100 dark:bg-yellow-800/50 rounded px-1">mercadolibre.com</code> e{" "}
+              <code className="bg-yellow-100 dark:bg-yellow-800/50 rounded px-1">mlstatic.com</code>.
             </Aviso>
           </Passo>
         </section>
 
         {/* ============ PARTE 3 — TESTE ============ */}
         <section id="teste" className="mb-10">
-          <h2 className="text-xl font-bold text-gray-800 mb-3">Parte 3 — Testar a integração</h2>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-sm text-gray-600 space-y-3">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">Parte 3 — Testar a integração</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 text-sm text-gray-600 dark:text-gray-300 space-y-3">
             <ol className="list-decimal ml-5 space-y-2">
               <li>Conecte um celular no SSID do hotspot (com um AP <strong>online</strong> no alcance);</li>
               <li>O portal de cadastro deve abrir automaticamente (captive portal);</li>
@@ -287,16 +287,16 @@ export default function TutorialOmada() {
 
         {/* ============ PROBLEMAS ============ */}
         <section id="problemas" className="mb-10">
-          <h2 className="text-xl font-bold text-gray-800 mb-3">Problemas comuns</h2>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">Problemas comuns</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-600">
+              <thead className="bg-gray-50 dark:bg-slate-900 text-left text-gray-600 dark:text-gray-300">
                 <tr>
                   <th className="px-4 py-3 font-medium">Sintoma</th>
                   <th className="px-4 py-3 font-medium">Causa provável / solução</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-600">
+              <tbody className="divide-y divide-gray-100 text-gray-600 dark:text-gray-300">
                 <tr>
                   <td className="px-4 py-3">Portal não abre no celular</td>
                   <td className="px-4 py-3">
