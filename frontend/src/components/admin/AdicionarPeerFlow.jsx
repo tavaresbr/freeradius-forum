@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { VENDORS, vendorDoTipo } from "../../constants/gatewayTipos";
+import { criarZip } from "../../utils/zipSimples";
 
 // "Nova Telecom" -> "Nova-Telecom" (sem acentos; so letras, numeros e hifen, como o nome do roteador exige)
 function baseNomePeer(nomeEmpresa) {
@@ -118,9 +119,10 @@ export function ConfPeerModal({ open, conf, nome, tipo, onClose, acaoExtra }) {
     }
   };
 
-  const baixar = () => {
-    const arquivo = `${String(nome || "peer").replace(/[^A-Za-z0-9._-]/g, "-")}.conf`;
-    const url = URL.createObjectURL(new Blob([conf], { type: "text/plain" }));
+  const nomeBase = String(nome || "peer").replace(/[^A-Za-z0-9._-]/g, "-");
+
+  const baixarBlob = (blob, arquivo) => {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = arquivo;
@@ -129,6 +131,10 @@ export function ConfPeerModal({ open, conf, nome, tipo, onClose, acaoExtra }) {
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+
+  const baixar = () => baixarBlob(new Blob([conf], { type: "text/plain" }), `${nomeBase}.conf`);
+  // Alguns equipamentos (ex.: Grandstream GWN) so aceitam upload de .zip
+  const baixarZip = () => baixarBlob(criarZip([{ nome: `${nomeBase}.conf`, conteudo: conf }]), `${nomeBase}.zip`);
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
@@ -147,6 +153,10 @@ export function ConfPeerModal({ open, conf, nome, tipo, onClose, acaoExtra }) {
           Só use este peer se o controller/AP (ou o roteador na frente dele) realmente enviar o tráfego RADIUS por esta VPN. O IP do peer será o IP do equipamento no cadastro.
         </p>
 
+        {tipo === "grandstream" && (
+          <p className="text-gray-400 text-xs mb-3">Se o GWN pedir um arquivo <strong>.zip</strong>, use <strong>Baixar .zip</strong> (o .conf vai dentro). Se não, copie o conteúdo abaixo.</p>
+        )}
+
         <div className="bg-[#0d1117] rounded-lg border border-gray-800 overflow-auto min-h-0 flex-1 max-h-[50vh]">
           <pre className="text-xs leading-relaxed text-green-400 font-mono whitespace-pre-wrap break-words p-3">
             <span className="dado-sensivel">{conf}</span>
@@ -156,6 +166,9 @@ export function ConfPeerModal({ open, conf, nome, tipo, onClose, acaoExtra }) {
         <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
           <button onClick={onClose} className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600">Fechar</button>
           <button onClick={baixar} className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600">Baixar .conf</button>
+          {tipo === "grandstream" && (
+            <button onClick={baixarZip} className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600">Baixar .zip</button>
+          )}
           {acaoExtra && (
             <button onClick={acaoExtra.onClick} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500">{acaoExtra.label}</button>
           )}
