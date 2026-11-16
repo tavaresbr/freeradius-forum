@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // dark: segue o botao de tema do painel (data-theme), nao o tema do sistema operacional
+  darkMode: ['selector', '[data-theme="escuro"]'],
   content: [
     "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
