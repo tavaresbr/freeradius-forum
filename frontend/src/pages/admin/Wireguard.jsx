@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
-import AdicionarPeerFlow, { ScriptPeerModal } from "../../components/admin/AdicionarPeerFlow";
+import AdicionarPeerFlow, { PeerConfigModal } from "../../components/admin/AdicionarPeerFlow";
+import { VENDORS, vendorDoTipo } from "../../constants/gatewayTipos";
 
 export default function Wireguard() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
-  const [scriptData, setScriptData] = useState("");
-  const [renomear, setRenomear] = useState(null); // { id, nome, erro, salvando }
+  const [scriptData, setScriptData] = useState({ tipo: "mikrotik", script: "", conf: "", nome: "" });
+  const [renomear, setRenomear] = useState(null); // { id, nome, tipo, erro, salvando }
   const [serverSettings, setServerSettings] = useState({ wgPort: '51820', wgHost: '92.113.34.197' });
   const [editSettings, setEditSettings] = useState({ wgPort: '', wgHost: '' });
   const [savingSettings, setSavingSettings] = useState(false);
@@ -70,7 +71,7 @@ export default function Wireguard() {
       const res = await fetch(`/api/wireguard/clients/${renomear.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: nome })
+        body: JSON.stringify({ name: nome, tipo: renomear.tipo })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Erro ao renomear");
@@ -81,16 +82,16 @@ export default function Wireguard() {
     }
   };
 
-  const showScript = async (id) => {
+  const showScript = async (client) => {
     try {
-      const scriptRes = await fetch(`/api/wireguard/clients/${id}/config`, {
+      const scriptRes = await fetch(`/api/wireguard/clients/${client.id}/config`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const scriptJson = await scriptRes.json();
-      setScriptData(scriptJson.routerOsScript);
+      setScriptData({ tipo: scriptJson.tipo || client.tipo || "mikrotik", script: scriptJson.routerOsScript || "", conf: scriptJson.conf || "", nome: client.name });
       setShowScriptModal(true);
     } catch (err) {
-      alert("Erro ao carregar script");
+      alert("Erro ao carregar a configuração do peer");
     }
   };
 
@@ -249,7 +250,7 @@ export default function Wireguard() {
                       <td className="px-6 py-4 font-medium text-white"><span className="dado-sensivel">{client.name}</span></td>
                       <td className="px-6 py-4 text-gray-400"><span className="dado-sensivel">{client.address}</span></td>
                       <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs rounded border border-blue-800/50">MikroTik</span>
+                        <span className={`px-2 py-1 text-xs rounded border ${vendorDoTipo(client.tipo).badge}`}>{vendorDoTipo(client.tipo).nome}</span>
                       </td>
                       <td className="px-6 py-4 text-gray-500">
                         {client.latestHandshakeAt ? new Date(client.latestHandshakeAt).toLocaleString() : '—'}
@@ -258,10 +259,10 @@ export default function Wireguard() {
                         <span className="text-green-400">↓ {formatBytes(client.transferRx)}</span> &nbsp; <span className="text-blue-400">↑ {formatBytes(client.transferTx)}</span>
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-3">
-                        <button onClick={() => setRenomear({ id: client.id, nome: client.name, erro: "", salvando: false })} className="text-gray-300 hover:text-white" title="Renomear identificação">
+                        <button onClick={() => setRenomear({ id: client.id, nome: client.name, tipo: client.tipo || "mikrotik", erro: "", salvando: false })} className="text-gray-300 hover:text-white" title="Renomear identificação">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 13l6.768-6.768a2 2 0 112.828 2.828L11.828 15.83a4 4 0 01-1.414.943L6 18l1.227-4.414A4 4 0 018.17 12.17L9 13z"></path></svg>
                         </button>
-                        <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300" title="Ver Script Mikrotik">
+                        <button onClick={() => showScript(client)} className="text-blue-400 hover:text-blue-300" title={client.tipo && client.tipo !== "mikrotik" ? "Ver configuração WireGuard (.conf)" : "Ver Script Mikrotik"}>
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                         </button>
                         <button onClick={() => handleDelete(client.id)} className="text-red-500 hover:text-red-400" title="Deletar">
@@ -293,7 +294,7 @@ export default function Wireguard() {
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
                     <span className="dado-sensivel">{client.address}</span>
-                    <span className="px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded border border-blue-800/50">MikroTik</span>
+                    <span className={`px-2 py-0.5 rounded border ${vendorDoTipo(client.tipo).badge}`}>{vendorDoTipo(client.tipo).nome}</span>
                     <span>Handshake: {client.latestHandshakeAt ? new Date(client.latestHandshakeAt).toLocaleString() : '—'}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
@@ -301,10 +302,10 @@ export default function Wireguard() {
                       <span className="text-green-400">↓ {formatBytes(client.transferRx)}</span> &nbsp; <span className="text-blue-400">↑ {formatBytes(client.transferTx)}</span>
                     </span>
                     <div className="flex gap-4">
-                      <button onClick={() => setRenomear({ id: client.id, nome: client.name, erro: "", salvando: false })} className="text-gray-300 hover:text-white p-1" title="Renomear identificação">
+                      <button onClick={() => setRenomear({ id: client.id, nome: client.name, tipo: client.tipo || "mikrotik", erro: "", salvando: false })} className="text-gray-300 hover:text-white p-1" title="Renomear identificação">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536M9 13l6.768-6.768a2 2 0 112.828 2.828L11.828 15.83a4 4 0 01-1.414.943L6 18l1.227-4.414A4 4 0 018.17 12.17L9 13z"></path></svg>
                         </button>
-                        <button onClick={() => showScript(client.id)} className="text-blue-400 hover:text-blue-300 p-1" title="Ver Script Mikrotik">
+                        <button onClick={() => showScript(client)} className="text-blue-400 hover:text-blue-300 p-1" title={client.tipo && client.tipo !== "mikrotik" ? "Ver configuração WireGuard (.conf)" : "Ver Script Mikrotik"}>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                       </button>
                       <button onClick={() => handleDelete(client.id)} className="text-red-500 hover:text-red-400 p-1" title="Deletar">
@@ -329,7 +330,7 @@ export default function Wireguard() {
             <h3 className="text-xl font-bold text-white mb-4">Renomear identificação</h3>
             <form onSubmit={salvarNome} className="space-y-4">
               <div>
-                <label className="text-sm text-gray-400 block mb-1">Identificação (Nome do Mikrotik)</label>
+                <label className="text-sm text-gray-400 block mb-1">Identificação</label>
                 <input
                   autoFocus
                   onFocus={(e) => e.target.select()}
@@ -339,6 +340,16 @@ export default function Wireguard() {
                   onChange={(e) => setRenomear({ ...renomear, nome: e.target.value, erro: "" })}
                 />
                 <p className="text-xs text-gray-500 mt-1">{(renomear.nome || "").length}/60</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">Tipo do equipamento</label>
+                <select
+                  className="w-full bg-[#0d1117] border border-gray-700 text-white rounded px-3 py-2 focus:outline-none focus:border-blue-500"
+                  value={renomear.tipo}
+                  onChange={(e) => setRenomear({ ...renomear, tipo: e.target.value, erro: "" })}
+                >
+                  {VENDORS.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                </select>
               </div>
               <p className="text-xs text-yellow-500/90">O roteador já configurado continua com o nome antigo; o novo nome vale ao gerar um novo script.</p>
               {renomear.erro && <p className="text-sm text-red-400">{renomear.erro}</p>}
@@ -360,7 +371,7 @@ export default function Wireguard() {
       />
 
       {/* Ver script de um peer existente */}
-      <ScriptPeerModal open={showScriptModal} script={scriptData} onClose={() => setShowScriptModal(false)} />
+      <PeerConfigModal open={showScriptModal} tipo={scriptData.tipo} script={scriptData.script} conf={scriptData.conf} nome={scriptData.nome} onClose={() => setShowScriptModal(false)} />
 
     </AdminLayout>
   );

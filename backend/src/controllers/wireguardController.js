@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const path = require('path');
 const { execSync } = require('child_process');
 const db = require('../../db');
+const { temColuna } = require('../utils/schemaCache');
+const { TIPOS_GATEWAY } = require('../constants/tiposGateway');
 const { ssidDoPeer } = require('../utils/ssid');
 const { linhasWifi } = require('../utils/wifiScript');
 const { credenciaisRoteador, linhasUsuarioRoteador } = require('../utils/roteadorAdmin');
@@ -116,15 +118,18 @@ exports.updateServerSettings = async (req, res) => {
 
 // Peers do wg-easy que pertencem a esta empresa (mapeados em empresa_vpn_peers).
 const filtrarPeersDaEmpresa = async (allClients, empresaId) => {
+  // `tipo` (migration 078): sem a coluna todo peer e' mikrotik, como antes.
+  const comTipo = await temColuna("empresa_vpn_peers", "tipo");
   const [peerRows] = await db.execute(
-    "SELECT wg_client_id, nome FROM empresa_vpn_peers WHERE empresa_id = ?",
+    `SELECT wg_client_id, nome${comTipo ? ", tipo" : ""} FROM empresa_vpn_peers WHERE empresa_id = ?`,
     [empresaId]
   );
   // O wg-easy guarda um nome tecnico unico (emp<id>-<hex>-<nome>); a empresa ve o nome que digitou.
   const nomes = new Map(peerRows.map(r => [r.wg_client_id, r.nome]));
+  const tipos = new Map(peerRows.map(r => [r.wg_client_id, TIPOS_GATEWAY.includes(r.tipo) ? r.tipo : "mikrotik"]));
   return allClients
     .filter(c => nomes.has(c.id))
-    .map(c => ({ ...c, wg_name: c.name, name: nomes.get(c.id) || c.name }));
+    .map(c => ({ ...c, wg_name: c.name, name: nomes.get(c.id) || c.name, tipo: tipos.get(c.id) || "mikrotik" }));
 };
 
 // Lista os peers da empresa consultando o wg-easy. Lança erro se o wg-easy estiver fora do ar.
@@ -174,6 +179,16 @@ exports.createClient = async (req, res) => {
     if (typeof (req.body && req.body.name) !== "string" || !nome || nome.length > 60) {
       return res.status(400).json({ message: "Nome do peer inválido" });
     }
+    // Tipo do equipamento (assistente "Adicionar Equipamento" ja o seleciona ao clicar no peer).
+    const tipoBruto = req.body && req.body.tipo;
+    if (tipoBruto != null && (typeof tipoBruto !== "string" || !TIPOS_GATEWAY.includes(tipoBruto))) {
+      return res.status(400).json({ message: "Tipo de equipamento inválido" });
+    }
+    const tipo = tipoBruto || "mikrotik";
+    const comTipo = await temColuna("empresa_vpn_peers", "tipo");
+    if (!comTipo && tipo !== "mikrotik") {
+      return res.status(503).json({ message: "Atualização pendente no servidor: rode `node migrations/078_vpn_peers_tipo.js` para escolher o tipo do equipamento." });
+    }
     // Nome unico no wg-easy: o peer recem-criado e' localizado por ele, nunca pelo nome
     // digitado (dois tenants com o mesmo nome receberiam o peer - e a chave privada - um do outro).
     const nomeWg = `emp${req.empresa_id}-${crypto.randomBytes(4).toString("hex")}-${nome}`.slice(0, 80);
@@ -185,13 +200,20 @@ exports.createClient = async (req, res) => {
     if (!novo) {
       throw new Error("peer criado mas nao localizado no wg-easy");
     }
-    await db.execute(
-      "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome) VALUES (?, ?, ?)",
-      [req.empresa_id, novo.id, nome]
-    );
+    if (comTipo) {
+      await db.execute(
+        "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome, tipo) VALUES (?, ?, ?, ?)",
+        [req.empresa_id, novo.id, nome, tipo]
+      );
+    } else {
+      await db.execute(
+        "INSERT INTO empresa_vpn_peers (empresa_id, wg_client_id, nome) VALUES (?, ?, ?)",
+        [req.empresa_id, novo.id, nome]
+      );
+    }
 
     // O front usa o id para pedir o script (o nome tecnico nao e o digitado).
-    res.json({ ...(client && typeof client === "object" ? client : {}), id: novo.id, name: nome });
+    res.json({ ...(client && typeof client === "object" ? client : {}), id: novo.id, name: nome, tipo });
   } catch (err) {
     console.error("Erro ao criar peer:", err.message);
     res.status(500).json({ message: "Erro ao criar peer" });
@@ -208,6 +230,10 @@ exports.renameClient = async (req, res) => {
     if (!nome || nome.length > 60) {
       return res.status(400).json({ message: "Nome do peer inválido (1 a 60 caracteres)" });
     }
+    const tipoBruto = req.body && req.body.tipo;
+    if (tipoBruto != null && (typeof tipoBruto !== "string" || !TIPOS_GATEWAY.includes(tipoBruto))) {
+      return res.status(400).json({ message: "Tipo de equipamento inválido" });
+    }
     const [[peer]] = await db.execute(
       "SELECT id FROM empresa_vpn_peers WHERE wg_client_id = ? AND empresa_id = ?",
       [id, req.empresa_id]
@@ -222,10 +248,17 @@ exports.renameClient = async (req, res) => {
     if (repetido) {
       return res.status(409).json({ message: "Já existe um peer com esse nome" });
     }
-    await db.execute(
-      "UPDATE empresa_vpn_peers SET nome = ? WHERE wg_client_id = ? AND empresa_id = ?",
-      [nome, id, req.empresa_id]
-    );
+    if (tipoBruto != null && (await temColuna("empresa_vpn_peers", "tipo"))) {
+      await db.execute(
+        "UPDATE empresa_vpn_peers SET nome = ?, tipo = ? WHERE wg_client_id = ? AND empresa_id = ?",
+        [nome, tipoBruto, id, req.empresa_id]
+      );
+    } else {
+      await db.execute(
+        "UPDATE empresa_vpn_peers SET nome = ? WHERE wg_client_id = ? AND empresa_id = ?",
+        [nome, id, req.empresa_id]
+      );
+    }
     res.json({ success: true, name: nome });
   } catch (err) {
     console.error("Erro ao renomear peer:", err.message);
@@ -264,12 +297,20 @@ exports.getClientConfig = async (req, res) => {
 
     // O retorno inclui a chave privada e a preshared do peer: so a empresa dona
     // do peer pode le-las (mesma regra do deleteClient).
+    const comTipo = await temColuna("empresa_vpn_peers", "tipo");
     const [[peer]] = await db.execute(
-      "SELECT nome FROM empresa_vpn_peers WHERE wg_client_id = ? AND empresa_id = ?",
+      `SELECT nome${comTipo ? ", tipo" : ""} FROM empresa_vpn_peers WHERE wg_client_id = ? AND empresa_id = ?`,
       [id, req.empresa_id]
     );
     if (!peer) {
       return res.status(403).json({ message: "Peer não pertence a esta empresa" });
+    }
+    const tipo = TIPOS_GATEWAY.includes(peer.tipo) ? peer.tipo : "mikrotik";
+
+    // Fora o MikroTik nao ha script de instalacao: so a configuracao WireGuard padrao (.conf).
+    if (tipo !== "mikrotik") {
+      const confOutro = await makeRequest('GET', `/api/wireguard/client/${id}/configuration`);
+      return res.json({ conf: confOutro, tipo, routerOsScript: null });
     }
 
     // Nome do roteador = nome do peer (so letras, numeros, ponto, hifen e underline).
@@ -361,7 +402,7 @@ exports.getClientConfig = async (req, res) => {
           ]),
     ].join("\n");
 
-    res.json({ conf, routerOsScript });
+    res.json({ conf, tipo, routerOsScript });
   } catch (err) {
     res.status(500).json({ message: "Erro ao obter config" });
   }

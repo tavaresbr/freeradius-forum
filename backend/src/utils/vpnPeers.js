@@ -1,5 +1,5 @@
 // Peers WireGuard (wg-easy) ainda sem equipamento cadastrado.
-// peers: [{ name, address, latestHandshakeAt }]; ipsUsados: IPs já em mikrotiks.
+// peers: [{ name, address, latestHandshakeAt, tipo }]; ipsUsados: IPs já em mikrotiks.
 const ONLINE_MS = 3 * 60 * 1000; // mesmo critério da página VPN (handshake nos últimos 3 min)
 
 function peersLivres(peers, ipsUsados, agora = Date.now()) {
@@ -8,6 +8,7 @@ function peersLivres(peers, ipsUsados, agora = Date.now()) {
     .map((p) => ({
       nome: String(p.name || ""),
       ip: String(p.address || "").split("/")[0].trim(),
+      tipo: String(p.tipo || "mikrotik"),
       online: !!p.latestHandshakeAt && agora - new Date(p.latestHandshakeAt).getTime() < ONLINE_MS,
     }))
     .filter((p) => p.ip && !usados.has(p.ip))
