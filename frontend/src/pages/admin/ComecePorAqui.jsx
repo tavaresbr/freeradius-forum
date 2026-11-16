@@ -167,9 +167,10 @@ export default function ComecePorAqui() {
             <p>O <strong>peer</strong> é a "identidade" do seu roteador na VPN. Ao criá-lo, o sistema gera um <strong>script</strong> que configura internet, DNS, firewall, hora, VPN, API e Wi-Fi do MikroTik de uma vez.</p>
             <ol className="list-decimal ml-5 space-y-1">
               <li>Clique em <strong>+ Adicionar Peer</strong> (aqui, no Dashboard ou em Rede → VPN WireGuard).</li>
-              <li>Confirme o nome do roteador (o sistema sugere um, ex.: <code>MinhaEmpresa-01</code>). Esse nome também vira o nome do Wi-Fi.</li>
-              <li>Clique em <strong>Salvar e Gerar Script</strong> e depois em <strong>Copiar script</strong>.</li>
-              <li>No Winbox, abra <strong>New Terminal</strong> do roteador, cole o script e aperte Enter.</li>
+              <li>Escolha o <strong>tipo do equipamento</strong> (MikroTik, Omada, UniFi, Grandstream ou Intelbras). Assim ele já aparece pronto, com o tipo certo, na hora de cadastrar o equipamento.</li>
+              <li>Confirme o nome (o sistema sugere um, ex.: <code>MinhaEmpresa-01</code>). No MikroTik esse nome também vira o nome do Wi-Fi.</li>
+              <li><strong>MikroTik:</strong> clique em <strong>Salvar e Gerar Script</strong> e depois em <strong>Copiar script</strong>. No Winbox, abra <strong>New Terminal</strong> do roteador, cole o script e aperte Enter.</li>
+              <li><strong>Outros tipos:</strong> o sistema mostra a configuração WireGuard (<code>.conf</code>) para copiar ou baixar e colocar no equipamento ou servidor que faz a VPN do local.</li>
             </ol>
             <Aviso tipo="atencao">O script serve para MikroTik <strong>resetado com "No Default Configuration"</strong>, com a <strong>ether1</strong> ligada na internet.</Aviso>
             <Aviso tipo="atencao">Defina a senha do usuário <code>admin</code> (<code>/user set admin password=...</code>) se o script avisar. Você vai usar <strong>exatamente a mesma senha</strong> ao cadastrar o equipamento. Pode colar o script de novo sem problema.</Aviso>
@@ -185,8 +186,8 @@ export default function ComecePorAqui() {
           <Passo numero="2" titulo="Assistente em 3 etapas: Tipo, Conexão e Portal">
             <ol className="list-decimal ml-5 space-y-1">
               <li>Clique em <strong>+ Adicionar Equipamento</strong>.</li>
-              <li><strong>Tipo:</strong> escolha MikroTik (ou Omada, UniFi, Grandstream, Intelbras).</li>
-              <li><strong>Conexão (MikroTik):</strong> clique no peer que aparece como opção — o nome e o IP da VPN são preenchidos sozinhos.</li>
+              <li><strong>Tipo:</strong> se você já criou o peer, ele aparece na lista <strong>"Peers da VPN prontos"</strong>: clique nele e o tipo, o nome e o IP já ficam preenchidos. Ou escolha o tipo na mão (MikroTik, Omada, UniFi, Grandstream ou Intelbras).</li>
+              <li><strong>Conexão (MikroTik):</strong> confira o usuário e a senha; para os outros tipos preencha os dados do controller/AP.</li>
               <li>Confira o usuário e a senha da API: precisam ser <strong>iguais aos do roteador</strong>. A porta padrão é 8728.</li>
               <li><strong>Portal:</strong> escolha o portal de entrada (pode ajustar depois). Clique em <strong>Salvar Equipamento</strong>.</li>
             </ol>

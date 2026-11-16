@@ -23,7 +23,7 @@ function reloadFreeRADIUS() {
 }
 console.log("DEBUG obterInformacoes:", typeof obterInformacoes);
 
-const TIPOS_GATEWAY = ["mikrotik", "omada", "unifi", "grandstream", "intelbras"];
+const { TIPOS_GATEWAY } = require("../constants/tiposGateway");
 
 /**
  * Valida e normaliza o body do cadastro/edicao de gateway por tipo.

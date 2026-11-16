@@ -1,43 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { VENDORS, vendorDoTipo } from "../../constants/gatewayTipos";
 
 /**
  * Wizard de cadastro/edicao de gateway (MikroTik / Omada / UniFi).
  * Passos: 0 = tipo, 1 = conexao (campos por vendor), 2 = portal + resumo.
  * Na edicao o tipo e' travado (backend tambem trava) e o wizard abre no passo 1.
  */
-
-const VENDORS = [
-  {
-    id: "mikrotik",
-    nome: "MikroTik",
-    desc: "RouterOS via API. Hotspot nativo com FreeRADIUS — setup automático completo.",
-    badge: "bg-sky-900/30 border-sky-800/50 text-sky-400",
-  },
-  {
-    id: "omada",
-    nome: "TP-Link Omada",
-    desc: "Controller Omada (software, OC200/OC300) via External RADIUS. Nomes dos APs via API: botão API na lista.",
-    badge: "bg-emerald-900/30 border-emerald-800/50 text-emerald-400",
-  },
-  {
-    id: "unifi",
-    nome: "Ubiquiti UniFi",
-    desc: "Controller UniFi via API. Autorização e sessões pela API do controller — setup simples, validado em campo.",
-    badge: "bg-indigo-900/30 border-indigo-800/50 text-indigo-400",
-  },
-  {
-    id: "grandstream",
-    nome: "Grandstream GWN",
-    desc: "APs GWN via External Web Portal + External RADIUS. Chaves GWN Cloud opcionais (só monitoramento).",
-    badge: "bg-rose-900/30 border-rose-800/50 text-rose-400",
-  },
-  {
-    id: "intelbras",
-    nome: "Intelbras",
-    desc: "APs Intelbras standalone (AP 360/1210/1250/3000) via portal externo + External RADIUS.",
-    badge: "bg-teal-900/30 border-teal-800/50 text-teal-400",
-  },
-];
 
 const FORM_INICIAL = {
   tipo: "mikrotik",
@@ -83,8 +51,6 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
         if (cancelado) return;
         setVpn({ carregando: false, peers: d.peers || [], total: d.total || 0, aviso: d.aviso || "" });
         setCredPadrao(d.credenciais_padrao || null);
-        // Pre-preenche usuario/senha da API so se o formulario ainda esta vazio
-        if (d.credenciais_padrao) setForm((f) => ({ ...f, usuario: f.usuario || d.credenciais_padrao.usuario, senha: f.senha || d.credenciais_padrao.senha }));
       })
       .catch(() => { if (!cancelado) setVpn({ carregando: false, peers: [], total: 0, aviso: "Não foi possível consultar a VPN agora." }); });
     return () => { cancelado = true; };
@@ -103,15 +69,27 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
       });
       setStep(1);
     } else {
-      setForm(credPadrao ? { ...FORM_INICIAL, usuario: credPadrao.usuario, senha: credPadrao.senha } : FORM_INICIAL);
+      setForm(FORM_INICIAL);
       setStep(0);
     }
   }, [open, editando]);
 
+  // Usuario/senha padrao do roteador (ROUTER_ADMIN_*) valem so para MikroTik: nos outros tipos a senha
+  // viraria o "Secret RADIUS" sem o cliente perceber. Ao trocar de tipo, limpa o que veio do padrao.
+  useEffect(() => {
+    if (!open || editando || !credPadrao) return;
+    setForm((f) => {
+      if (f.tipo === "mikrotik") return { ...f, usuario: f.usuario || credPadrao.usuario, senha: f.senha || credPadrao.senha };
+      return { ...f, usuario: f.usuario === credPadrao.usuario ? "" : f.usuario, senha: f.senha === credPadrao.senha ? "" : f.senha };
+    });
+  }, [open, editando, credPadrao, form.tipo]);
+
   if (!open) return null;
 
   const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
-  const vendor = VENDORS.find((v) => v.id === form.tipo) || VENDORS[0];
+  const vendor = vendorDoTipo(form.tipo);
+  const peersDoTipo = vpn.peers.filter((p) => (p.tipo || "mikrotik") === form.tipo);
+  const escolherPeer = (p) => { set("tipo", p.tipo || "mikrotik"); set("nome", p.nome); set("ip", p.ip); setErro(""); setStep(1); };
 
   const validarConexao = () => {
     if (!form.nome || !form.ip) return "Preencha nome e IP.";
@@ -200,6 +178,28 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
         {/* Passo 0: Tipo */}
         {step === 0 && (
           <div className="space-y-3">
+            {/* Peers da VPN ainda sem equipamento: um clique ja escolhe o tipo e preenche nome e IP */}
+            {!editando && vpn.peers.length > 0 && (
+              <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800">
+                <p className="text-xs text-gray-500 mb-2">Peers da VPN prontos — clique para usar</p>
+                <div className="flex flex-wrap gap-2">
+                  {vpn.peers.map((p) => (
+                    <button
+                      key={p.ip}
+                      type="button"
+                      onClick={() => escolherPeer(p)}
+                      className="flex items-center gap-2 text-xs px-3 py-1.5 rounded border border-gray-700 text-gray-300 hover:border-blue-500 cursor-pointer transition-colors"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${p.online ? "bg-green-500" : "bg-red-500"}`} />
+                      <span className={`px-1.5 py-0.5 rounded border ${vendorDoTipo(p.tipo).badge}`}>{vendorDoTipo(p.tipo).nome}</span>
+                      <span className="font-medium dado-sensivel">{p.nome}</span>
+                      <span className="text-gray-500 dado-sensivel">{p.ip}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-600 mt-2">Ou escolha o tipo abaixo e preencha na mão.</p>
+              </div>
+            )}
             {VENDORS.map((v) => (
               <button
                 key={v.id}
@@ -219,16 +219,16 @@ export default function GatewayWizard({ open, onClose, onSaved, portais, token, 
         {step === 1 && (
           <div className="space-y-4">
             {/* Peers da VPN ainda não cadastrados: um clique preenche nome e IP */}
-            {!editando && form.tipo === "mikrotik" && (vpn.carregando || vpn.peers.length > 0 || vpn.total > 0 || vpn.aviso) && (
+            {!editando && (vpn.carregando || vpn.aviso || peersDoTipo.length > 0 || (form.tipo === "mikrotik" && vpn.total > 0)) && (
               <div className="bg-[#0d1117] rounded-lg p-3 border border-gray-800">
-                <p className="text-xs text-gray-500 mb-2">Equipamentos da VPN ainda não cadastrados</p>
+                <p className="text-xs text-gray-500 mb-2">{form.tipo === "mikrotik" ? "Equipamentos da VPN ainda não cadastrados" : `Peers da VPN (${vendor.nome}) ainda não cadastrados`}</p>
                 {vpn.carregando && <p className="text-xs text-gray-600">Carregando...</p>}
                 {!vpn.carregando && vpn.aviso && <p className="text-xs text-amber-500/90">{vpn.aviso} Preencha o IP manualmente.</p>}
-                {!vpn.carregando && !vpn.aviso && vpn.peers.length === 0 && vpn.total > 0 && (
-                  <p className="text-xs text-gray-400">Todos os equipamentos da VPN já estão cadastrados.</p>
+                {!vpn.carregando && !vpn.aviso && peersDoTipo.length === 0 && vpn.total > 0 && (
+                  <p className="text-xs text-gray-400">{vpn.peers.length === 0 ? "Todos os equipamentos da VPN já estão cadastrados." : "Nenhum peer livre deste tipo."}</p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {vpn.peers.map((p) => (
+                  {peersDoTipo.map((p) => (
                     <button
                       key={p.ip}
                       type="button"
