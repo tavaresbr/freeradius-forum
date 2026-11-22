@@ -11,6 +11,7 @@ import Automacao from "../../components/admin/atendimento/Automacao";
 import Agendar from "../../components/admin/atendimento/Agendar";
 import Chatbot from "../../components/admin/atendimento/Chatbot";
 import IaAtendente from "../../components/admin/atendimento/IaAtendente";
+import AlertaEspera from "../../components/admin/atendimento/AlertaEspera";
 
 const FILTROS = [
   ["aberta", "Abertas"],
@@ -839,6 +840,7 @@ export default function Atendimento({ embutido = false, pedido = null, onPedidoT
           )}
           {modal === "chatbot" && <Chatbot headers={headers} onFechar={() => setModal(null)} />}
           {modal === "ia" && <IaAtendente headers={headers} onFechar={() => setModal(null)} />}
+          {modal === "espera" && <AlertaEspera headers={headers} onFechar={() => setModal(null)} />}
           {modal === "automacao" && <Automacao headers={headers} onFechar={() => setModal(null)} />}
           {modal === "agendar" && selecionadaId && <Agendar conversaId={selecionadaId} headers={headers} textoInicial={texto} onFechar={() => setModal(null)} />}
           {modal === "nova" && <NovaConversa headers={headers} numeros={numeros} onFechar={() => setModal(null)} onAbrir={abrirConversa} />}

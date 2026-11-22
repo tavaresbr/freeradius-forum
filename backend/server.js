@@ -730,6 +730,12 @@ cron.schedule('*/5 * * * *', () => {
   alertaEquipamentos().catch(err => console.error('[CRON] Erro alertaEquipamentos:', err.message));
 });
 
+// Aviso ao proprietario de cliente esperando no chat (so empresas que ligaram; desligado por padrao)
+const alertaEspera = require('./src/jobs/alertaEspera');
+cron.schedule('*/2 * * * *', () => {
+  alertaEspera().catch(err => console.error('[CRON] Erro alertaEspera:', err.message));
+});
+
 // Agradecimento pos-compra por WhatsApp (so empresas que ligaram; desligado por padrao)
 const posCompra = require('./src/jobs/posCompra');
 cron.schedule('*/10 * * * *', () => {

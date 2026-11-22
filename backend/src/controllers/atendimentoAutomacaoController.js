@@ -7,6 +7,7 @@ const horario = require("../utils/horarioAtendimento");
 const avisoExp = require("../utils/avisoExpiracao");
 const bot = require("../utils/chatbot");
 const cfgIa = require("../utils/iaAtendente");
+const alertaEspera = require("../utils/alertaEspera");
 const claude = require("../services/claudeClient");
 const iaUso = require("../services/iaUso");
 const { temRecurso } = require("../utils/assinatura");
@@ -233,6 +234,44 @@ exports.testarIaAtendente = async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     erro500(res, err, "Erro ao testar o atendente por IA");
+  }
+};
+
+// ---- Aviso ao proprietario: cliente esperando no chat ----
+// GET /api/atendimento/alerta-espera
+exports.obterAlertaEspera = async (req, res) => {
+  try {
+    const cfg = await auto.lerConfigJson(req.empresa_id);
+    res.json({ alerta: alertaEspera.mesclarComPadrao(cfg.alerta_espera), pronto: await temColuna("whatsapp_conversas", "espera_avisada_em") });
+  } catch (err) { erro500(res, err, "Erro ao buscar o aviso de espera"); }
+};
+
+// PUT /api/atendimento/alerta-espera { ativo, telefones[], minutos, somente_horario }
+exports.salvarAlertaEspera = async (req, res) => {
+  try {
+    const alerta = alertaEspera.validarAlertaEspera(req.body);
+    if (alerta.ativo && !(await temColuna("whatsapp_conversas", "espera_avisada_em"))) {
+      return res.status(503).json({ error: "Recurso indisponível: rode a migration 079 (node migrations/079_whatsapp_espera.js)." });
+    }
+    await auto.salvarChave(req.empresa_id, "alerta_espera", alerta);
+    res.json({ success: true, alerta });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    erro500(res, err, "Erro ao salvar o aviso de espera");
+  }
+};
+
+// POST /api/atendimento/alerta-espera/teste { telefone }
+exports.testarAlertaEspera = async (req, res) => {
+  try {
+    const telefone = normalizarTelefone(req.body?.telefone);
+    if (!telefone) return res.status(400).json({ error: "Telefone inválido. Informe DDD + número." });
+    const mensagem = `[TESTE] ${alertaEspera.montarMensagem([{ nome: "Maria (exemplo)", espera_min: 12 }, { telefone: "5593999991234", espera_min: 25 }], "")}`;
+    await enviarMensagemEstrita(telefone, mensagem, req.empresa_id);
+    await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "alerta_espera_teste", status: "ok" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(502).json({ error: `Não foi possível enviar o teste: ${String(erroEvolution(err)).slice(0, 150)}` });
   }
 };
 
