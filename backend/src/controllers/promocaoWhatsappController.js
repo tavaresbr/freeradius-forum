@@ -51,6 +51,7 @@ exports.previa = async (req, res) => {
         total: sel.destinatarios.length,
         invalidos: sel.invalidos,
         duplicados: sel.duplicados,
+        bloqueados: sel.bloqueados || 0,
         excedeu: sel.excedeu,
         limite: sel.limite,
         amostra,

@@ -1,6 +1,7 @@
 // Promocoes por WhatsApp: filtros de destinatarios, montagem da mensagem e validacao.
 // Funcoes puras (exceto selecionarDestinatarios, que recebe o db) para ficarem testaveis.
 const { renderTemplate, normalizarTelefone } = require("../services/whatsappNotify");
+const naoPerturbe = require("./naoPerturbe");
 
 const MAX_NOME = 150;
 const MAX_MENSAGEM = 1000;
@@ -83,8 +84,9 @@ async function selecionarDestinatarios(db, filtrosBrutos, empresaId) {
     `SELECT id, nome, telefone FROM leads WHERE ${where} ORDER BY id ASC LIMIT ${MAX_DESTINATARIOS * 2}`,
     params
   );
+  // 1) telefones validos e sem repeticao
   const vistos = new Set();
-  const destinatarios = [];
+  const candidatos = [];
   let invalidos = 0;
   let duplicados = 0;
   for (const r of rows) {
@@ -92,9 +94,19 @@ async function selecionarDestinatarios(db, filtrosBrutos, empresaId) {
     if (!tel) { invalidos++; continue; }
     if (vistos.has(tel)) { duplicados++; continue; }
     vistos.add(tel);
-    if (destinatarios.length < MAX_DESTINATARIOS) destinatarios.push({ lead_id: r.id, nome: r.nome || null, telefone: tel });
+    candidatos.push({ lead_id: r.id, nome: r.nome || null, telefone: tel });
   }
-  return { destinatarios, invalidos, duplicados, filtros, limite: MAX_DESTINATARIOS, excedeu: vistos.size > MAX_DESTINATARIOS };
+  // 2) lista "Nao perturbe" (quem respondeu SAIR sem ser lead, importados...): fora ja na previa, para o total nao enganar.
+  // O worker continua conferindo no envio (quem entrar na lista depois tambem nao recebe).
+  const fora = new Set();
+  for (let i = 0; i < candidatos.length; i += 1000) {
+    const lote = candidatos.slice(i, i + 1000).map((c) => c.telefone);
+    for (const f of await naoPerturbe.bloqueados(empresaId, lote)) fora.add(f);
+  }
+  const elegiveis = fora.size ? candidatos.filter((c) => !fora.has(naoPerturbe.fim10(c.telefone))) : candidatos;
+  const bloqueados = candidatos.length - elegiveis.length;
+  const destinatarios = elegiveis.slice(0, MAX_DESTINATARIOS);
+  return { destinatarios, invalidos, duplicados, bloqueados, filtros, limite: MAX_DESTINATARIOS, excedeu: elegiveis.length > MAX_DESTINATARIOS };
 }
 
 module.exports = {

@@ -299,7 +299,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
             <div className="bg-[#0d1117] border border-gray-800 rounded p-4 text-sm">
               <p className="text-white font-semibold mb-1">{previa.total} contato(s) vão receber</p>
               <p className="text-xs text-gray-500 mb-3">
-                {previa.invalidos} com telefone inválido e {previa.duplicados} repetido(s) ficaram de fora.
+                {previa.invalidos} com telefone inválido, {previa.duplicados} repetido(s) e {previa.bloqueados || 0} na lista Não perturbe ficaram de fora.
                 {previa.excedeu && ` Limite de ${previa.limite} por promoção: os demais ficam de fora.`}
               </p>
               <p className="text-xs text-gray-500 mb-1">Exemplo da mensagem:</p>
