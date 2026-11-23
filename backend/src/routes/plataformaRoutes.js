@@ -11,6 +11,7 @@ const { promocaoLimiter } = require("../middleware/rateLimiters");
 router.get("/eu", auth, c.eu);
 router.get("/donos", auth, exigeDonoPlataforma, c.listarDonos);
 router.get("/metricas", auth, exigeDonoPlataforma, c.metricas);
+router.get("/ia-uso", auth, exigeDonoPlataforma, c.iaUso);
 router.get("/empresas/:id", auth, exigeDonoPlataforma, e.resumo);
 router.post("/empresas/:id/plano", auth, exigeDonoPlataforma, e.alterarPlano);
 router.post("/empresas/:id/gratificacao", auth, exigeDonoPlataforma, e.gratificar);

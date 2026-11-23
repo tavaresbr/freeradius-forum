@@ -264,6 +264,9 @@ export default function SuperDashboard() {
               <Link to="/super/atualizar" className="px-3 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 text-sm">
                 Atualizar Sistema
               </Link>
+              <Link to="/super/uso-ia" className="px-3 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 text-sm">
+                Uso da IA
+              </Link>
               <Link to="/super/backups" className="px-3 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 text-sm">
                 Backups
               </Link>
