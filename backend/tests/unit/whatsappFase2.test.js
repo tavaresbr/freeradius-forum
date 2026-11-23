@@ -155,3 +155,23 @@ test('processaAgendadas: conexao conferida pelo numero da conversa', async () =>
     assert.deepStrictEqual(enviados, [0]); // o numero 3 esta desconectado: volta para a fila
   } finally { un(); }
 });
+
+test('promocao: previa/selecao tira quem esta na lista Nao perturbe e conta em "bloqueados"', async () => {
+  limpar();
+  const un = semLog();
+  try {
+    const db = criarDb(async (sql) => {
+      if (/^SELECT id, nome, telefone FROM leads/.test(sql)) return [[
+        { id: 1, nome: 'Ana', telefone: '11988887777' },
+        { id: 2, nome: 'Bia', telefone: '11977776666' },
+        { id: 3, nome: 'Cai', telefone: '11966665555' },
+      ]];
+      if (/FROM whatsapp_nao_perturbe/.test(sql)) return [[{ telefone_fim10: '1977776666' }]]; // so a Bia (ultimos 10 digitos de 5511977776666)
+      if (/FROM leads WHERE empresa_id = \? AND whatsapp_optout = 1/.test(sql)) return [[]];
+    });
+    const u2 = carregar('src/utils/promocaoWhatsapp.js', { db });
+    const sel = await u2.selecionarDestinatarios(db, {}, 7);
+    assert.deepStrictEqual(sel.destinatarios.map((d) => d.nome), ['Ana', 'Cai']);
+    assert.strictEqual(sel.bloqueados, 1);
+  } finally { un(); }
+});
