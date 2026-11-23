@@ -135,7 +135,7 @@ test('enviarMensagem: numero removido -> 400 claro e a mensagem nao sai pelo pri
 
 const payload = { key: { id: 'ABC', remoteJid: '5593999990000@s.whatsapp.net', fromMe: false }, pushName: 'Maria', message: { conversation: 'oi' }, messageTimestamp: 1760000000 };
 
-test('recebimento: conversa nasce com o numero; chatbot e resposta automatica so no principal', async () => {
+test('recebimento: conversa nasce com o numero; chatbot e resposta automatica valem para qualquer numero (Fase 2)', async () => {
   const chamou = [];
   let { db, svc } = carregarServico({ chamou });
   await svc.registrarMensagem(7, payload, 2);
@@ -143,7 +143,8 @@ test('recebimento: conversa nasce com o numero; chatbot e resposta automatica so
   assert.match(ins.sql, /numero_id/);
   assert.deepStrictEqual(ins.params.slice(0, 2), [7, 2]);
   await new Promise((r) => setTimeout(r, 20));
-  assert.deepStrictEqual(chamou, []); // numero 2: nada automatico
+  assert.deepStrictEqual(chamou, ['chatbot', 'auto']); // Fase 2: numero 2 tambem e' automatizado
+  chamou.length = 0;
 
   ({ db, svc } = carregarServico({ chamou }));
   await svc.registrarMensagem(7, payload, 0);

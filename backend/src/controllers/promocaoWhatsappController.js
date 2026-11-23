@@ -6,6 +6,17 @@ const { normalizarTelefone } = require("../services/whatsappNotify");
 const p = require("../utils/promocaoWhatsapp");
 const { temColuna } = require("../utils/schemaCache");
 
+const numeroEnvio = require("../utils/numeroEnvio");
+
+const MSG_SEM_NUMERO_COL = "Escolher o número de envio ainda não está disponível neste servidor. Rode a migration 080 (node migrations/080_promocao_envios_numero.js) e reinicie o backend.";
+
+/** numero_id do corpo (0/ausente = principal): valida que e' da empresa e que a coluna existe. Lanca erro com .status. */
+async function numeroDoCorpo(req) {
+  const id = await numeroEnvio.validarNumero(req.empresa_id, req.body?.numero_id);
+  if (id > 0 && !(await temColuna("promocao_envios", "numero_id"))) throw Object.assign(new Error(MSG_SEM_NUMERO_COL), { status: 503 });
+  return id;
+}
+
 const MSG_DESCONECTADO = "O WhatsApp da empresa não está conectado. Conecte a instância na tela WhatsApp e tente de novo.";
 
 async function carregarEnvio(id, empresaId) {
@@ -56,6 +67,8 @@ exports.criar = async (req, res) => {
   const v = p.validarEnvio(req.body);
   if (!v.ok) return res.status(400).json({ error: v.erro });
   try {
+    const numeroId = await numeroDoCorpo(req);
+    if (numeroId > 0 && !(await instanciaConectada(req.empresa_id, numeroId))) return res.status(409).json({ error: MSG_DESCONECTADO });
     const sel = await p.selecionarDestinatarios(db, req.body?.filtros, req.empresa_id);
     if (!sel.destinatarios.length) return res.status(400).json({ error: "Nenhum contato elegível com esses filtros" });
 
@@ -65,6 +78,7 @@ exports.criar = async (req, res) => {
       [req.empresa_id, v.nome, v.mensagem, JSON.stringify(sel.filtros), sel.destinatarios.length, req.user?.id || null]
     );
     const envioId = r.insertId;
+    if (numeroId > 0) await db.execute("UPDATE promocao_envios SET numero_id = ? WHERE id = ? AND empresa_id = ?", [numeroId, envioId, req.empresa_id]);
     for (let i = 0; i < sel.destinatarios.length; i += 500) {
       const lote = sel.destinatarios.slice(i, i + 500);
       await db.query(
@@ -74,6 +88,7 @@ exports.criar = async (req, res) => {
     }
     res.status(201).json({ success: true, data: await carregarEnvio(envioId, req.empresa_id) });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("Erro ao criar promocao:", err);
     res.status(500).json({ error: "Erro ao criar a promoção" });
   }
@@ -85,7 +100,7 @@ async function ativar(req, res, deQuais) {
     const envio = await carregarEnvio(req.params.id, req.empresa_id);
     if (!envio) return res.status(404).json({ error: "Promoção não encontrada" });
     if (!deQuais.includes(envio.status)) return res.status(409).json({ error: `Não dá para fazer isso numa promoção ${envio.status}` });
-    if (!(await instanciaConectada(req.empresa_id))) return res.status(409).json({ error: MSG_DESCONECTADO });
+    if (!(await instanciaConectada(req.empresa_id, Number(envio.numero_id) || 0))) return res.status(409).json({ error: MSG_DESCONECTADO });
     await db.execute(
       "UPDATE promocao_envios SET status = 'em_andamento', iniciado_em = COALESCE(iniciado_em, NOW()) WHERE id = ? AND empresa_id = ?",
       [envio.id, req.empresa_id]
@@ -167,10 +182,12 @@ exports.testar = async (req, res) => {
   const tel = normalizarTelefone(req.body?.telefone);
   if (!tel) return res.status(400).json({ error: "Telefone inválido (use DDD + número)" });
   try {
-    if (!(await instanciaConectada(req.empresa_id))) return res.status(409).json({ error: MSG_DESCONECTADO });
-    await enviarMensagemEstrita(tel, p.montarMensagem(v.mensagem, "Cliente Teste"), req.empresa_id);
+    const numeroId = await numeroEnvio.validarNumero(req.empresa_id, req.body?.numero_id);
+    if (!(await instanciaConectada(req.empresa_id, numeroId))) return res.status(409).json({ error: MSG_DESCONECTADO });
+    await enviarMensagemEstrita(tel, p.montarMensagem(v.mensagem, "Cliente Teste"), req.empresa_id, numeroId);
     res.json({ success: true });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error("Erro no teste de promocao:", err.message);
     res.status(502).json({ error: "Não foi possível enviar o teste. Confira a conexão do WhatsApp." });
   }

@@ -7,6 +7,7 @@ const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
+const { numeroPadrao } = require("../utils/numeroEnvio");
 const { getDriver } = require("../gateways");
 const al = require("../utils/alertaEquipamentos");
 const at = require("../utils/alertaTecnico");
@@ -52,9 +53,10 @@ async function empresasComAlerta() {
 }
 
 async function avisar(empresaId, telefones, mensagem, dormirFn) {
+  const numero = await numeroPadrao(empresaId);
   for (let i = 0; i < telefones.length; i++) {
     try {
-      await enviarMensagemEstrita(telefones[i], mensagem, empresaId);
+      await enviarMensagemEstrita(telefones[i], mensagem, empresaId, numero);
       await gravarLog({ empresa_id: empresaId, telefone: telefones[i], mensagem, contexto_tipo: "alerta_equipamento", status: "ok" });
     } catch (err) {
       const msg = String(erroEvolution(err)).slice(0, 500);
@@ -66,7 +68,7 @@ async function avisar(empresaId, telefones, mensagem, dormirFn) {
 
 async function processarEmpresa({ empresaId, alerta, tec, equipe, monitora }, { dormirFn, testarFn, agora }) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
-  const conectada = await instanciaConectada(empresaId);
+  const conectada = await instanciaConectada(empresaId, await numeroPadrao(empresaId));
   if (monitora) { // feed: so painel (nao envia nada)
     if (!conectada) await alertasTecnicos.abrir(empresaId, { tipo: "whatsapp_desconectado", titulo: "WhatsApp desconectado", detalhes: "Nenhuma mensagem automática sai até reconectar em Integrações.", severidade: "media" });
     else await alertasTecnicos.resolver(empresaId, { tipo: "whatsapp_desconectado" });

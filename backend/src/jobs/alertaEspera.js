@@ -9,6 +9,7 @@ const db = require("../../db");
 const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
 const { temColuna } = require("../utils/schemaCache");
+const { numeroPadrao } = require("../utils/numeroEnvio");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog } = require("../services/whatsappNotify");
 const auto = require("../services/whatsappAutomacao");
@@ -97,7 +98,8 @@ async function processarEmpresa({ empresaId, alerta, automacao }, { dormirFn, ag
   if (!(await temColuna("whatsapp_conversas", "espera_avisada_em"))) return 0;
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
   if (alerta.somente_horario && automacao.usar_horario && !horario.dentroDoHorario(automacao, agora)) return 0;
-  if (!(await instanciaConectada(empresaId))) return 0; // nada e' reservado: a proxima rodada tenta de novo
+  const numero = await numeroPadrao(empresaId);
+  if (!(await instanciaConectada(empresaId, numero))) return 0; // nada e' reservado: a proxima rodada tenta de novo
 
   const lista = await esperando(empresaId, alerta.minutos);
   const reservadas = [];
@@ -109,7 +111,7 @@ async function processarEmpresa({ empresaId, alerta, automacao }, { dormirFn, ag
   let enviou = 0;
   for (let i = 0; i < alerta.telefones.length; i++) {
     try {
-      await enviarMensagemEstrita(alerta.telefones[i], mensagem, empresaId);
+      await enviarMensagemEstrita(alerta.telefones[i], mensagem, empresaId, numero);
       await gravarLog({ empresa_id: empresaId, telefone: alerta.telefones[i], mensagem, contexto_tipo: "alerta_espera", status: "ok" });
       enviou++;
     } catch (err) {

@@ -107,11 +107,12 @@ async function avisarIndicador(empresaId, lead, cupom, cfg) {
     const { comCupom } = require("../utils/renovacao");
     const tel = normalizarTelefone(lead?.telefone);
     if (!tel || !(await temRecurso(empresaId, "whatsapp")) || (await naoPerturbe.estaBloqueado(empresaId, tel))) return false;
-    if (!(await instanciaConectada(empresaId))) return false;
+    const numero = await require("../utils/numeroEnvio").numeroPadrao(empresaId);
+    if (!(await instanciaConectada(empresaId, numero))) return false;
     const link = comCupom((await linkPlanosDoCliente(empresaId, {}).catch(() => null)) || "", cupom.codigo);
     const validade = cupom.valido_ate instanceof Date ? cupom.valido_ate.toLocaleDateString("pt-BR") : String(cupom.valido_ate || "");
     const mensagem = renderTemplate(ind.MSG_RECOMPENSA, { codigo: cupom.codigo, desconto: textoDesconto(cfg.recompensa_indicador), validade, link }).trim();
-    try { await enviarMensagemEstrita(tel, mensagem, empresaId); await gravarLog({ empresa_id: empresaId, telefone: tel, mensagem, contexto_tipo: "indicacao", status: "ok" }); }
+    try { await enviarMensagemEstrita(tel, mensagem, empresaId, numero); await gravarLog({ empresa_id: empresaId, telefone: tel, mensagem, contexto_tipo: "indicacao", status: "ok" }); }
     catch (err) { await gravarLog({ empresa_id: empresaId, telefone: tel, mensagem, contexto_tipo: "indicacao", status: "erro", erro_msg: String(err.message).slice(0, 300) }); }
     return true;
   } catch (err) { console.warn("[indicacao] aviso ao indicador nao enviado:", err.message); return false; }

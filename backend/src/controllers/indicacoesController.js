@@ -85,9 +85,10 @@ exports.convite = async (req, res) => {
     const tel = normalizarTelefone(lead.telefone);
     if (!tel) return res.status(400).json({ error: "O cliente não tem telefone válido" });
     if (await naoPerturbe.estaBloqueado(req.empresa_id, tel)) return res.status(409).json({ error: "Este cliente pediu para não receber mensagens." });
-    if (!(await instanciaConectada(req.empresa_id))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
+    const numero = await require("../utils/numeroEnvio").numeroPadrao(req.empresa_id);
+    if (!(await instanciaConectada(req.empresa_id, numero))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
     try {
-      await enviarMensagemEstrita(tel, mensagem, req.empresa_id);
+      await enviarMensagemEstrita(tel, mensagem, req.empresa_id, numero);
       await gravarLog({ empresa_id: req.empresa_id, telefone: tel, mensagem, contexto_tipo: "indicacao_convite", status: "ok" });
     } catch (err) {
       const msg = erroEvolution(err);

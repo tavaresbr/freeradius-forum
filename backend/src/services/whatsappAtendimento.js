@@ -183,8 +183,9 @@ async function registrarMensagem(empresaId, data, numeroId = 0) {
     [m.quando, m.previa, m.fromMe ? 0 : 1, m.fromMe ? 0 : 1, m.nome, conversaId, empresaId]
   );
   await aplicarOptOut(empresaId, m);
-  // Fase 1 de varios numeros: chatbot e resposta automatica so atendem o numero PRINCIPAL.
-  if (!m.fromMe && !numeroId) {
+  // Fase 2 de varios numeros: as automacoes (config unica da empresa) valem para qualquer numero e respondem
+  // sempre pelo numero da conversa (enviarTexto le conversa.numero_id).
+  if (!m.fromMe) {
     // Chatbot de menu e, se ele nao tratou a mensagem, resposta automatica (boas-vindas / fora do horario):
     // em segundo plano, nunca atrapalha o webhook.
     require("./whatsappChatbot").processar(empresaId, conversaId, m)

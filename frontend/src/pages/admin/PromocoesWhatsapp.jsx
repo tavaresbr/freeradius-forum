@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import SeletorNumeroEnvio from "../../components/admin/atendimento/SeletorNumeroEnvio";
 import Moldura from "../../components/admin/Moldura";
 import SeletorModelo from "../../components/admin/atendimento/SeletorModelo";
 
@@ -65,6 +66,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
   const [previa, setPrevia] = useState(null);
   const [telTeste, setTelTeste] = useState("");
+  const [numeroId, setNumeroId] = useState(0); // numero de WhatsApp do envio (0 = principal)
   const [ocupado, setOcupado] = useState(false);
 
   const chamar = useCallback(async (url, opts = {}) => {
@@ -135,7 +137,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
   const enviarTeste = async () => {
     setOcupado(true); setMsg(null);
     try {
-      await chamar("/api/promocoes-whatsapp/teste", { method: "POST", body: JSON.stringify({ mensagem, telefone: telTeste }) });
+      await chamar("/api/promocoes-whatsapp/teste", { method: "POST", body: JSON.stringify({ mensagem, telefone: telTeste, numero_id: numeroId }) });
       setMsg({ tipo: "ok", texto: "Mensagem de teste enviada." });
     } catch (e) {
       setMsg({ tipo: "erro", texto: e.message });
@@ -149,7 +151,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
     try {
       const c = await chamar("/api/promocoes-whatsapp", {
         method: "POST",
-        body: JSON.stringify({ nome, mensagem, filtros: corpoFiltros() }),
+        body: JSON.stringify({ nome, mensagem, filtros: corpoFiltros(), numero_id: numeroId }),
       });
       try {
         await chamar(`/api/promocoes-whatsapp/${c.data.id}/iniciar`, { method: "POST" });
@@ -237,6 +239,7 @@ export default function PromocoesWhatsapp({ embutido = false }) {
             <label className="block text-xs text-gray-500 mb-1">Nome da promoção (só para você)</label>
             <input className={inputCls} maxLength={150} value={nome} onChange={(e) => { setNome(e.target.value); }} placeholder="Ex.: Black Friday 2026" />
           </div>
+          <SeletorNumeroEnvio headers={headers} value={numeroId} onChange={setNumeroId} />
           <div>
             <label className="block text-xs text-gray-500 mb-1">Mensagem (use {"{{nome}}"} para o primeiro nome do cliente)</label>
             <textarea aria-label="Mensagem" className={inputCls} rows={5} maxLength={1000} value={mensagem} onChange={(e) => { setMensagem(e.target.value); mudouAlgo(); }} />

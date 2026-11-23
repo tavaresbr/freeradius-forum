@@ -49,8 +49,11 @@ async function processarUma(ag, cacheEmpresa) {
     return;
   }
 
-  if (estado.conectada === null) estado.conectada = await instanciaConectada(ag.empresa_id);
-  if (!estado.conectada) {
+  // Conexao conferida pelo numero DA CONVERSA (0 = principal), com cache por empresa+numero
+  const numeroId = Number(conversa.numero_id) || 0;
+  const chave = `${ag.empresa_id}:${numeroId}`;
+  if (estado[chave] === undefined) estado[chave] = await instanciaConectada(ag.empresa_id, numeroId);
+  if (!estado[chave]) {
     // Desconectado: devolve para a fila e tenta na proxima rodada (ate EXPIRA_HORAS)
     const atrasada = Date.now() - new Date(ag.enviar_em).getTime() > EXPIRA_HORAS * 3600 * 1000;
     if (atrasada) return fechar(ag.id, "erro", "WhatsApp desconectado: a mensagem não foi enviada");

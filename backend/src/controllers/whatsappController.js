@@ -95,8 +95,8 @@ async function enviarMensagem(req, res) {
 }
 
 // Funcao direta para envio interno (sem req/res, chamada pelo liberarUsuario)
-async function enviarMensagemDireta(telefone, mensagem, empresaId) {
-  const evo = await getEvolutionConfig(empresaId);
+async function enviarMensagemDireta(telefone, mensagem, empresaId, numeroId = 0) {
+  const evo = await getEvolutionConfig(empresaId, numeroId);
   if (!telefone || !mensagem || !evo.apiKey) return;
 
   const numeroFormatado = formatarNumeroComNonoDigito(telefone);
@@ -111,8 +111,8 @@ async function enviarMensagemDireta(telefone, mensagem, empresaId) {
 
 // Envio estrito (promocoes): ao contrario de enviarMensagemDireta, NUNCA devolve sucesso sem enviar
 // (sem apiKey/telefone/mensagem lanca erro), para a fila nao marcar "enviado" o que nao saiu.
-async function enviarMensagemEstrita(telefone, mensagem, empresaId) {
-  const evo = await getEvolutionConfig(empresaId);
+async function enviarMensagemEstrita(telefone, mensagem, empresaId, numeroId = 0) {
+  const evo = await getEvolutionConfig(empresaId, numeroId);
   if (!evo.apiKey) throw new Error("WhatsApp sem chave de API configurada");
   if (!telefone || !mensagem) throw new Error("Telefone ou mensagem vazios");
   const resposta = await axios.post(
@@ -320,6 +320,7 @@ async function saveConfig(req, res) {
       ...(atual.nao_perturbe ? { nao_perturbe: atual.nao_perturbe } : {}),
       ...(atual.alertas_tecnicos ? { alertas_tecnicos: atual.alertas_tecnicos } : {}),
       ...(atual.indicacoes ? { indicacoes: atual.indicacoes } : {}),
+      ...(atual.numero_envios ? { numero_envios: atual.numero_envios } : {}),
     });
 
     if (existing) {

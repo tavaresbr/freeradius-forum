@@ -83,6 +83,16 @@ export default function NumerosWhatsapp({ headers: base }) {
     await carregar();
   };
 
+  const salvarPadrao = async (id) => {
+    setErro("");
+    try {
+      const res = await fetch("/api/whatsapp/numeros/padrao", { method: "PUT", headers, body: JSON.stringify({ numero_id: id }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) setErro(d.error || "Não foi possível salvar o número padrão");
+    } catch { setErro("Erro de conexão"); }
+    await carregar();
+  };
+
   const renomear = async (n) => {
     const novo = window.prompt("Novo nome do número:", n.nome);
     if (novo == null || !novo.trim()) return;
@@ -103,7 +113,7 @@ export default function NumerosWhatsapp({ headers: base }) {
         <div>
           <h2 className="text-lg font-semibold">Números de WhatsApp</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Conecte mais de um número e responda cada conversa pelo número em que ela chegou. Respostas automáticas, chatbot e envios em massa usam só o número principal.
+            Conecte mais de um número e responda cada conversa pelo número em que ela chegou. Chatbot, resposta automática e IA valem para todos os números (uma só configuração) e respondem pelo número em que o cliente escreveu.
           </p>
         </div>
         {dados && <span className="text-xs px-2 py-1 rounded-md border bg-gray-800 text-gray-300 border-gray-700">{dados.usados} de {limite} no plano</span>}
@@ -136,6 +146,17 @@ export default function NumerosWhatsapp({ headers: base }) {
           );
         })}
       </div>
+
+      {dados && dados.numeros.length > 1 && (
+        <div className="mt-4 bg-[#0f111a] rounded-lg p-3">
+          <label htmlFor="numero-padrao" className="block text-sm font-medium mb-1">Número padrão para envios automáticos</label>
+          <select id="numero-padrao" value={dados.padrao || 0} onChange={(e) => salvarPadrao(Number(e.target.value))}
+            className="w-full sm:w-72 bg-[#0d1117] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+            {dados.numeros.map((n) => <option key={n.id} value={n.id}>{n.nome}{n.estado === "open" ? "" : " (desconectado)"}</option>)}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">Usado por renovação, pós-compra, aviso de expiração, alertas, envio de credenciais e indicações. Se este número estiver desconectado, esses envios esperam até ele voltar. Promoções e avisos em massa escolhem o número em cada envio.</p>
+        </div>
+      )}
 
       {dados && (dados.pode_adicionar ? (
         <form onSubmit={adicionar} className="mt-4 flex gap-2 flex-wrap">

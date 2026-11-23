@@ -14,6 +14,8 @@ router.post("/webhook/ativar", ativarWebhookInstancia);
 router.get("/webhook/status", statusWebhookInstancia);
 router.get("/numeros", numeros.listar);
 router.post("/numeros", numeros.criar);
+router.get("/numeros/padrao", numeros.obterPadrao);
+router.put("/numeros/padrao", numeros.salvarPadrao);
 router.put("/numeros/:id", numeros.renomear);
 router.get("/numeros/:id/qrcode", numeros.qrcode);
 router.post("/numeros/:id/logout", numeros.desconectar);

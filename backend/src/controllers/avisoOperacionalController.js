@@ -6,6 +6,7 @@ const { normalizarTelefone } = require("../services/whatsappNotify");
 const { temColuna } = require("../utils/schemaCache");
 const { mascararTelefone } = require("../utils/promocaoWhatsapp");
 const a = require("../utils/avisoOperacional");
+const numeroEnvio = require("../utils/numeroEnvio");
 
 const MSG_MIGRATION = "Recurso indisponível: rode a migration 057 (node migrations/057_promocao_envios_tipo.js).";
 
@@ -41,6 +42,11 @@ exports.criar = async (req, res) => {
   try {
     if (!(await temColuna("promocao_envios", "tipo"))) return res.status(503).json({ error: MSG_MIGRATION });
     if (!(await equipamentoValido(req.empresa_id, v.equipamento_id))) return res.status(400).json({ error: "Equipamento inválido" });
+    const numeroId = await numeroEnvio.validarNumero(req.empresa_id, req.body?.numero_id);
+    if (numeroId > 0) {
+      if (!(await temColuna("promocao_envios", "numero_id"))) return res.status(503).json({ error: "Escolher o número de envio ainda não está disponível neste servidor. Rode a migration 080 (node migrations/080_promocao_envios_numero.js) e reinicie o backend." });
+      if (!(await instanciaConectada(req.empresa_id, numeroId))) return res.status(409).json({ error: "O WhatsApp deste número não está conectado." });
+    }
     const sel = await a.selecionarConectados(db, req.empresa_id, v.equipamento_id);
     if (!sel.destinatarios.length) return res.status(400).json({ error: "Nenhum cliente conectado agora com telefone cadastrado" });
     const [r] = await db.execute(
@@ -49,6 +55,7 @@ exports.criar = async (req, res) => {
       [req.empresa_id, v.nome, v.mensagem, JSON.stringify({ equipamento_id: v.equipamento_id }), sel.destinatarios.length, req.user?.id || null]
     );
     const envioId = r.insertId;
+    if (numeroId > 0) await db.execute("UPDATE promocao_envios SET numero_id = ? WHERE id = ? AND empresa_id = ?", [numeroId, envioId, req.empresa_id]);
     await db.query(
       "INSERT INTO promocao_destinatarios (envio_id, empresa_id, lead_id, telefone, nome) VALUES ?",
       [sel.destinatarios.map((d) => [envioId, req.empresa_id, d.lead_id, d.telefone, d.nome])]
@@ -56,6 +63,7 @@ exports.criar = async (req, res) => {
     const [[envio]] = await db.execute("SELECT * FROM promocao_envios WHERE id = ? AND empresa_id = ?", [envioId, req.empresa_id]);
     res.status(201).json({ success: true, data: envio });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error("[aviso-operacional] criar:", err.message);
     res.status(500).json({ error: "Erro ao criar o aviso" });
   }
@@ -82,10 +90,12 @@ exports.testar = async (req, res) => {
   const tel = normalizarTelefone(req.body?.telefone);
   if (!tel) return res.status(400).json({ error: "Telefone inválido (use DDD + número)" });
   try {
-    if (!(await instanciaConectada(req.empresa_id))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
-    await enviarMensagemEstrita(tel, `[TESTE] ${a.montarMensagemAviso(v.mensagem, "Cliente Teste")}`, req.empresa_id);
+    const numeroId = await numeroEnvio.validarNumero(req.empresa_id, req.body?.numero_id);
+    if (!(await instanciaConectada(req.empresa_id, numeroId))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
+    await enviarMensagemEstrita(tel, `[TESTE] ${a.montarMensagemAviso(v.mensagem, "Cliente Teste")}`, req.empresa_id, numeroId);
     res.json({ success: true });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error("[aviso-operacional] teste:", err.message);
     res.status(502).json({ error: "Não foi possível enviar o teste. Confira a conexão do WhatsApp." });
   }

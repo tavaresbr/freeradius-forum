@@ -6,6 +6,7 @@ const db = require("../../db");
 const wpp = require("./whatsappController");
 const numeros = require("../utils/whatsappNumeros");
 const { obterStatus, tabelaInexistente } = require("../utils/assinatura");
+const numeroEnvio = require("../utils/numeroEnvio");
 
 const MSG_SEM_MIGRATION = "Vários números de WhatsApp ainda não estão disponíveis neste servidor. Rode a migration 075 (node migrations/075_whatsapp_numeros.js) e reinicie o backend.";
 const headers = (evo) => ({ apikey: evo.apiKey, "Content-Type": "application/json" });
@@ -54,11 +55,25 @@ exports.listar = async (req, res) => {
         { id: 0, nome: "Número principal", instance_name: base.instanceName, principal: true, estado: estadoPrincipal },
         ...extras.map((n, i) => ({ id: n.id, nome: n.nome, instance_name: n.instance_name, principal: false, estado: estados[i], criado_em: n.criado_em })),
       ],
+      padrao: await numeroEnvio.numeroPadrao(req.empresa_id),
       limite,
       usados: 1 + extras.length,
       pode_adicionar: limite == null || 1 + extras.length < limite,
     });
   } catch (err) { erro(res, err, "Erro ao listar os números"); }
+};
+
+// GET/PUT /api/whatsapp/numeros/padrao { numero_id } -> numero usado nos envios automaticos sem conversa (0 = principal)
+exports.obterPadrao = async (req, res) => {
+  try { res.json({ numero_id: await numeroEnvio.numeroPadrao(req.empresa_id) }); }
+  catch (err) { erro(res, err, "Erro ao ler o número padrão"); }
+};
+exports.salvarPadrao = async (req, res) => {
+  try {
+    const id = await numeroEnvio.validarNumero(req.empresa_id, req.body?.numero_id);
+    await require("../services/whatsappAutomacao").salvarChave(req.empresa_id, "numero_envios", { numero_id: id });
+    res.json({ numero_id: id });
+  } catch (err) { erro(res, err, "Não foi possível salvar o número padrão."); }
 };
 
 // POST /api/whatsapp/numeros { nome }
@@ -153,6 +168,12 @@ exports.remover = async (req, res) => {
       if (err?.response?.status !== 404) throw err; // ja nao existe na Evolution: so remove o cadastro
     }
     await db.query("DELETE FROM whatsapp_numeros WHERE id = ? AND empresa_id = ?", [n.id, req.empresa_id]);
+    // Se era o numero padrao dos envios automaticos, volta ao principal
+    try {
+      const auto = require("../services/whatsappAutomacao");
+      const cfg = await auto.lerConfigJson(req.empresa_id);
+      if (Number(cfg?.numero_envios?.numero_id) === n.id) await auto.salvarChave(req.empresa_id, "numero_envios", { numero_id: 0 });
+    } catch (e) { console.warn("[whatsapp-numeros] padrao nao zerado:", e.message); }
     res.json({ success: true });
   } catch (err) { erro(res, err, "Não foi possível remover o número."); }
 };
