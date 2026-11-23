@@ -46,10 +46,11 @@ async function processarEnvio(envio, { dormirFn }) {
     console.warn(`[promocoes] envio ${envio.id} pausado: empresa ${envio.empresa_id} sem o recurso WhatsApp`);
     return;
   }
-  if (!(await instanciaConectada(envio.empresa_id))) {
+  const numeroId = Number(envio.numero_id) || 0; // 0 = principal (Fase 2 de varios numeros)
+  if (!(await instanciaConectada(envio.empresa_id, numeroId))) {
     // Sem WhatsApp conectado: pausa em vez de queimar a fila com erros. O admin retoma na tela.
     await db.execute("UPDATE promocao_envios SET status = 'pausada' WHERE id = ? AND status = 'em_andamento'", [envio.id]);
-    console.warn(`[promocoes] envio ${envio.id} pausado: WhatsApp da empresa ${envio.empresa_id} desconectado`);
+    console.warn(`[promocoes] envio ${envio.id} pausado: WhatsApp (numero ${numeroId}) da empresa ${envio.empresa_id} desconectado ou removido`);
     return;
   }
 
@@ -98,7 +99,7 @@ async function processarEnvio(envio, { dormirFn }) {
     const aviso = envio.tipo === "aviso";
     const mensagem = aviso ? montarMensagemAviso(envio.mensagem, d.nome) : montarMensagem(envio.mensagem, d.nome);
     try {
-      await enviarMensagemEstrita(d.telefone, mensagem, envio.empresa_id);
+      await enviarMensagemEstrita(d.telefone, mensagem, envio.empresa_id, numeroId);
       await db.execute("UPDATE promocao_destinatarios SET status = 'enviado', enviado_em = NOW() WHERE id = ?", [d.id]);
       await gravarLog({ empresa_id: envio.empresa_id, telefone: d.telefone, mensagem, contexto_tipo: aviso ? "aviso_operacional" : "promocao", referencia_id: envio.id, status: "ok" });
     } catch (err) {

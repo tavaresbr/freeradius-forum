@@ -7,6 +7,7 @@ const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
 const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
+const { numeroPadrao } = require("../utils/numeroEnvio");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("../services/whatsappNotify");
 const { mesclarComPadrao, comCupom } = require("../utils/renovacao");
@@ -57,7 +58,8 @@ async function reservar(empresaId, pagamentoId, etapa, telefone, status) {
 async function processarEmpresa({ empresaId, ren }, dormirFn) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
   if (await naoPerturbe.emSilencio(empresaId, "renovacao")) return 0; // adia: nada e reservado
-  if (!(await instanciaConectada(empresaId))) return 0;
+  const numero = await numeroPadrao(empresaId);
+  if (!(await instanciaConectada(empresaId, numero))) return 0;
   const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [empresaId]).catch(() => [[{}]]);
   let enviados = 0;
   const telefonesRodada = new Set();
@@ -85,7 +87,7 @@ async function processarEmpresa({ empresaId, ren }, dormirFn) {
       const link = comCupom(await linkPlanosDoCliente(empresaId, { clienteId: lead?.id || c.cliente_id, nasId: c.nas_id }) || "", ren.cupom);
       const mensagem = renderTemplate(ren.template, { nome: primeiroNome(lead?.nome), plano: c.nome_plano || "", link, empresa: emp?.nome || "" }).trim();
       try {
-        await enviarMensagemEstrita(telefone, mensagem, empresaId);
+        await enviarMensagemEstrita(telefone, mensagem, empresaId, numero);
         await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "renovacao", referencia_id: c.id, status: "ok" });
       } catch (err) {
         const msg = String(erroEvolution(err)).slice(0, 500);

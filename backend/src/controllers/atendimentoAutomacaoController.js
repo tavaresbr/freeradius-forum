@@ -147,7 +147,7 @@ exports.testarAviso = async (req, res) => {
     const minutos = Number.isInteger(Number(req.body?.minutos)) ? Number(req.body.minutos) : cfg.minutos;
     const link = (await linkPlanosDoCliente(req.empresa_id, {}).catch(() => null)) || "";
     const mensagem = renderTemplate(modelo, { nome: "Cliente", minutos: String(minutos), link, plano: "Plano exemplo", empresa: "" }).trim();
-    await enviarMensagemEstrita(telefone, `[TESTE] ${mensagem}`, req.empresa_id);
+    await enviarMensagemEstrita(telefone, `[TESTE] ${mensagem}`, req.empresa_id, await require("../utils/numeroEnvio").numeroPadrao(req.empresa_id));
     await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "aviso_expiracao_teste", status: "ok" });
     res.json({ success: true });
   } catch (err) {
@@ -267,7 +267,7 @@ exports.testarAlertaEspera = async (req, res) => {
     const telefone = normalizarTelefone(req.body?.telefone);
     if (!telefone) return res.status(400).json({ error: "Telefone inválido. Informe DDD + número." });
     const mensagem = `[TESTE] ${alertaEspera.montarMensagem([{ nome: "Maria (exemplo)", espera_min: 12 }, { telefone: "5593999991234", espera_min: 25 }], "")}`;
-    await enviarMensagemEstrita(telefone, mensagem, req.empresa_id);
+    await enviarMensagemEstrita(telefone, mensagem, req.empresa_id, await require("../utils/numeroEnvio").numeroPadrao(req.empresa_id));
     await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "alerta_espera_teste", status: "ok" });
     res.json({ success: true });
   } catch (err) {

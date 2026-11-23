@@ -288,7 +288,7 @@ async function notificarLiberacao(ctx) {
     }
 
     try {
-      await enviarMensagemDireta(telefoneComDDI, mensagemFinal, empresa_id);
+      await enviarMensagemDireta(telefoneComDDI, mensagemFinal, empresa_id, await require("../utils/numeroEnvio").numeroPadrao(empresa_id));
       await gravarLog({
         empresa_id, portal_id: portalId, telefone: telefoneComDDI,
         mensagem: mensagemFinal, contexto_tipo, referencia_id,

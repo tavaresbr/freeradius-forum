@@ -43,12 +43,13 @@ async function aoReceberNota(empresaId, conversaId, mensagemId) {
     if (nota <= 2 && cfg.alerta_nota_baixa.ativo && cfg.alerta_nota_baixa.telefones.length) {
       if (!(await reservar(empresaId, "alerta", mensagemId))) return { feito: false, motivo: "repetido" };
       const { enviarMensagemEstrita, instanciaConectada } = require("../controllers/whatsappController");
-      if (!(await instanciaConectada(empresaId))) { await devolver(empresaId, "alerta", mensagemId); return { feito: false, motivo: "desconectada" }; }
+      const numero = await require("../utils/numeroEnvio").numeroPadrao(empresaId);
+      if (!(await instanciaConectada(empresaId, numero))) { await devolver(empresaId, "alerta", mensagemId); return { feito: false, motivo: "desconectada" }; }
       const texto = `⚠️ Nota ${nota}/5 no atendimento: ${conversa.nome || "cliente"} (${pc.mascararTelefone(conversa.telefone)}). Abra a conversa no painel (menu WhatsApp) e retome o contato.`;
       let enviou = 0;
       for (const tel of cfg.alerta_nota_baixa.telefones) {
         try {
-          await enviarMensagemEstrita(tel, texto, empresaId);
+          await enviarMensagemEstrita(tel, texto, empresaId, numero);
           await gravarLog({ empresa_id: empresaId, telefone: tel, mensagem: texto, contexto_tipo: "alerta_nota_baixa", status: "ok" });
           enviou++;
         } catch (err) {

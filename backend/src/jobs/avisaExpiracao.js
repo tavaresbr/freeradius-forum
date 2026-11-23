@@ -6,6 +6,7 @@ const naoPerturbe = require("../utils/naoPerturbe");
 const db = require("../../db");
 const { erroEvolution } = require("../utils/erroEvolution");
 const { temRecurso } = require("../utils/assinatura");
+const { numeroPadrao } = require("../utils/numeroEnvio");
 const { instanciaConectada, enviarMensagemEstrita } = require("../controllers/whatsappController");
 const { gravarLog, normalizarTelefone, renderTemplate } = require("../services/whatsappNotify");
 const { mesclarComPadrao } = require("../utils/avisoExpiracao");
@@ -60,7 +61,8 @@ async function empresasComAviso() {
 async function processarEmpresa({ empresaId, aviso }, dormirFn) {
   if (!(await temRecurso(empresaId, "whatsapp"))) return 0;
   if (await naoPerturbe.emSilencio(empresaId, "aviso_expiracao")) return 0;
-  if (!(await instanciaConectada(empresaId))) return 0;
+  const numero = await numeroPadrao(empresaId);
+  if (!(await instanciaConectada(empresaId, numero))) return 0;
   const [sessoes] = await db.query(SQL_SESSOES, [empresaId, empresaId, aviso.minutos * 60]);
   const host = await portalHostDaEmpresa(empresaId);
   const [[emp]] = await db.query("SELECT nome FROM empresas WHERE id = ?", [empresaId]).catch(() => [[{}]]);
@@ -87,7 +89,7 @@ async function processarEmpresa({ empresaId, aviso }, dormirFn) {
     const link = montarLinkPlanos(host, { empresaId, mikrotikId: s.nas_id, clienteId: lead.id }) || "";
     const mensagem = renderTemplate(aviso.template, { nome: primeiroNome(lead.nome), minutos: String(minutos), link, plano: s.plano || "", empresa: emp?.nome || "" }).trim();
     try {
-      await enviarMensagemEstrita(telefone, mensagem, empresaId);
+      await enviarMensagemEstrita(telefone, mensagem, empresaId, numero);
       await gravarLog({ empresa_id: empresaId, telefone, mensagem, contexto_tipo: "aviso_expiracao", status: "ok" });
     } catch (err) {
       const msg = String(erroEvolution(err)).slice(0, 500);

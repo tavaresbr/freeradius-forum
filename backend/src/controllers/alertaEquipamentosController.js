@@ -51,7 +51,7 @@ exports.testar = async (req, res) => {
     const telefone = normalizarTelefone(req.body?.telefone);
     if (!telefone) return res.status(400).json({ error: "Telefone inválido. Informe DDD + número." });
     const mensagem = `[TESTE] ${al.mensagemOffline({ nome: "Equipamento de exemplo", ip: "10.0.0.1" }, new Date())}`;
-    await enviarMensagemEstrita(telefone, mensagem, req.empresa_id);
+    await enviarMensagemEstrita(telefone, mensagem, req.empresa_id, await require("../utils/numeroEnvio").numeroPadrao(req.empresa_id));
     await gravarLog({ empresa_id: req.empresa_id, telefone, mensagem, contexto_tipo: "alerta_equipamento_teste", status: "ok" });
     res.json({ success: true });
   } catch (err) {

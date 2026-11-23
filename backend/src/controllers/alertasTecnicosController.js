@@ -120,7 +120,7 @@ exports.avisarClientes = async (req, res) => {
   const tipo = req.body?.tipo === "volta" ? "volta" : "queda";
   if (req.body?.confirmar !== true) return res.status(400).json({ error: "Confirme o envio" });
   try {
-    if (!(await instanciaConectada(req.empresa_id))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
+    if (!(await instanciaConectada(req.empresa_id, await require("../utils/numeroEnvio").numeroPadrao(req.empresa_id)))) return res.status(409).json({ error: "O WhatsApp da empresa não está conectado." });
     const cfg = at.mesclarComPadrao((await auto.lerConfigJson(req.empresa_id)).alertas_tecnicos);
     const r = await svc.avisarClientes(req.empresa_id, id, tipo, cfg);
     if (!r.ok) {

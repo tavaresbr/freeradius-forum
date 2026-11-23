@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import SeletorNumeroEnvio from "../../components/admin/atendimento/SeletorNumeroEnvio";
 import Moldura from "../../components/admin/Moldura";
 import SeletorModelo from "../../components/admin/atendimento/SeletorModelo";
 import usePrivacidade from "../../hooks/usePrivacidade";
@@ -21,6 +22,7 @@ export default function AvisoOperacional({ embutido = false }) {
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const [mensagem, setMensagem] = useState(MODELO);
   const [equipamento, setEquipamento] = useState("");
+  const [numeroId, setNumeroId] = useState(0); // numero de WhatsApp do envio (0 = principal)
   const [equipamentos, setEquipamentos] = useState([]);
   const [previa, setPrevia] = useState(null);
   const [telefone, setTelefone] = useState("");
@@ -67,10 +69,10 @@ export default function AvisoOperacional({ embutido = false }) {
   };
 
   const verPrevia = async () => { const d = await chamar("/api/avisos-operacionais/previa", "POST", corpo()); if (d) setPrevia(d.data); };
-  const testar = () => chamar("/api/avisos-operacionais/teste", "POST", { ...corpo(), telefone }, "Teste enviado.");
+  const testar = () => chamar("/api/avisos-operacionais/teste", "POST", { ...corpo(), telefone, numero_id: numeroId }, "Teste enviado.");
   const enviar = async () => {
     if (!previa || !window.confirm(`Enviar este aviso para ${previa.total} cliente(s) conectado(s) agora?`)) return;
-    const c = await chamar("/api/avisos-operacionais", "POST", corpo());
+    const c = await chamar("/api/avisos-operacionais", "POST", { ...corpo(), numero_id: numeroId });
     if (!c) return;
     const i = await chamar(`/api/avisos-operacionais/${c.data.id}/iniciar`, "POST", null, "Aviso em envio. Acompanhe abaixo.");
     if (i) setPrevia(null);
@@ -86,6 +88,7 @@ export default function AvisoOperacional({ embutido = false }) {
         {aviso503 && <p className="text-sm text-yellow-300">Rode a migration 057 no servidor para usar este recurso.</p>}
 
         <section className="bg-[#1a1d27] border border-gray-800 rounded-xl p-4 space-y-3">
+          <SeletorNumeroEnvio headers={headers} value={numeroId} onChange={setNumeroId} />
           <div>
             <label className="block text-xs text-gray-500 mb-1">Equipamento (opcional)</label>
             <select className={inputCls} value={equipamento} onChange={(e) => { setEquipamento(e.target.value); setPrevia(null); }} aria-label="Equipamento">

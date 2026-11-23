@@ -11,6 +11,13 @@ async function criarEnvioAviso(db, { empresaId, equipamentoId, janelaDias = 30, 
      VALUES (?, ?, 'aviso', ?, ?, 'em_andamento', ?, NOW())`,
     [empresaId, String(nome).slice(0, 150), mensagem, JSON.stringify(filtros || {}), sel.destinatarios.length]
   );
+  // Fase 2: o aviso sai pelo numero padrao dos envios automaticos (so grava se a coluna existe e ha numero extra)
+  try {
+    const numeroId = await require("../utils/numeroEnvio").numeroPadrao(empresaId);
+    if (numeroId > 0 && await require("../utils/schemaCache").temColuna("promocao_envios", "numero_id")) {
+      await db.query("UPDATE promocao_envios SET numero_id = ? WHERE id = ? AND empresa_id = ?", [numeroId, r.insertId, empresaId]);
+    }
+  } catch (err) { console.warn("[avisoClientes] numero padrao ignorado:", err.message); }
   await db.query(
     "INSERT INTO promocao_destinatarios (envio_id, empresa_id, lead_id, telefone, nome) VALUES ?",
     [sel.destinatarios.map((d) => [r.insertId, empresaId, d.lead_id, d.telefone, d.nome])]
