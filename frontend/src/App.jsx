@@ -47,6 +47,7 @@ import Empresas from "./pages/super/Empresas";
 import EmpresaPainel from "./pages/super/EmpresaPainel";
 import SuperDashboard from "./pages/super/SuperDashboard";
 import Backups from "./pages/super/Backups";
+import UsoIA from "./pages/super/UsoIA";
 import AtualizarSistema from "./pages/super/AtualizarSistema";
 import PublicarAtualizacao from "./pages/super/PublicarAtualizacao";
 
@@ -166,6 +167,7 @@ function App() {
       <Route path="/super/empresas" element={<RotaDono><Empresas /></RotaDono>} />
       <Route path="/super/empresas/:id" element={<RotaDono><EmpresaPainel /></RotaDono>} />
       <Route path="/super/atualizar" element={<RotaDono><AtualizarSistema /></RotaDono>} />
+      <Route path="/super/uso-ia" element={<RotaDono><UsoIA /></RotaDono>} />
       <Route path="/super/backups" element={<RotaDono><Backups /></RotaDono>} />
       <Route path="/super/publicar-atualizacao" element={<RotaDono><PublicarAtualizacao /></RotaDono>} />
     </Routes>

@@ -168,3 +168,48 @@ exports.metricas = async (req, res) => {
     res.status(500).json({ message: "Erro ao calcular métricas" });
   }
 };
+
+// Dono: uso da IA (custo da plataforma) por empresa em um mes. Sem a migration 077 devolve `indisponivel`.
+exports.iaUso = async (req, res) => {
+  const r = require("../utils/iaUsoResumo");
+  const { mesAtual } = require("../services/iaUso");
+  const { obterStatus } = require("../utils/assinatura");
+  const mes = req.query.mes === undefined ? mesAtual() : req.query.mes;
+  if (!r.mesValido(mes)) return res.status(400).json({ error: "Mês inválido. Use AAAA-MM." });
+  try {
+    let rows;
+    try {
+      [rows] = await db.query(
+        `SELECT e.id, e.nome, sp.nome AS plano, u.respostas, u.tokens_in, u.tokens_out
+           FROM empresas e
+           LEFT JOIN assinaturas a ON a.empresa_id = e.id
+           LEFT JOIN saas_planos sp ON sp.id = a.plano_id
+           LEFT JOIN ia_uso u ON u.empresa_id = e.id AND u.mes = ?
+          ORDER BY e.nome`, [mes]);
+    } catch (err) {
+      if (err.code === "ER_NO_SUCH_TABLE" || err.errno === 1146) {
+        return res.json({ indisponivel: true, mes, mensagem: "Rode a migration 077 (node migrations/077_ia_atendente.js) para ver o uso da IA." });
+      }
+      throw err;
+    }
+    const empresas = [];
+    for (let i = 0; i < rows.length; i += 10) {
+      const lote = await Promise.all(rows.slice(i, i + 10).map(async (x) => {
+        const st = await obterStatus(x.id).catch(() => ({}));
+        return r.montarLinha({
+          id: x.id, nome: x.nome, plano: x.plano, iaAtiva: st.recursos?.ia === true,
+          respostas: x.respostas, limite: st.ia_respostas_mes == null ? null : st.ia_respostas_mes,
+          tokensIn: x.tokens_in, tokensOut: x.tokens_out,
+        });
+      }));
+      empresas.push(...lote);
+    }
+    const [meses] = await db.query("SELECT DISTINCT mes FROM ia_uso ORDER BY mes DESC LIMIT 12");
+    const lista = meses.map((m) => m.mes);
+    if (!lista.includes(mes)) lista.unshift(mes);
+    res.json({ mes, meses_disponiveis: lista, totais: r.totais(empresas), empresas });
+  } catch (err) {
+    console.error("[plataforma] iaUso:", err.message);
+    res.status(500).json({ error: "Erro ao consultar o uso da IA" });
+  }
+};
