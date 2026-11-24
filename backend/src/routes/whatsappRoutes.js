@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const numeros = require("../controllers/whatsappNumerosController");
-const { enviarMensagem, getInstanceStatus, createInstance, getQrCode, deleteInstance, restartInstance, logoutInstance, saveConfig, getConfig, ativarWebhookInstancia, statusWebhookInstancia, listarLogs, limparLogs } = require("../controllers/whatsappController");
+const { enviarMensagem, getInstanceStatus, createInstance, getQrCode, deleteInstance, restartInstance, logoutInstance, saveConfig, getConfig, obterConfirmacaoConexao, salvarConfirmacaoConexao, ativarWebhookInstancia, statusWebhookInstancia, listarLogs, limparLogs } = require("../controllers/whatsappController");
 
 router.post("/send", enviarMensagem);
 router.get("/instance/status", getInstanceStatus);
@@ -21,6 +21,8 @@ router.get("/numeros/:id/qrcode", numeros.qrcode);
 router.post("/numeros/:id/logout", numeros.desconectar);
 router.post("/numeros/:id/webhook/ativar", numeros.ativarWebhook);
 router.delete("/numeros/:id", numeros.remover);
+router.get("/confirmacao-conexao", obterConfirmacaoConexao);
+router.put("/confirmacao-conexao", salvarConfirmacaoConexao);
 router.get("/config", getConfig);
 router.post("/config", saveConfig);
 router.get("/logs", listarLogs);

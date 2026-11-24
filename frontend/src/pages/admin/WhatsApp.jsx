@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import NumerosWhatsapp from "../../components/admin/atendimento/NumerosWhatsapp";
+import ConfirmacaoConexao from "../../components/admin/atendimento/ConfirmacaoConexao";
 
 export default function WhatsApp() {
   const [status, setStatus] = useState(null);
@@ -403,6 +404,7 @@ export default function WhatsApp() {
       </div>
 
       {/* Enviar mensagem de teste */}
+      <ConfirmacaoConexao headers={headers} />
       {status?.exists && <NumerosWhatsapp headers={headers} />}
 
       {/* Recebimento de mensagens (atendimento) */}

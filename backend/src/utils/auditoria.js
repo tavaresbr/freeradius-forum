@@ -35,6 +35,7 @@ const REGRAS = [
   ["PUT", /^\/api\/atendimento\/alerta-espera$/, "config.salvar", "alerta_espera"],
   ["PUT", /^\/api\/atendimento\/ia-atendente$/, "config.salvar", "ia_atendente"],
   ["PUT", /^\/api\/whatsapp\/numeros\/padrao$/, "config.salvar", "numero_envios"],
+  ["PUT", /^\/api\/whatsapp\/confirmacao-conexao$/, "config.salvar", "confirmacao_conexao"],
   ["PUT", /^\/api\/atendimento\/pos-compra$/, "config.salvar", "pos_compra"],
   ["PUT", /^\/api\/atendimento\/renovacao$/, "config.salvar", "renovacao"],
   ["PUT", /^\/api\/atendimento\/nao-perturbe\/config$/, "config.salvar", "nao_perturbe"],
