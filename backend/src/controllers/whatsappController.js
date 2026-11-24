@@ -321,6 +321,7 @@ async function saveConfig(req, res) {
       ...(atual.alertas_tecnicos ? { alertas_tecnicos: atual.alertas_tecnicos } : {}),
       ...(atual.indicacoes ? { indicacoes: atual.indicacoes } : {}),
       ...(atual.numero_envios ? { numero_envios: atual.numero_envios } : {}),
+      ...(atual.confirmacao_conexao ? { confirmacao_conexao: atual.confirmacao_conexao } : {}),
     });
 
     if (existing) {
@@ -461,7 +462,34 @@ async function limparLogs(req, res) {
   }
 }
 
+// GET/PUT /api/whatsapp/confirmacao-conexao: chave geral da mensagem enviada ao cliente quando ele conecta
+async function obterConfirmacaoConexao(req, res) {
+  try {
+    const cc = require("../utils/confirmacaoConexao");
+    const cfg = await require("../services/whatsappAutomacao").lerConfigJson(req.empresa_id);
+    res.json(cc.mesclarComPadrao(cfg.confirmacao_conexao));
+  } catch (err) {
+    console.error("Erro ao ler confirmacao-conexao:", err.message);
+    res.status(500).json({ error: "Erro ao ler a configuração" });
+  }
+}
+
+async function salvarConfirmacaoConexao(req, res) {
+  try {
+    const cc = require("../utils/confirmacaoConexao");
+    const cfg = cc.validarConfirmacao(req.body);
+    await require("../services/whatsappAutomacao").salvarChave(req.empresa_id, "confirmacao_conexao", cfg);
+    res.json(cfg);
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error("Erro ao salvar confirmacao-conexao:", err.message);
+    res.status(500).json({ error: "Erro ao salvar a configuração" });
+  }
+}
+
 module.exports = {
+  obterConfirmacaoConexao,
+  salvarConfirmacaoConexao,
   enviarMensagem,
   enviarMensagemDireta,
   enviarMensagemEstrita,

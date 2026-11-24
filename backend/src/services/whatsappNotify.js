@@ -168,6 +168,24 @@ async function notificarLiberacao(ctx) {
       return { ok: false, skipped: "sem_recurso" };
     }
 
+    // Chave geral da empresa (Integracoes > WhatsApp): desligada = ninguem recebe confirmacao ao conectar.
+    let confirmacao = require("../utils/confirmacaoConexao").padrao();
+    if (empresa_id) {
+      try {
+        const [[linhaCfg]] = await db.query("SELECT config_json FROM empresa_configs WHERE empresa_id = ? AND config_type = 'whatsapp'", [empresa_id]);
+        const cfgEmpresa = linhaCfg ? (typeof linhaCfg.config_json === "string" ? JSON.parse(linhaCfg.config_json) : linhaCfg.config_json) || {} : {};
+        confirmacao = require("../utils/confirmacaoConexao").mesclarComPadrao(cfgEmpresa.confirmacao_conexao);
+      } catch { /* sem config legivel: segue com o padrao (ligado) */ }
+    }
+    if (!confirmacao.ativo) {
+      await gravarLog({
+        empresa_id, portal_id: portalId, telefone: telefoneInput,
+        contexto_tipo, referencia_id,
+        status: "skipped", skip_motivo: "desativada_empresa",
+      });
+      return { ok: false, skipped: "desativada_empresa" };
+    }
+
     // 2. Buscar config do portal
     const config = await getPortalNotifConfig(portalId, empresa_id);
 
@@ -285,6 +303,28 @@ async function notificarLiberacao(ctx) {
         status: "skipped", skip_motivo: "telefone_invalido",
       });
       return { ok: false, skipped: "telefone_invalido" };
+    }
+
+    // Trava anti-repeticao (acesso gratis que reconecta toda hora): mesmo telefone nao recebe de novo dentro da janela.
+    // Pagamento/upgrade ficam fora: a mensagem leva a credencial recem-comprada.
+    const horas = confirmacao.nao_repetir_horas;
+    if (horas > 0 && empresa_id && require("../utils/confirmacaoConexao").contextoRepetivel(contexto_tipo)) {
+      try {
+        const [[ja]] = await db.query(
+          `SELECT id FROM whatsapp_logs
+            WHERE empresa_id = ? AND telefone = ? AND status = 'ok' AND contexto_tipo IN (${require("../utils/confirmacaoConexao").CONTEXTOS_REPETIVEIS.map(() => "?").join(",")})
+              AND criado_em > DATE_SUB(NOW(), INTERVAL ? HOUR) LIMIT 1`,
+          [empresa_id, telefoneComDDI, ...require("../utils/confirmacaoConexao").CONTEXTOS_REPETIVEIS, horas]
+        );
+        if (ja) {
+          await gravarLog({
+            empresa_id, portal_id: portalId, telefone: telefoneComDDI,
+            contexto_tipo, referencia_id,
+            status: "skipped", skip_motivo: "repetida",
+          });
+          return { ok: false, skipped: "repetida" };
+        }
+      } catch (e) { console.warn("[whatsappNotify] checagem de repeticao falhou:", e.message); }
     }
 
     try {

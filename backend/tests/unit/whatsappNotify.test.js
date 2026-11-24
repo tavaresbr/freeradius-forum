@@ -53,3 +53,69 @@ test('whatsapp: MAC (vem do cliente) NAO resolve telefone de terceiro => skipped
   assert.strictEqual(r.skipped, 'sem_telefone');
   assert.ok(!db.calls.some((c) => /origem = 'lgpd'/.test(c.sql)), 'nem consulta por MAC');
 });
+
+// ---- Chave geral e trava anti-repeticao da confirmacao ao conectar ----
+function montarCfg({ cfgJson = null, jaEnviado = false } = {}) {
+  const enviados = [];
+  const db = criarDb(async (sql) => {
+    if (/FROM portais WHERE id/.test(sql)) return [[{ enabled: 1, template: 'Ola {{nome}}, usuario {{username}}' }]];
+    if (/FROM empresa_configs/.test(sql)) return cfgJson ? [[{ config_json: JSON.stringify(cfgJson) }]] : [[]];
+    if (/FROM whatsapp_logs/.test(sql)) return jaEnviado ? [[{ id: 1 }]] : [[]];
+    return undefined;
+  });
+  const mod = carregar('src/services/whatsappNotify.js', {
+    db,
+    extras: { 'src/controllers/whatsappController.js': { enviarMensagemDireta: async (tel, msg) => { enviados.push({ tel, msg }); } } },
+  });
+  return { mod, enviados, db };
+}
+
+test('confirmacao: chave da empresa desligada => nao envia, em nenhum contexto (inclusive pagamento)', async () => {
+  const un = silencia();
+  try {
+    for (const ctx of ['lgpd', 'pagamento_aprovado']) {
+      const { mod, enviados, db } = montarCfg({ cfgJson: { confirmacao_conexao: { ativo: false, nao_repetir_horas: 24 } } });
+      const r = await mod.notificarLiberacao({ ...base, telefone: '11977776666', contexto_tipo: ctx });
+      assert.strictEqual(r.skipped, 'desativada_empresa');
+      assert.strictEqual(enviados.length, 0);
+      assert.ok(db.calls.some((c) => /INSERT INTO whatsapp_logs/.test(c.sql) && c.params.includes('desativada_empresa')));
+    }
+  } finally { un(); }
+});
+
+test('confirmacao: sem config da empresa segue ligada (comportamento antigo)', async () => {
+  const { mod, enviados } = montarCfg();
+  const un = silencia();
+  try { await mod.notificarLiberacao({ ...base, telefone: '11977776666', contexto_tipo: 'lgpd' }); } finally { un(); }
+  assert.strictEqual(enviados.length, 1);
+});
+
+test('confirmacao: trava anti-repeticao barra lgpd/lead repetido, mas NUNCA pagamento; 0 horas = sem trava', async () => {
+  const un = silencia();
+  try {
+    let t = montarCfg({ jaEnviado: true });
+    let r = await t.mod.notificarLiberacao({ ...base, telefone: '11977776666', contexto_tipo: 'lgpd' });
+    assert.strictEqual(r.skipped, 'repetida');
+    assert.strictEqual(t.enviados.length, 0);
+
+    t = montarCfg({ jaEnviado: true });
+    r = await t.mod.notificarLiberacao({ ...base, telefone: '11977776666', contexto_tipo: 'pagamento_aprovado' });
+    assert.strictEqual(r.ok, true, 'pagamento leva a credencial recem-comprada');
+
+    t = montarCfg({ jaEnviado: true, cfgJson: { confirmacao_conexao: { ativo: true, nao_repetir_horas: 0 } } });
+    r = await t.mod.notificarLiberacao({ ...base, telefone: '11977776666', contexto_tipo: 'lgpd' });
+    assert.strictEqual(r.ok, true);
+    assert.ok(!t.db.calls.some((c) => /FROM whatsapp_logs/.test(c.sql)), 'sem trava nao consulta o historico');
+  } finally { un(); }
+});
+
+test('confirmacao: validarConfirmacao e mesclarComPadrao', () => {
+  const cc = require('../../src/utils/confirmacaoConexao');
+  assert.deepStrictEqual(cc.validarConfirmacao({ ativo: false, nao_repetir_horas: 12 }), { ativo: false, nao_repetir_horas: 12 });
+  assert.strictEqual(cc.validarConfirmacao({ ativo: true }).nao_repetir_horas, 24);
+  assert.throws(() => cc.validarConfirmacao({ ativo: 'sim' }), /ligada ou desligada/);
+  assert.throws(() => cc.validarConfirmacao({ ativo: true, nao_repetir_horas: -1 }), /0 a 168/);
+  assert.throws(() => cc.validarConfirmacao({ ativo: true, nao_repetir_horas: 1.5 }), /0 a 168/);
+  assert.deepStrictEqual(cc.mesclarComPadrao(undefined), { ativo: true, nao_repetir_horas: 24 });
+  assert.strictEqual(cc.mesclarComPadrao({ ativo: false }).ativo, false);
+});
